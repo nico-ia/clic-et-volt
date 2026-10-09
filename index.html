@@ -75,6 +75,9 @@
             <button id="tab-3d" onclick="switchMode('3d')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white">
                 <i class="fa-solid fa-cube"></i> 3D & Câblage Auto
             </button>
+            <button id="tab-report" onclick="switchMode('report')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-clipboard-check"></i> Métré & Contrôles
+            </button>
         </div>
 
         <!-- Action Buttons -->
@@ -266,15 +269,16 @@
                     <span class="text-slate-600">|</span>
                     <span id="drawing-instruction-hint" class="text-emerald-300">Cliquez pour placer le premier point du mur (Clic droit pour fermer/terminer)</span>
                 </div>
-                <div class="absolute top-4 right-4 z-10 flex flex-wrap justify-end max-w-[calc(100%-2rem)] bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
+                <div class="absolute bottom-4 left-4 z-10 flex flex-wrap justify-end max-w-[calc(100%-2rem)] bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
                     <button onclick="printPlan('2d')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Imprimer / enregistrer le plan 2D en PDF" aria-label="Imprimer le plan 2D"><i class="fa-solid fa-print"></i><span>Imprimer</span></button>
+                    <button onclick="savePlanPng('2d')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Enregistrer le plan 2D en PNG"><i class="fa-solid fa-image"></i><span>PNG</span></button>
                     <button onclick="undoAction()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Annuler" aria-label="Annuler"><i class="fa-solid fa-rotate-left"></i><span>Annuler</span></button>
                     <button onclick="redoAction()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Rétablir" aria-label="Rétablir"><i class="fa-solid fa-rotate-right"></i><span>Rétablir</span></button>
                     <button onclick="clearCanvas()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Tout effacer" aria-label="Tout effacer"><i class="fa-solid fa-trash"></i><span>Effacer</span></button>
                     <button onclick="zoomCanvas(1.15)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Zoom avant" aria-label="Zoom avant"><i class="fa-solid fa-plus"></i><span>Zoom +</span></button>
                     <button onclick="zoomCanvas(0.85)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Zoom arrière" aria-label="Zoom arrière"><i class="fa-solid fa-minus"></i><span>Zoom -</span></button>
                     <button onclick="resetZoomPan()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Recentrer le plan" aria-label="Recentrer le plan"><i class="fa-solid fa-expand"></i><span>Centrer</span></button>
-                    <button id="btn-pan-canvas" onclick="setTool('pan')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Activer le déplacement du plan à la souris gauche" aria-label="Déplacer le plan avec le bouton gauche"><i class="fa-solid fa-hand"></i><span>Déplacer</span></button>
+                    <button id="btn-pan-canvas" onclick="setTool('pan')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Activer le déplacement du plan à la souris gauche" aria-label="Déplacer le plan avec le bouton gauche"><i class="fa-solid fa-hand"></i><span></span></button>
                 </div>
             </div>
         </div>
@@ -297,15 +301,12 @@
                         </label>
                         <div id="circuits-list" class="space-y-2 text-xs"></div>
                     </section>
-                    <section id="report-box" class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
+                    <section id="warnings-box" class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
                         <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                            <span>Métré & contrôles</span>
-                            <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
+                            <span>Avertissements</span>
+                            <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
                         </label>
-                        <div id="report-content" class="space-y-2 text-xs text-slate-300"></div>
-                        <button onclick="exportBOM()" class="w-full py-2 bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5">
-                            <i class="fa-solid fa-file-csv"></i> Exporter le métré (CSV)
-                        </button>
+                        <div id="warnings-content" class="space-y-2 text-xs text-slate-300"></div>
                     </section>
                 </div>
             </aside>
@@ -319,8 +320,9 @@
                 </div>
 
                 <!-- 3D Undo / Redo -->
-                <div class="absolute top-4 right-4 z-10 flex bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
+                <div class="absolute bottom-4 left-4 z-10 flex bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
                     <button onclick="printPlan('3d')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1" title="Imprimer / enregistrer le plan 3D en PDF"><i class="fa-solid fa-print"></i> Imprimer 3D</button>
+                    <button onclick="savePlanPng('3d')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1" title="Enregistrer le plan 3D en image PNG"><i class="fa-solid fa-image"></i> PNG 3D</button>
                     <button onclick="undoAction()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1"><i class="fa-solid fa-rotate-left"></i> Annuler</button>
                     <button onclick="redoAction()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1"><i class="fa-solid fa-rotate-right"></i> Rétablir</button>
                 </div>
@@ -458,6 +460,22 @@
             </div>
         </div>
 
+        <!-- ================= MÉTRÉ & CONTRÔLES VIEW ================= -->
+        <div id="view-report" class="absolute inset-0 hidden bg-slate-950 overflow-y-auto custom-scrollbar">
+            <div class="max-w-3xl mx-auto p-6">
+                <section id="report-box" class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
+                    <label class="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center justify-between">
+                        <span>Métré & contrôles</span>
+                        <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
+                    </label>
+                    <div id="report-content" class="space-y-3 text-sm text-slate-300"></div>
+                    <button onclick="exportBOM()" class="w-full py-2 bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i> Exporter le métré (CSV)
+                    </button>
+                </section>
+            </div>
+        </div>
+
     </div>
 
     <!-- Notification Toast -->
@@ -535,6 +553,7 @@
             updateCircuitsUI();
             updateStats();
             startAutosave();
+            startCollisionBlink();
 
             window.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
@@ -647,11 +666,15 @@
             currentMode = mode;
             document.getElementById('view-2d').classList.toggle('hidden', mode !== '2d');
             document.getElementById('view-3d').classList.toggle('hidden', mode !== '3d');
+            document.getElementById('view-report').classList.toggle('hidden', mode !== 'report');
 
-            document.getElementById('tab-2d').className = mode === '2d' ? 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow' : 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white';
-            document.getElementById('tab-3d').className = mode === '3d' ? 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow' : 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white';
+            const tabOn = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow';
+            const tabOff = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white';
+            ['2d', '3d', 'report'].forEach(m => { document.getElementById('tab-' + m).className = mode === m ? tabOn : tabOff; });
 
-            if (mode === '3d') {
+            if (mode === 'report') {
+                updateCircuitsUI();
+            } else if (mode === '3d') {
                 build3DScene();
                 if (selected3DId) {
                     const o = interactiveObjects3D.find(x => x.userData && x.userData.id === selected3DId);
@@ -799,16 +822,6 @@
                 ctx2D.lineTo(wall.x2, wall.y2);
                 ctx2D.stroke();
 
-                const dx = wall.x2 - wall.x1;
-                const dy = wall.y2 - wall.y1;
-                const lengthM = Math.sqrt(dx * dx + dy * dy) / 100;
-                const midX = (wall.x1 + wall.x2) / 2;
-                const midY = (wall.y1 + wall.y2) / 2;
-
-                ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f1f5f9';
-                ctx2D.font = 'bold 11px Inter, sans-serif';
-                ctx2D.textAlign = 'center';
-                ctx2D.fillText(lengthM.toFixed(2) + 'm', midX, midY - 12);
             });
 
             draw2DEquipment();
@@ -1694,7 +1707,7 @@
                     .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, ceilZ) && stubOK(r))
                     .sort((p, q) => Math.abs(p - dist) - Math.abs(q - dist) || q - p);
                 let r = valid.length ? valid[0] : Math.max(10, Math.min(t.len - 10, dist));
-                if (!valid.length) result.warnings.push('Aucune descente possible pour ' + el.id);
+                if (!valid.length) result.warnings.push('Aucune descente possible pour ' + electricalDisplayName(el));
                 t.st.push(r);
                 place.set(el.id, { t, E, dist, r, zEl });
             });
@@ -2108,6 +2121,17 @@
                     .flatMap(link => link.linkIds || [])
                 : []);
             const hasLinkFocus = selectedLinkIds.size > 0;
+            // circuits réellement concernés par la sélection : les autres circuits qui passent dans le même tronçon restent estompés
+            const linkCircuitIds = new Set();
+            if (hasLinkFocus) {
+                (net.controlLinks || [])
+                    .filter(link => link.switchId === selected3DId || link.lightIds.includes(selected3DId))
+                    .forEach(link => link.lightIds.forEach(lightId => {
+                        const light = projectData.electrical.find(el => el.id === lightId);
+                        const circuit = light && circuitOf(light);
+                        if (circuit) linkCircuitIds.add(circuit.id);
+                    }));
+            }
 
             const colors = { 'red': 0xef4444, 'blue': 0x3b82f6, 'green-yellow': 0x22c55e, 'violet': 0x8b5cf6, 'orange': 0xf97316 };
             if (!CABLE_RES.cyl) {
@@ -2116,6 +2140,7 @@
                 CABLE_RES.sph = markShared(new THREE.SphereGeometry(1, 12, 10));
                 CABLE_RES.conduitMat = markShared(new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
                 CABLE_RES.circMats = {};
+                CABLE_RES.hiMats = {};
                 CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.9, depthWrite: false }));
                 CABLE_RES.dimConduit = markShared(new THREE.MeshBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.035, depthWrite: false }));
                 CABLE_RES.highlightCore = markShared(new THREE.MeshBasicMaterial({ color: 0xfef08a }));
@@ -2131,6 +2156,15 @@
                 return CABLE_RES.circMats[hex] || (CABLE_RES.circMats[hex] = markShared(new THREE.MeshBasicMaterial({
                     color: hex, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide
                 })));
+            };
+            const hiFor = (cid, core) => {
+                const circuit = cid && projectData.circuits.find(c => c.id === cid);
+                if (!circuit) return core ? CABLE_RES.highlightCore : CABLE_RES.highlightConduit;
+                const hex = circuitColor(circuit);
+                const key = (core ? 'c' : 'g') + hex;
+                return CABLE_RES.hiMats[key] || (CABLE_RES.hiMats[key] = markShared(new THREE.MeshBasicMaterial(core
+                    ? { color: hex }
+                    : { color: hex, transparent: true, opacity: 0.9, depthWrite: false })));
             };
             const add = (mesh) => { mesh.userData.shared = true; threeScene.add(mesh); wallMeshes3D.push(mesh); };
             const Y = new THREE.Vector3(0, 1, 0);
@@ -2168,16 +2202,17 @@
                         .addScaledVector(u, Math.cos(angle) * radialOffset)
                         .addScaledVector(v, Math.sin(angle) * radialOffset);
                     const isSelected = selectedCircuitId && cid === selectedCircuitId;
-                    const cmat = hasLinkFocus
-                        ? (isLinkHighlighted ? CABLE_RES.highlightConduit : CABLE_RES.dimConduit)
-                        : selectedCircuitId
-                            ? (isSelected ? CABLE_RES.highlightConduit : CABLE_RES.dimConduit)
-                            : conduitFor(cid);
+                    const isFocused = hasLinkFocus
+                        ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid))
+                        : isSelected;
+                    const cmat = (hasLinkFocus || selectedCircuitId)
+                        ? (isFocused ? hiFor(cid, false) : CABLE_RES.dimConduit)
+                        : conduitFor(cid);
                     const tube = new THREE.Mesh(CABLE_RES.cyl, cmat);
                     tube.position.copy(mid).add(offset);
                     tube.quaternion.copy(q);
                     tube.scale.set(R, len, R);
-                    tube.renderOrder = 2;
+                    tube.renderOrder = isFocused ? 3 : 2;
                     add(tube);
 
                     wires.slice(0, 18).forEach((col, i) => {
@@ -2190,12 +2225,11 @@
                             const ang = (idx / n) * Math.PI * 2;
                             wireOffset.addScaledVector(u, Math.cos(ang) * rad).addScaledVector(v, Math.sin(ang) * rad);
                         }
-                        const coreMat = hasLinkFocus
-                            ? (isLinkHighlighted ? CABLE_RES.highlightCore : CABLE_RES.dimCore)
-                            : selectedCircuitId
-                                ? (isSelected ? CABLE_RES.highlightCore : CABLE_RES.dimCore)
-                                : matFor(col);
+                        const coreMat = (hasLinkFocus || selectedCircuitId)
+                            ? (isFocused ? hiFor(cid, true) : CABLE_RES.dimCore)
+                            : matFor(col);
                         const core = new THREE.Mesh(CABLE_RES.core, coreMat);
+                        core.renderOrder = isFocused ? 3 : 2;
                         core.position.copy(mid).add(offset).add(wireOffset);
                         core.quaternion.copy(q);
                         core.scale.set(0.6, len, 0.6);
@@ -2205,8 +2239,9 @@
                     [[a, dir.clone()], [b, dir.clone().negate()]].forEach(([p, d]) => {
                         const jp = p.clone().add(offset);
                         const k = (cid || '_') + '|' + jp.x.toFixed(1) + '|' + jp.y.toFixed(1) + '|' + jp.z.toFixed(1);
-                        if (!joints.has(k)) joints.set(k, { pos: jp, dirs: [], R: 0, mat: cmat });
+                        if (!joints.has(k)) joints.set(k, { pos: jp, dirs: [], R: 0, mat: cmat, focused: isFocused });
                         const j = joints.get(k);
+                        if ((selectedCircuitId || hasLinkFocus) && isFocused && !j.focused) { j.mat = cmat; j.focused = true; }
                         if (!selectedCircuitId && !hasLinkFocus && j.mat !== cmat) j.mat = CABLE_RES.conduitMat;
                         j.dirs.push(d);
                         j.R = Math.max(j.R, R);
@@ -2220,7 +2255,7 @@
                 const s = new THREE.Mesh(CABLE_RES.sph, j.mat);
                 s.position.copy(j.pos);
                 s.scale.set(j.R, j.R, j.R);
-                s.renderOrder = 2;
+                s.renderOrder = j.focused ? 3 : 2;
                 add(s);
             });
             return net;
@@ -2344,6 +2379,7 @@
             });
 
             addCircuitElementHighlights();
+            addCollisionHighlights();
             renderCableNetwork(cx, cy);
 
             if (selected3DId) {
@@ -2749,12 +2785,6 @@
                         return;
                     }
                 }
-                if (selected3DId) {
-                    selected3DId = null;
-                    updateSelectionHighlight(null);
-                    syncElementInspectors();
-                    redraw2D();
-                }
             }
         }
 
@@ -3012,6 +3042,11 @@
         }
 
         function selectCircuit(id) {
+            if (selected3DId) {
+                selected3DId = null;
+                updateSelectionHighlight(null);
+                syncElementInspectors();
+            }
             selectedCircuitId = id && projectData.circuits.some(c => c.id === id)
                 ? (selectedCircuitId === id ? null : id)
                 : null;
@@ -3034,7 +3069,7 @@
                 .map(el => el.id));
             interactiveObjects3D.forEach(obj => {
                 if (!obj.userData || !highlightedIds.has(obj.userData.id)) return;
-                const helper = new THREE.BoxHelper(obj, 0xfacc15);
+                const helper = new THREE.BoxHelper(obj, circuitColor(selectedCircuit));
                 helper.material.transparent = true;
                 helper.material.opacity = 0.95;
                 helper.material.depthTest = false;
@@ -3043,6 +3078,36 @@
                 threeScene.add(helper);
                 wallMeshes3D.push(helper);
             });
+        }
+
+        let blinkOn = true;
+
+        function addCollisionHighlights() {
+            const ids = collidingElementIds();
+            if (!ids.size) return;
+            interactiveObjects3D.forEach(obj => {
+                if (!obj.userData || !ids.has(obj.userData.id)) return;
+                const helper = new THREE.BoxHelper(obj, 0xef4444);
+                helper.material.depthTest = false;
+                helper.renderOrder = 11;
+                helper.userData.shared = false;
+                helper.userData.blink = true;
+                helper.visible = blinkOn;
+                threeScene.add(helper);
+                wallMeshes3D.push(helper);
+            });
+        }
+
+        // Clignotement des appareils en collision (plan 2D et vue 3D)
+        function startCollisionBlink() {
+            setInterval(() => {
+                blinkOn = !blinkOn;
+                if (currentMode === '3d') {
+                    wallMeshes3D.forEach(m => { if (m.userData && m.userData.blink) m.visible = blinkOn; });
+                } else if (currentMode === '2d' && collidingElementIds().size) {
+                    redraw2D();
+                }
+            }, 450);
         }
 
         function circuitRoot(c) {
@@ -3250,6 +3315,67 @@
         }
 
         // ---------- Contrôles par circuit + métré ----------
+        // Appareils posés dans l'emprise d'une porte ou d'une fenêtre
+        function computeOpeningCollisions() {
+            const list = [];
+            projectData.electrical.forEach(el => {
+                if (el.type === 'light_ceiling') return;
+                const w = projectData.walls.find(x => x.id === el.wallId);
+                if (!w) return;
+                const wl = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+                const dist = el.distanceFromStart !== undefined ? el.distanceFromStart : wl / 2;
+                const z = getElCoords(el).z;
+                projectData.openings.forEach(op => {
+                    if (op.wallId !== w.id) return;
+                    const b = openingBox(op, w);
+                    if (Math.abs(dist - b.d) < b.half && z >= b.z0 && z <= b.z1) list.push({ el, isDoor: !!b.isDoor });
+                });
+            });
+            return list;
+        }
+
+        function collidingElementIds() {
+            return new Set(computeOpeningCollisions().map(c => c.el.id));
+        }
+
+        // Prises simples proches (même mur, même côté, même hauteur) : regroupées automatiquement en double / triple / quadruple
+        const GANGABLE_OUTLETS = ['outlet_16a', 'outlet_20a'];
+        const GANG_MAX_GAP_CM = 15;
+        const GANG_NAMES = { 1: 'simple', 2: 'double', 3: 'triple', 4: 'quadruple' };
+
+        function computeOutletGangs() {
+            const sizeOf = new Map();
+            const tally = {};
+            GANGABLE_OUTLETS.forEach(type => { tally[type] = { 1: 0, 2: 0, 3: 0, 4: 0 }; });
+            const buckets = new Map();
+            projectData.electrical.forEach(el => {
+                if (!GANGABLE_OUTLETS.includes(el.type)) return;
+                const w = projectData.walls.find(x => x.id === el.wallId);
+                const wl = w ? Math.hypot(w.x2 - w.x1, w.y2 - w.y1) : 0;
+                const dist = el.distanceFromStart !== undefined ? el.distanceFromStart : wl / 2;
+                const key = el.type + '|' + el.wallId + '|' + (el.side === -1 ? -1 : 1);
+                if (!buckets.has(key)) buckets.set(key, []);
+                buckets.get(key).push({ el, dist, h: el.height || defaultHeightFor(el.type) });
+            });
+            buckets.forEach(items => {
+                items.sort((a, b) => a.dist - b.dist);
+                let cluster = [];
+                const close = () => {
+                    if (!cluster.length) return;
+                    cluster.forEach(it => sizeOf.set(it.el.id, cluster.length));
+                    tally[cluster[0].el.type][cluster.length]++;
+                    cluster = [];
+                };
+                items.forEach(it => {
+                    const last = cluster[cluster.length - 1];
+                    if (last && it.dist - last.dist <= GANG_MAX_GAP_CM && Math.abs(it.h - last.h) <= 5 && cluster.length < 4) cluster.push(it);
+                    else { close(); cluster.push(it); }
+                });
+                close();
+            });
+            return { sizeOf, tally };
+        }
+
         function computeCircuitReport() {
             const net = getCableNetwork();
             const info = net.linkInfo || [];
@@ -3283,25 +3409,12 @@
             projectData.electrical.filter(isLightingControl).forEach(el => {
                 const height = el.height || 110;
                 if (height < 90 || height > 130) {
-                    alerts.push((ELEMENT_LABELS[el.type] || 'Commande d’éclairage') + ' hors de la plage de hauteur usuelle 0,90–1,30 m.');
+                    alerts.push(electricalDisplayName(el) + ' hors de la plage de hauteur usuelle 0,90–1,30 m.');
                 }
             });
             rows.forEach(r => r.warnings.forEach(w => alerts.push(r.circuit.name + ' : ' + w)));
-            // appareil posé dans l'emprise d'une porte ou d'une fenêtre
-            projectData.electrical.forEach(el => {
-                if (el.type === 'light_ceiling') return;
-                const w = projectData.walls.find(x => x.id === el.wallId);
-                if (!w) return;
-                const wl = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
-                const dist = el.distanceFromStart !== undefined ? el.distanceFromStart : wl / 2;
-                const z = getElCoords(el).z;
-                projectData.openings.forEach(op => {
-                    if (op.wallId !== w.id) return;
-                    const b = openingBox(op, w);
-                    if (Math.abs(dist - b.d) < b.half && z >= b.z0 && z <= b.z1) {
-                        alerts.push((ELEMENT_LABELS[el.type] || el.type) + ' placé(e) dans ' + (b.isDoor ? 'une porte' : 'une fenêtre') + ' : à déplacer');
-                    }
-                });
+            computeOpeningCollisions().forEach(({ el, isDoor }) => {
+                alerts.push(electricalDisplayName(el) + ' placé(e) dans ' + (isDoor ? 'une porte' : 'une fenêtre') + ' : à déplacer');
             });
             const infos = projectData.circuits.filter(c => c.auto).map(c => '« ' + c.name + ' » créé automatiquement (' + c.maxPoints + ' points maximum par circuit)');
 
@@ -3310,7 +3423,19 @@
             const conduitM = net.segments.reduce((s, sg) => s + Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y, sg.b.z - sg.a.z), 0) / 100;
             const counts = {};
             projectData.electrical.forEach(el => { counts[el.type] = (counts[el.type] || 0) + 1; });
-            return { rows, alerts, infos, sections, conduitM, counts };
+            const gangs = computeOutletGangs();
+            // lignes du décompte : les prises regroupables sont détaillées en simple / double / triple / quadruple
+            const countLines = [];
+            Object.keys(counts).forEach(t => {
+                if (gangs.tally[t]) {
+                    [1, 2, 3, 4].forEach(n => {
+                        if (gangs.tally[t][n]) countLines.push({ label: ELEMENT_LABELS[t] + ' ' + GANG_NAMES[n], count: gangs.tally[t][n] });
+                    });
+                } else {
+                    countLines.push({ label: ELEMENT_LABELS[t] || t, count: counts[t] });
+                }
+            });
+            return { rows, alerts, infos, sections, conduitM, counts, countLines };
         }
 
         function updateCircuitsUI() {
@@ -3342,22 +3467,28 @@
                     '<div class="flex items-center justify-between gap-2">' +
                     '<div class="flex items-center gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + esc(circuitColor(c)) + '"></span>' +
                     '<div class="min-w-0"><div class="font-semibold text-slate-200 truncate">' + esc(c.name) + (c.auto ? ' <span class="text-[9px] px-1 rounded bg-sky-500/20 text-sky-300 align-middle">auto</span>' : '') + '</div>' +
-                    '<div class="text-[10px] text-slate-400">' + c.breakerRating + 'A | ' + c.wireSection + ' mm² | ' + r.points + '/' + c.maxPoints + ' pts' + lengthInfo + '</div></div></div>' +
-                    '<button onclick="event.stopPropagation();editCircuit(\'' + esc(c.id) + '\')" class="text-slate-400 hover:text-white px-1" title="Modifier"><i class="fa-solid fa-pen text-[10px]"></i></button></div>' +
+                    '<div class="text-[10px] text-slate-400">' + r.points + '/' + c.maxPoints + ' pts' + lengthInfo + '</div></div></div></div>' +
+                    '<div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-[10px] text-slate-300">' +
+                    stepperHtml(c.id, 'breakerRating', 'Calibre', c.breakerRating + 'A') +
+                    stepperHtml(c.id, 'wireSection', 'Section', c.wireSection + ' mm²') +
+                    stepperHtml(c.id, 'maxPoints', 'Éléments', String(c.maxPoints)) + '</div>' +
                     r.warnings.map(w => '<div class="text-[10px] text-rose-300 mt-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>' + esc(w) + '</div>' +
                         '<div class="ml-4 text-[10px] text-amber-200/90">Piste de correction : ' + esc(solutionForWarning(w)) + '</div>').join('');
                 list.appendChild(div);
             });
 
+            const alertsHtml = rep.alerts.length
+                ? '<div class="space-y-2">' + rep.alerts.map(a => '<div><div class="text-[11px] text-amber-300"><i class="fa-solid fa-triangle-exclamation mr-1"></i>' + esc(a) + '</div>' +
+                    '<div class="ml-4 text-[10px] text-amber-200/90">Piste de correction : ' + esc(solutionForWarning(a)) + '</div></div>').join('') + '</div>'
+                : '<div class="text-[11px] text-emerald-300"><i class="fa-solid fa-circle-check mr-1"></i>Aucune alerte</div>';
+
+            const warningsBox = document.getElementById('warnings-content');
+            if (warningsBox) warningsBox.innerHTML = alertsHtml;
+
             const box = document.getElementById('report-content');
             if (box) {
                 let html = '';
-                if (rep.alerts.length) {
-                    html += '<div class="space-y-2">' + rep.alerts.map(a => '<div><div class="text-[11px] text-amber-300"><i class="fa-solid fa-triangle-exclamation mr-1"></i>' + esc(a) + '</div>' +
-                        '<div class="ml-4 text-[10px] text-amber-200/90">Piste de correction : ' + esc(solutionForWarning(a)) + '</div></div>').join('') + '</div>';
-                } else if (projectData.electrical.length) {
-                    html += '<div class="text-[11px] text-emerald-300"><i class="fa-solid fa-circle-check mr-1"></i>Aucune alerte</div>';
-                }
+                if (rep.alerts.length || projectData.electrical.length) html += alertsHtml;
                 if (rep.infos.length) {
                     html += '<div class="space-y-1">' + rep.infos.map(a => '<div class="text-[11px] text-sky-300"><i class="fa-solid fa-circle-info mr-1"></i>' + esc(a) + '</div>').join('') + '</div>';
                 }
@@ -3365,7 +3496,7 @@
                 html += '<div class="space-y-0.5">';
                 secs.forEach(([s, m]) => { html += '<div class="flex justify-between"><span>Câble 3G' + s + ' mm²</span><span class="text-slate-100 font-semibold">' + Math.ceil(m * 1.1) + ' m</span></div>'; });
                 if (rep.conduitM > 0) html += '<div class="flex justify-between"><span>Gaine / conduit</span><span class="text-slate-100 font-semibold">' + Math.ceil(rep.conduitM * 1.1) + ' m</span></div>';
-                Object.keys(rep.counts).forEach(t => { html += '<div class="flex justify-between"><span>' + esc(ELEMENT_LABELS[t] || t) + '</span><span class="text-slate-100 font-semibold">' + rep.counts[t] + '</span></div>'; });
+                rep.countLines.forEach(line => { html += '<div class="flex justify-between"><span>' + esc(line.label) + '</span><span class="text-slate-100 font-semibold">' + line.count + '</span></div>'; });
                 html += '</div>';
                 if (secs.length) html += '<div class="text-[10px] text-slate-500">Longueurs avec 10 % de marge. Contrôles indicatifs : à faire valider par un électricien (NF C 15-100).</div>';
                 box.innerHTML = html;
@@ -3418,7 +3549,7 @@
             const rows = [['Catégorie', 'Désignation', 'Quantité', 'Unité']];
             [...rep.sections.entries()].sort((a, b) => a[0] - b[0]).forEach(([s, m]) => rows.push(['Câble', 'Câble 3G' + s + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
             if (rep.conduitM > 0) rows.push(['Gaine', 'Gaine / conduit (marge 10 %)', Math.ceil(rep.conduitM * 1.1), 'm']);
-            Object.keys(rep.counts).forEach(t => rows.push(['Appareillage', ELEMENT_LABELS[t] || t, rep.counts[t], 'u']));
+            rep.countLines.forEach(line => rows.push(['Appareillage', line.label, line.count, 'u']));
             const doors = projectData.openings.filter(o => o.type === 'door_single').length;
             const wins = projectData.openings.filter(o => o.type === 'window_std').length;
             if (doors) rows.push(['Ouvertures', 'Porte simple', doors, 'u']);
@@ -3432,6 +3563,42 @@
             a.click();
             a.remove();
             showNotification('Métré exporté en CSV', 'success');
+        }
+
+        const CIRCUIT_STEPS = { breakerRating: [10, 16, 20, 32], wireSection: [1.5, 2.5, 6] };
+
+        function stepperHtml(id, field, label, value) {
+            const btn = (dir, sym) => '<button onclick="event.stopPropagation();adjustCircuit(\'' + esc(id) + '\',\'' + field + '\',' + dir + ')" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 leading-none" aria-label="' + label + (dir > 0 ? ' +' : ' -') + '">' + sym + '</button>';
+            return '<span class="flex items-center gap-1" title="' + label + '">' + label + ' ' + btn(-1, '−') +
+                '<span class="min-w-[2.5rem] text-center font-semibold text-slate-100">' + esc(value) + '</span>' + btn(1, '+') + '</span>';
+        }
+
+        function adjustCircuit(id, field, dir) {
+            const c = projectData.circuits.find(x => x.id === id);
+            if (!c) return;
+            let next;
+            if (field === 'maxPoints') {
+                next = (c.maxPoints | 0) + dir;
+                const standardLimit = CIRCUIT_POINT_LIMITS[circuitRoot(c).id];
+                if (next < 1) return;
+                if (standardLimit !== undefined && next > standardLimit) {
+                    showNotification('Limite NF C 15-100 dépassée : ' + standardLimit + ' points maximum pour ce circuit', 'error');
+                    return;
+                }
+            } else {
+                const steps = CIRCUIT_STEPS[field];
+                if (!steps) return;
+                let idx = steps.findIndex(v => v >= c[field]);
+                if (idx < 0) idx = steps.length - 1;
+                else if (steps[idx] !== c[field] && dir < 0) idx -= 1;
+                else if (steps[idx] === c[field]) idx += dir;
+                if (idx < 0 || idx >= steps.length) return;
+                next = steps[idx];
+            }
+            if (next === c[field]) return;
+            saveStateToUndo();
+            c[field] = next;
+            if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
         }
 
         function editCircuit(id) {
@@ -3471,7 +3638,7 @@
         function electricalDisplayName(el) {
             const sameType = projectData.electrical.filter(candidate => candidate.type === el.type);
             const ordinal = sameType.findIndex(candidate => candidate.id === el.id) + 1;
-            return (ELEMENT_LABELS[el.type] || el.type) + ' ' + ordinal;
+            return (ELEMENT_LABELS[el.type] || el.type) + ' n°' + ordinal;
         }
 
         function focusAssociatedElement(id) {
@@ -3641,7 +3808,7 @@
             if (box) {
                 box.classList.toggle('hidden', !(el || op));
                 if (el || op) {
-                    document.getElementById('el2d-name').textContent = el ? (ELEMENT_LABELS[el.type] || el.type) : (op.type === 'door_single' ? 'Porte' : 'Fenêtre');
+                    document.getElementById('el2d-name').textContent = el ? electricalDisplayName(el) : (op.type === 'door_single' ? 'Porte' : 'Fenêtre');
                     document.getElementById('el2d-circuit-wrap').classList.toggle('hidden', !circ);
                     document.getElementById('el2d-dup').classList.toggle('hidden', !el);
                 }
@@ -3898,6 +4065,74 @@
             }
         }
 
+        // Cotes des murs : placées hors de l'épaisseur des murs, à l'écart des appareils, des ouvertures et des autres cotes
+        function drawWallLengthLabels() {
+            ctx2D.font = 'bold 11px Inter, sans-serif';
+            ctx2D.textAlign = 'center';
+            ctx2D.textBaseline = 'middle';
+            const hh = 7;
+            const obstacles = [];
+            projectData.electrical.forEach(el => {
+                const p = getElCoords(el);
+                obstacles.push({ x: p.x, y: p.y, r: el.type === 'panel' ? 24 : 18 });
+            });
+            projectData.openings.forEach(op => {
+                const p = openingPos2D(op);
+                if (p) obstacles.push({ x: p.x, y: p.y, r: op.type === 'door_single' ? 50 : 62 });
+            });
+            const placed = [];
+            const rectHitsCircle = (cx, cy, hw, o) => {
+                const nx = Math.max(cx - hw, Math.min(o.x, cx + hw));
+                const ny = Math.max(cy - hh, Math.min(o.y, cy + hh));
+                return Math.hypot(o.x - nx, o.y - ny) < o.r;
+            };
+            const rectHitsWall = (cx, cy, hw, w) => {
+                const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
+                const margin = (w.thickness || 10) / 2 + 3;
+                const steps = Math.max(1, Math.ceil(len / 8));
+                for (let i = 0; i <= steps; i++) {
+                    const px = w.x1 + dx * i / steps, py = w.y1 + dy * i / steps;
+                    if (px > cx - hw - margin && px < cx + hw + margin && py > cy - hh - margin && py < cy + hh + margin) return true;
+                }
+                return false;
+            };
+            const bg = currentTheme === 'light' ? '#ffffff' : '#020617';
+
+            projectData.walls.forEach(wall => {
+                const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+                const len = Math.hypot(dx, dy);
+                if (len < 1) return;
+                const label = (len / 100).toFixed(2) + ' m';
+                const hw = ctx2D.measureText(label).width / 2 + 3;
+                const nx = -dy / len, ny = dx / len;
+                const off = (wall.thickness || 10) / 2 + 4 + hh;
+                let best = null, bestScore = Infinity;
+                [0.5, 0.35, 0.65, 0.2, 0.8].forEach(t => {
+                    [1, -1].forEach(side => {
+                        const mx = wall.x1 + dx * t, my = wall.y1 + dy * t;
+                        // décalage perpendiculaire suffisant pour sortir de l'épaisseur du mur, même pour un mur oblique
+                        const extra = Math.abs(nx) * hw + Math.abs(ny) * hh - hh;
+                        const d = off + Math.max(0, extra);
+                        const cx = mx + nx * side * d, cy = my + ny * side * d;
+                        let score = 0;
+                        obstacles.forEach(o => { if (rectHitsCircle(cx, cy, hw, o)) score += 3; });
+                        projectData.walls.forEach(w => { if (rectHitsWall(cx, cy, hw, w)) score += 3; });
+                        placed.forEach(r => { if (Math.abs(r.x - cx) < r.hw + hw && Math.abs(r.y - cy) < hh * 2) score += 3; });
+                        score += Math.abs(t - 0.5) * 0.1;
+                        if (score < bestScore) { bestScore = score; best = { x: cx, y: cy }; }
+                    });
+                });
+                placed.push({ x: best.x, y: best.y, hw });
+                ctx2D.lineJoin = 'round';
+                ctx2D.lineWidth = 4;
+                ctx2D.strokeStyle = bg;
+                ctx2D.strokeText(label, best.x, best.y);
+                ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f1f5f9';
+                ctx2D.fillText(label, best.x, best.y);
+            });
+            ctx2D.textBaseline = 'alphabetic';
+        }
+
         function draw2DEquipment() {
             ensureCircuitAssignment();
             // 1. Câbles (trait plein = plafond, pointillé = plinthe)
@@ -3990,6 +4225,21 @@
 
             // 3. Appareils électriques (symboles de plan)
             projectData.electrical.forEach(el => drawElementSymbol2D(el));
+            if (!isPrintRendering && blinkOn) {
+                const colliding = collidingElementIds();
+                projectData.electrical.forEach(el => {
+                    if (!colliding.has(el.id)) return;
+                    const p = getElCoords(el);
+                    ctx2D.beginPath();
+                    ctx2D.arc(p.x, p.y, 20, 0, Math.PI * 2);
+                    ctx2D.fillStyle = 'rgba(239,68,68,0.35)';
+                    ctx2D.fill();
+                    ctx2D.lineWidth = 3;
+                    ctx2D.strokeStyle = '#ef4444';
+                    ctx2D.stroke();
+                });
+            }
+            drawWallLengthLabels();
             ctx2D.textBaseline = 'alphabetic';
         }
 
@@ -4162,6 +4412,43 @@
             showNotification('Projet enregistré sous « ' + fileName + '.json »', 'success');
         }
 
+        function capturePlanImage(mode) {
+            if (mode === '3d') {
+                on3DWindowResize();
+                threeRenderer.render(threeScene, threeCamera);
+                return threeRenderer.domElement.toDataURL('image/png');
+            }
+            resize2DCanvas();
+            const previouslySelectedId = selected3DId;
+            selected3DId = null;
+            isPrintRendering = true;
+            try {
+                redraw2D();
+                return canvas2D.toDataURL('image/png');
+            } finally {
+                isPrintRendering = false;
+                selected3DId = previouslySelectedId;
+                redraw2D();
+            }
+        }
+
+        function savePlanPng(mode) {
+            try {
+                const imageUrl = capturePlanImage(mode);
+                if (!imageUrl) throw new Error('La vue à enregistrer est vide.');
+                const anchor = document.createElement('a');
+                anchor.href = imageUrl;
+                anchor.download = 'clic_and_volt_pro_plan_' + mode + '.png';
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                showNotification('Plan ' + mode.toUpperCase() + ' enregistré en PNG', 'success');
+            } catch (error) {
+                console.error('Échec de l’enregistrement PNG.', error);
+                showNotification('Impossible d’enregistrer le plan en PNG.', 'error');
+            }
+        }
+
         function printPlan(mode) {
             const printWindow = window.open('', '_blank');
             if (!printWindow) {
@@ -4169,25 +4456,7 @@
                 return;
             }
             try {
-                let imageUrl;
-                if (mode === '3d') {
-                    on3DWindowResize();
-                    threeRenderer.render(threeScene, threeCamera);
-                    imageUrl = threeRenderer.domElement.toDataURL('image/png');
-                } else {
-                    resize2DCanvas();
-                    const previouslySelectedId = selected3DId;
-                    selected3DId = null;
-                    isPrintRendering = true;
-                    try {
-                        redraw2D();
-                        imageUrl = canvas2D.toDataURL('image/png');
-                    } finally {
-                        isPrintRendering = false;
-                        selected3DId = previouslySelectedId;
-                        redraw2D();
-                    }
-                }
+                const imageUrl = capturePlanImage(mode);
                 if (!imageUrl) throw new Error('La vue à imprimer est vide.');
                 const title = mode === '3d' ? 'Plan 3D' : 'Plan 2D';
                 printWindow.document.open();
