@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Archiz - Plan 2D & Modélisateur 3D</title>
+    <title>Clic & Volt - Plan 2D & Modélisateur 3D</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -16,6 +16,40 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
         canvas { display: block; outline: none; }
         .tool-active-yellow { border-color: #facc15 !important; box-shadow: 0 0 15px rgba(250, 204, 21, 0.6); background-color: rgba(250, 204, 21, 0.15) !important; color: #fef08a !important; }
+        body.theme-light { background: #f1f5f9; color: #0f172a; }
+        body.theme-light .bg-slate-950 { background-color: #f8fafc !important; }
+        body.theme-light [class*="bg-slate-950/"] { background-color: rgba(248, 250, 252, 0.94) !important; }
+        body.theme-light .bg-slate-900 { background-color: #ffffff !important; }
+        body.theme-light [class*="bg-slate-900/"] { background-color: rgba(255, 255, 255, 0.94) !important; }
+        body.theme-light .bg-slate-800 { background-color: #e2e8f0 !important; }
+        body.theme-light .bg-slate-700 { background-color: #cbd5e1 !important; }
+        body.theme-light .bg-black { background-color: #e2e8f0 !important; }
+        body.theme-light .border-slate-800 { border-color: #cbd5e1 !important; }
+        body.theme-light .border-slate-700 { border-color: #cbd5e1 !important; }
+        body.theme-light .text-white { color: #0f172a !important; }
+        body.theme-light .text-slate-100 { color: #1e293b !important; }
+        body.theme-light .text-slate-200 { color: #334155 !important; }
+        body.theme-light .text-slate-300 { color: #475569 !important; }
+        body.theme-light .text-slate-400 { color: #64748b !important; }
+        body.theme-light .text-slate-500 { color: #64748b !important; }
+        body.theme-light .text-slate-600 { color: #475569 !important; }
+        body.theme-light .text-amber-300,
+        body.theme-light .text-amber-400 { color: #92400e !important; }
+        body.theme-light .text-sky-300 { color: #075985 !important; }
+        body.theme-light .text-emerald-300 { color: #047857 !important; }
+        body.theme-light .text-emerald-400 { color: #047857 !important; }
+        body.theme-light .text-green-300 { color: #047857 !important; }
+        body.theme-light .text-green-400 { color: #047857 !important; }
+        body.theme-light .hover\:bg-slate-700:hover { background-color: #cbd5e1 !important; }
+        body.theme-light .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
+        body.theme-light .hover\:text-white:hover { color: #0f172a !important; }
+        body.theme-light .custom-scrollbar::-webkit-scrollbar-track { background: #e2e8f0; }
+        body.theme-light .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; }
+        .theme-toggle-sun { color: #f4c430 !important; }
+        .wall-light-placement-icon { color: #facc15 !important; }
+        @media print {
+            html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col">
@@ -27,7 +61,7 @@
             </div>
             <div>
                 <h1 class="font-bold text-lg tracking-wide text-white flex items-center gap-2">
-                    Archiz
+                    Clic & Volt
                 </h1>
                 <p class="text-xs text-slate-400">Plan 2D & Modélisateur 3D (Câblage auto & Repiquage)</p>
             </div>
@@ -45,6 +79,9 @@
 
         <!-- Action Buttons -->
         <div class="flex items-center space-x-2">
+            <button id="theme-toggle" onclick="toggleTheme()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition" title="Passer au thème clair" aria-label="Passer au thème clair">
+                <i class="fa-solid fa-sun theme-toggle-sun"></i>
+            </button>
             <button onclick="triggerNewProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Nouveau projet">
                 <i class="fa-solid fa-file-circle-plus"></i> <span class="hidden md:inline">Nouveau</span>
             </button>
@@ -80,6 +117,9 @@
                             </button>
                             <button onclick="setTool('place')" id="btn-tool-place" class="tool-btn p-3 rounded-xl border border-slate-800 bg-slate-800 text-slate-300 text-xs font-medium flex flex-col items-center gap-1.5 hover:border-slate-700 transition shadow-sm">
                                 <i class="fa-solid fa-plug-circle-plus text-base"></i> Placer appareil
+                            </button>
+                            <button onclick="setTool('pan')" id="btn-tool-pan" class="tool-btn p-3 rounded-xl border border-slate-800 bg-slate-800 text-slate-300 text-xs font-medium flex flex-col items-center gap-1.5 hover:border-slate-700 transition shadow-sm">
+                                <i class="fa-solid fa-hand text-base"></i> Déplacer la vue
                             </button>
                         </div>
                     </div>
@@ -119,6 +159,7 @@
                         <label class="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
                             <span>Élément sélectionné</span><span id="el2d-name" class="text-slate-200 normal-case"></span>
                         </label>
+                        <div id="lighting-associations-2d" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
                         <div id="el2d-circuit-wrap" class="space-y-1">
                             <div class="text-xs text-slate-300">Circuit</div>
                             <select id="el2d-circuit" onchange="setSelectedCircuit(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
@@ -208,17 +249,6 @@
                                 <i class="fa-solid fa-bezier-curve"></i> Câbles : ON
                             </button>
                         </div>
-                        <div class="flex gap-2 pt-1">
-                            <button onclick="undoAction()" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 flex items-center justify-center gap-1 transition">
-                                <i class="fa-solid fa-rotate-left"></i> Annuler
-                            </button>
-                            <button onclick="redoAction()" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 flex items-center justify-center gap-1 transition">
-                                <i class="fa-solid fa-rotate-right"></i> Rétablir
-                            </button>
-                            <button onclick="clearCanvas()" class="px-3 py-2 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 rounded-lg text-xs font-medium text-rose-300 flex items-center justify-center gap-1 transition" title="Tout effacer">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </div>
                     </div>
                 </div>
                 <div class="p-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
@@ -236,11 +266,15 @@
                     <span class="text-slate-600">|</span>
                     <span id="drawing-instruction-hint" class="text-emerald-300">Cliquez pour placer le premier point du mur (Clic droit pour fermer/terminer)</span>
                 </div>
-
-                <div class="absolute bottom-6 right-6 flex flex-col gap-2 bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl">
-                    <button onclick="zoomCanvas(1.15)" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg flex items-center justify-center transition" title="Zoom Avant"><i class="fa-solid fa-plus"></i></button>
-                    <button onclick="zoomCanvas(0.85)" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg flex items-center justify-center transition" title="Zoom Arrière"><i class="fa-solid fa-minus"></i></button>
-                    <button onclick="resetZoomPan()" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg flex items-center justify-center transition" title="Réinitialiser la vue"><i class="fa-solid fa-expand"></i></button>
+                <div class="absolute top-4 right-4 z-10 flex bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
+                    <button onclick="printPlan('2d')" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Imprimer / enregistrer le plan 2D en PDF" aria-label="Imprimer le plan 2D"><i class="fa-solid fa-print"></i></button>
+                    <button onclick="undoAction()" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Annuler" aria-label="Annuler"><i class="fa-solid fa-rotate-left"></i></button>
+                    <button onclick="redoAction()" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Rétablir" aria-label="Rétablir"><i class="fa-solid fa-rotate-right"></i></button>
+                    <button onclick="clearCanvas()" class="w-9 h-9 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Tout effacer" aria-label="Tout effacer"><i class="fa-solid fa-trash"></i></button>
+                    <button onclick="zoomCanvas(1.15)" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Zoom avant" aria-label="Zoom avant"><i class="fa-solid fa-plus"></i></button>
+                    <button onclick="zoomCanvas(0.85)" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Zoom arrière" aria-label="Zoom arrière"><i class="fa-solid fa-minus"></i></button>
+                    <button onclick="resetZoomPan()" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Recentrer le plan" aria-label="Recentrer le plan"><i class="fa-solid fa-expand"></i></button>
+                    <button id="btn-pan-canvas" onclick="setTool('pan')" class="w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Activer le déplacement du plan à la souris gauche" aria-label="Déplacer le plan avec le bouton gauche"><i class="fa-solid fa-hand"></i></button>
                 </div>
             </div>
         </div>
@@ -286,6 +320,7 @@
 
                 <!-- 3D Undo / Redo -->
                 <div class="absolute top-4 right-4 z-10 flex bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
+                    <button onclick="printPlan('3d')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1" title="Imprimer / enregistrer le plan 3D en PDF"><i class="fa-solid fa-print"></i> Imprimer 3D</button>
                     <button onclick="undoAction()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1"><i class="fa-solid fa-rotate-left"></i> Annuler</button>
                     <button onclick="redoAction()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1"><i class="fa-solid fa-rotate-right"></i> Rétablir</button>
                 </div>
@@ -352,10 +387,10 @@
                             <button onclick="setPlacementType('switch_pushbutton')" id="btn-place-switch_pushbutton" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition">
                                 <i class="fa-regular fa-circle-dot text-sky-400 text-base"></i> Bouton poussoir (télérupteur)
                             </button>
-                            <button onclick="setPlacementType('wall_light')" id="btn-place-wall_light" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition col-span-2">
-                                <i class="fa-solid fa-lightbulb text-amber-400 text-base"></i> Applique Murale (Cliquer sur un mur)
+                            <button onclick="setPlacementType('wall_light')" id="btn-place-wall_light" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition">
+                                <i class="fa-solid fa-lightbulb wall-light-placement-icon text-base"></i> Applique Murale (Cliquer sur un mur)
                             </button>
-                            <button onclick="setPlacementType('light_ceiling')" id="btn-place-light_ceiling" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition col-span-2">
+                            <button onclick="setPlacementType('light_ceiling')" id="btn-place-light_ceiling" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition">
                                 <i class="fa-solid fa-lightbulb text-yellow-400 text-base"></i> Plafonnier (Cliquer au plafond)
                             </button>
                         </div>
@@ -369,8 +404,8 @@
                         </label>
                         <div class="border-b border-slate-800 pb-2">
                             <div id="inspector-3d-element-name" class="text-sm font-semibold text-white"></div>
-                            <div id="inspector-3d-element-id" class="text-[10px] text-slate-500 font-mono"></div>
                         </div>
+                        <div id="lighting-associations" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
                         <p class="text-[11px] text-slate-400">Modifiez la position, la hauteur ou basculez de côté.</p>
                         <div id="door-hinge-3d-container" class="hidden space-y-1">
                             <label for="door-hinge-3d" class="text-xs text-slate-300">Sens d'ouverture (vue côté pose)</label>
@@ -439,6 +474,8 @@
         let currentTool = 'wall';
         let gridSnap = true;
         let angleSnap = true;
+        let currentTheme = 'dark';
+        let isPrintRendering = false;
 
         let projectData = {
             walls: [],
@@ -489,6 +526,7 @@
         let planeIntersectPoint = new THREE.Vector3();
 
         window.addEventListener('DOMContentLoaded', () => {
+            initializeTheme();
             document.getElementById('inspector-dock-slot').appendChild(document.getElementById('inspector-3d'));
             init2DCanvas();
             init3DScene();
@@ -516,6 +554,42 @@
                 }
             });
         });
+
+        function initializeTheme() {
+            try {
+                const savedTheme = localStorage.getItem('clic_and_volt_theme');
+                currentTheme = savedTheme === 'light' ? 'light' : 'dark';
+            } catch (error) {
+                console.warn('Impossible de lire le thème enregistré.', error);
+            }
+            applyTheme();
+        }
+
+        function applyTheme() {
+            const light = currentTheme === 'light';
+            document.body.classList.toggle('theme-light', light);
+            const button = document.getElementById('theme-toggle');
+            if (button) {
+                button.innerHTML = light
+                    ? '<i class="fa-solid fa-sun theme-toggle-sun"></i>'
+                    : '<i class="fa-solid fa-moon"></i>';
+                button.title = light ? 'Passer au thème sombre' : 'Passer au thème clair';
+                button.setAttribute('aria-label', button.title);
+            }
+            if (threeScene) threeScene.background = new THREE.Color(light ? 0xe2e8f0 : 0x020617);
+            redraw2D();
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme();
+            try {
+                localStorage.setItem('clic_and_volt_theme', currentTheme);
+            } catch (error) {
+                console.error('Impossible d’enregistrer le thème choisi.', error);
+                showNotification('Le thème est appliqué, mais n’a pas pu être mémorisé.', 'error');
+            }
+        }
 
         function showNotification(message, type = 'info') {
             const toast = document.getElementById('toast-notification');
@@ -668,13 +742,17 @@
         function redraw2D() {
             if (!ctx2D || !canvas2D) return;
             ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
+            if (isPrintRendering) {
+                ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
+                ctx2D.fillRect(0, 0, canvas2D.width, canvas2D.height);
+            }
 
             ctx2D.save();
             ctx2D.translate(panX, panY);
             ctx2D.scale(zoom, zoom);
 
             if (gridSnap) {
-                ctx2D.strokeStyle = '#1e293b';
+                ctx2D.strokeStyle = currentTheme === 'light' ? '#cbd5e1' : '#1e293b';
                 ctx2D.lineWidth = 1 / zoom;
                 const gridSize = 50;
                 const startX = Math.floor(-panX / zoom / gridSize) * gridSize - gridSize * 2;
@@ -697,9 +775,9 @@
             }
 
             projectData.walls.forEach(wall => {
-                const isSelected = selectedWallIds.includes(wall.id);
+                const isSelected = !isPrintRendering && selectedWallIds.includes(wall.id);
                 
-                ctx2D.strokeStyle = isSelected ? '#34d399' : '#334155';
+                ctx2D.strokeStyle = isSelected ? (currentTheme === 'light' ? '#047857' : '#34d399') : (currentTheme === 'light' ? '#94a3b8' : '#334155');
                 ctx2D.lineWidth = wall.thickness + 4;
                 ctx2D.lineCap = 'round';
                 ctx2D.beginPath();
@@ -707,14 +785,14 @@
                 ctx2D.lineTo(wall.x2, wall.y2);
                 ctx2D.stroke();
 
-                ctx2D.strokeStyle = isSelected ? '#6ee7b7' : '#0f766e';
+                ctx2D.strokeStyle = isSelected ? (currentTheme === 'light' ? '#059669' : '#6ee7b7') : (currentTheme === 'light' ? '#047857' : '#0f766e');
                 ctx2D.lineWidth = wall.thickness;
                 ctx2D.beginPath();
                 ctx2D.moveTo(wall.x1, wall.y1);
                 ctx2D.lineTo(wall.x2, wall.y2);
                 ctx2D.stroke();
 
-                ctx2D.strokeStyle = '#020617';
+                ctx2D.strokeStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
                 ctx2D.lineWidth = Math.max(2, wall.thickness - 8);
                 ctx2D.beginPath();
                 ctx2D.moveTo(wall.x1, wall.y1);
@@ -727,7 +805,7 @@
                 const midX = (wall.x1 + wall.x2) / 2;
                 const midY = (wall.y1 + wall.y2) / 2;
 
-                ctx2D.fillStyle = '#f1f5f9';
+                ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f1f5f9';
                 ctx2D.font = 'bold 11px Inter, sans-serif';
                 ctx2D.textAlign = 'center';
                 ctx2D.fillText(lengthM.toFixed(2) + 'm', midX, midY - 12);
@@ -735,7 +813,7 @@
 
             draw2DEquipment();
 
-            if (drawingStartPoint && mouseCurrentPos) {
+            if (!isPrintRendering && drawingStartPoint && mouseCurrentPos) {
                 ctx2D.strokeStyle = '#34d399';
                 ctx2D.lineWidth = activeWallThickness;
                 ctx2D.lineCap = 'round';
@@ -755,9 +833,9 @@
                     ctx2D.textAlign = 'center';
                     ctx2D.textBaseline = 'middle';
                     const labelWidth = ctx2D.measureText(label).width + 12;
-                    ctx2D.fillStyle = '#020617';
+                    ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
                     ctx2D.fillRect(labelX - labelWidth / 2, labelY - 10, labelWidth, 20);
-                    ctx2D.fillStyle = '#a7f3d0';
+                    ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#a7f3d0';
                     ctx2D.fillText(label, labelX, labelY);
                 }
 
@@ -767,14 +845,14 @@
                 ctx2D.fill();
             }
 
-            if (currentTool === 'select') {
+            if (!isPrintRendering && currentTool === 'select') {
                 selectedWallIds.forEach(id => {
                     const wall = projectData.walls.find(w => w.id === id);
                     if (!wall) return;
                     [ [wall.x1, wall.y1], [wall.x2, wall.y2] ].forEach(([x, y]) => {
                         ctx2D.beginPath();
                         ctx2D.arc(x, y, 7 / zoom, 0, Math.PI * 2);
-                        ctx2D.fillStyle = '#f8fafc';
+                        ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#f8fafc';
                         ctx2D.fill();
                         ctx2D.lineWidth = 2 / zoom;
                         ctx2D.strokeStyle = '#059669';
@@ -783,7 +861,7 @@
                 });
             }
 
-            if (selectionBoxStart && selectionBoxEnd) {
+            if (!isPrintRendering && selectionBoxStart && selectionBoxEnd) {
                 const left = Math.min(selectionBoxStart.x, selectionBoxEnd.x);
                 const top = Math.min(selectionBoxStart.y, selectionBoxEnd.y);
                 const width = Math.abs(selectionBoxEnd.x - selectionBoxStart.x);
@@ -1132,11 +1210,21 @@
             if (activeBtn) {
                 activeBtn.className = "tool-btn p-3 rounded-xl border border-emerald-500 bg-emerald-500/20 text-emerald-300 text-xs font-medium flex flex-col items-center gap-1.5 transition shadow-sm";
             }
-            const toolBadges = { wall: 'Tracer Mur', select: 'Sélectionner / Glisser', place: 'Placer appareil' };
+            const panCanvasButton = document.getElementById('btn-pan-canvas');
+            if (panCanvasButton) {
+                panCanvasButton.className = tool === 'pan'
+                    ? 'w-9 h-9 rounded-lg border border-emerald-500 bg-emerald-500/20 text-emerald-300 flex items-center justify-center transition'
+                    : 'w-9 h-9 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg flex items-center justify-center transition';
+                panCanvasButton.title = tool === 'pan'
+                    ? 'Déplacement actif : faites glisser avec le bouton gauche'
+                    : 'Activer le déplacement du plan à la souris gauche';
+            }
+            const toolBadges = { wall: 'Tracer Mur', select: 'Sélectionner / Glisser', place: 'Placer appareil', pan: 'Déplacer la vue' };
             const toolHints = {
                 wall: 'Cliquez pour placer le premier point du mur (Clic droit pour fermer/arrêter)',
                 select: 'Cliquez un mur ; glissez dans le vide pour encadrer ; tirez une extrémité ; Ctrl/Cmd/Shift pour ajouter',
-                place: 'Choisissez un élément à gauche puis cliquez près d\'un mur pour le poser'
+                place: 'Choisissez un élément à gauche puis cliquez près d\'un mur pour le poser',
+                pan: 'Faites glisser le plan avec le bouton gauche de la souris'
             };
             document.getElementById('active-tool-badge').textContent = toolBadges[tool] || tool;
             document.getElementById('drawing-instruction-hint').textContent = toolHints[tool] || '';
@@ -1294,12 +1382,12 @@
         function init3DScene() {
             const container = document.getElementById('three-container');
             threeScene = new THREE.Scene();
-            threeScene.background = new THREE.Color(0x020617);
+            threeScene.background = new THREE.Color(currentTheme === 'light' ? 0xe2e8f0 : 0x020617);
 
             threeCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
             threeCamera.position.set(0, 500, 600);
 
-            threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+            threeRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
             threeRenderer.setSize(container.clientWidth, container.clientHeight);
             threeRenderer.shadowMap.enabled = true;
             container.appendChild(threeRenderer.domElement);
@@ -1525,7 +1613,7 @@
             const C = CABLE_CFG;
             const walls = projectData.walls.filter(w => Math.hypot(w.x2 - w.x1, w.y2 - w.y1) > 1);
             const els = projectData.electrical;
-            const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [] };
+            const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [] };
             const panel = els.find(e => e.type === 'panel') || null;
             const wired = els.filter(e => e.type !== 'panel');
             if (!walls.length || !panel || !wired.length) return result;
@@ -1861,24 +1949,38 @@
             const lights = alive.filter(el => el.type === 'light_ceiling' || el.type === 'wall_light');
             const ctrl = new Map(switches.map(sw => [sw.id, []]));
             const taken = new Set();
-            const pairs = [];
-            switches.forEach(sw => lights.forEach(l => pairs.push({ sw, l, d: rdist(sw, l) })));
-            pairs.sort((p, q) => p.d - q.d);
-            pairs.forEach(p => {
-                if (isFinite(p.d) && !ctrl.get(p.sw.id).length && !taken.has(p.l.id)) { ctrl.get(p.sw.id).push(p.l); taken.add(p.l.id); }
+            const manuallyConfigured = new Set();
+            switches.forEach(sw => {
+                if (!Array.isArray(sw.controlledLightIds)) return;
+                manuallyConfigured.add(sw.id);
+                sw.controlledLightIds.forEach(id => {
+                    const light = lights.find(candidate => candidate.id === id);
+                    if (light && isFinite(rdist(sw, light))) {
+                        ctrl.get(sw.id).push(light);
+                        taken.add(light.id);
+                    }
+                });
             });
-            // luminaires restants : un même interrupteur peut en commander plusieurs (dans un rayon de 5 m)
-            lights.filter(l => !taken.has(l.id)).forEach(l => {
+            // Chaque luminaire non affecté rejoint sa commande la plus proche, plutôt qu'un appariement global.
+            lights.filter(light => !taken.has(light.id)).forEach(light => {
                 let best = null;
-                switches.forEach(sw => { const d = rdist(sw, l); if (d <= 500 && (!best || d < best.d)) best = { sw, d }; });
-                if (best) { ctrl.get(best.sw.id).push(l); taken.add(l.id); }
+                switches.filter(sw => !manuallyConfigured.has(sw.id)).forEach(sw => {
+                    const d = rdist(sw, light);
+                    if (d <= 500 && (!best || d < best.d)) best = { sw, d };
+                });
+                if (best) { ctrl.get(best.sw.id).push(light); taken.add(light.id); }
             });
-            // interrupteurs restants (plus d'interrupteurs que de luminaires) : va-et-vient sur le luminaire le plus proche
-            switches.filter(sw => !ctrl.get(sw.id).length).forEach(sw => {
+            // Une seconde commande va-et-vient rejoint le point déjà desservi le plus proche.
+            switches.filter(sw => !manuallyConfigured.has(sw.id) && sw.type === 'switch_va_et_vient' && !ctrl.get(sw.id).length).forEach(sw => {
                 let best = null;
                 lights.forEach(l => { const d = rdist(sw, l); if (isFinite(d) && (!best || d < best.d)) best = { l, d }; });
                 if (best) ctrl.get(sw.id).push(best.l);
             });
+            result.controlLinks = switches.map(sw => ({
+                switchId: sw.id,
+                lightIds: ctrl.get(sw.id).map(light => light.id),
+                linkIds: ctrl.get(sw.id).map(light => controlCableLinkId(sw.id, light.id))
+            }));
 
             const units = [];
             alive.filter(el => el.type.startsWith('outlet')).forEach(el => {
@@ -1899,19 +2001,26 @@
             // 11. Arbre de câblage minimal par circuit (Prim sur les distances réelles de gaine)
             const used = new Map();
             const priv = new Map();
-            const addPriv = (pts, wires, cid) => {
+            const addPriv = (pts, wires, cid, relationId) => {
                 for (let k = 0; k < pts.length - 1; k++) {
                     const a = pts[k], b = pts[k + 1];
                     if (Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) < 0.3) continue;
                     const ka = key(a.x, a.y, a.z), kb = key(b.x, b.y, b.z);
                     const pk = ka < kb ? ka + '~' + kb : kb + '~' + ka;
-                    if (!priv.has(pk)) priv.set(pk, { a, b, cables: [], cids: [] });
-                    priv.get(pk).cables.push(wires);
-                    priv.get(pk).cids.push(cid);
+                    if (!priv.has(pk)) priv.set(pk, { a, b, cables: [], cids: [], links: [] });
+                    const segment = priv.get(pk);
+                    segment.cables.push(wires);
+                    segment.cids.push(cid);
+                    if (relationId && !segment.links.includes(relationId)) segment.links.push(relationId);
                 }
             };
             const addLink = (A, B, wires, cid) => {
                 const ra = R.get(A.id), rb = R.get(B.id);
+                const relationId = isLightingControl(A) && (B.type === 'light_ceiling' || B.type === 'wall_light')
+                    ? controlCableLinkId(A.id, B.id)
+                    : isLightingControl(B) && (A.type === 'light_ceiling' || A.type === 'wall_light')
+                        ? controlCableLinkId(B.id, A.id)
+                        : null;
                 const path = [];
                 if (ra.node !== rb.node) {
                     const mp = mapFor(ra.node);
@@ -1923,12 +2032,14 @@
                     }
                     path.reverse();
                 }
-                addPriv(ra.stub, wires, cid);
-                addPriv(rb.stub, wires, cid);
+                addPriv(ra.stub, wires, cid, relationId);
+                addPriv(rb.stub, wires, cid, relationId);
                 path.forEach(e => {
-                    if (!used.has(e)) used.set(e, { cables: [], cids: [] });
-                    used.get(e).cables.push(wires);
-                    used.get(e).cids.push(cid);
+                    if (!used.has(e)) used.set(e, { cables: [], cids: [], links: [] });
+                    const segment = used.get(e);
+                    segment.cables.push(wires);
+                    segment.cids.push(cid);
+                    if (relationId && !segment.links.includes(relationId)) segment.links.push(relationId);
                 });
                 const length = path.reduce((acc, e) => acc + e.len, 0) + stubLen(ra.stub) + stubLen(rb.stub);
                 result.linkInfo.push({ circuitId: cid, length });
@@ -1973,7 +2084,7 @@
             });
 
             used.forEach((u, e) => result.segments.push({
-                a: { x: e.a.x, y: e.a.y, z: e.a.z }, b: { x: e.b.x, y: e.b.y, z: e.b.z }, cables: u.cables, cids: u.cids
+                a: { x: e.a.x, y: e.a.y, z: e.a.z }, b: { x: e.b.x, y: e.b.y, z: e.b.z }, cables: u.cables, cids: u.cids, links: u.links
             }));
             priv.forEach(sg => result.segments.push(sg));
             return result;
@@ -1988,6 +2099,15 @@
                 if (typeof showNotification === 'function') showNotification(net.unrouted + ' appareil(s) n\'ont pas pu être reliés au tableau', 'error');
             }
             if (!net.segments.length) return net;
+            const selectedElement = projectData.electrical.find(el => el.id === selected3DId);
+            const isLightingSelection = selectedElement &&
+                (isLightingControl(selectedElement) || selectedElement.type === 'light_ceiling' || selectedElement.type === 'wall_light');
+            const selectedLinkIds = new Set(isLightingSelection
+                ? (net.controlLinks || [])
+                    .filter(link => link.switchId === selected3DId || link.lightIds.includes(selected3DId))
+                    .flatMap(link => link.linkIds || [])
+                : []);
+            const hasLinkFocus = selectedLinkIds.size > 0;
 
             const colors = { 'red': 0xef4444, 'blue': 0x3b82f6, 'green-yellow': 0x22c55e, 'violet': 0x8b5cf6, 'orange': 0xf97316 };
             if (!CABLE_RES.cyl) {
@@ -2017,6 +2137,7 @@
             const joints = new Map();
 
             net.segments.forEach(seg => {
+                const isLinkHighlighted = (seg.links || []).some(id => selectedLinkIds.has(id));
                 const a = new THREE.Vector3(seg.a.x - cx, seg.a.z, seg.a.y - cy);
                 const b = new THREE.Vector3(seg.b.x - cx, seg.b.z, seg.b.y - cy);
                 const dir = b.clone().sub(a);
@@ -2047,9 +2168,11 @@
                         .addScaledVector(u, Math.cos(angle) * radialOffset)
                         .addScaledVector(v, Math.sin(angle) * radialOffset);
                     const isSelected = selectedCircuitId && cid === selectedCircuitId;
-                    const cmat = selectedCircuitId
-                        ? (isSelected ? CABLE_RES.highlightConduit : CABLE_RES.dimConduit)
-                        : conduitFor(cid);
+                    const cmat = hasLinkFocus
+                        ? (isLinkHighlighted ? CABLE_RES.highlightConduit : CABLE_RES.dimConduit)
+                        : selectedCircuitId
+                            ? (isSelected ? CABLE_RES.highlightConduit : CABLE_RES.dimConduit)
+                            : conduitFor(cid);
                     const tube = new THREE.Mesh(CABLE_RES.cyl, cmat);
                     tube.position.copy(mid).add(offset);
                     tube.quaternion.copy(q);
@@ -2067,9 +2190,11 @@
                             const ang = (idx / n) * Math.PI * 2;
                             wireOffset.addScaledVector(u, Math.cos(ang) * rad).addScaledVector(v, Math.sin(ang) * rad);
                         }
-                        const coreMat = selectedCircuitId
-                            ? (isSelected ? CABLE_RES.highlightCore : CABLE_RES.dimCore)
-                            : matFor(col);
+                        const coreMat = hasLinkFocus
+                            ? (isLinkHighlighted ? CABLE_RES.highlightCore : CABLE_RES.dimCore)
+                            : selectedCircuitId
+                                ? (isSelected ? CABLE_RES.highlightCore : CABLE_RES.dimCore)
+                                : matFor(col);
                         const core = new THREE.Mesh(CABLE_RES.core, coreMat);
                         core.position.copy(mid).add(offset).add(wireOffset);
                         core.quaternion.copy(q);
@@ -2082,7 +2207,7 @@
                         const k = (cid || '_') + '|' + jp.x.toFixed(1) + '|' + jp.y.toFixed(1) + '|' + jp.z.toFixed(1);
                         if (!joints.has(k)) joints.set(k, { pos: jp, dirs: [], R: 0, mat: cmat });
                         const j = joints.get(k);
-                        if (!selectedCircuitId && j.mat !== cmat) j.mat = CABLE_RES.conduitMat;
+                        if (!selectedCircuitId && !hasLinkFocus && j.mat !== cmat) j.mat = CABLE_RES.conduitMat;
                         j.dirs.push(d);
                         j.R = Math.max(j.R, R);
                     });
@@ -2139,7 +2264,7 @@
             threeCamera.updateProjectionMatrix();
             if (threeControls) threeControls.maxDistance = Math.max(500, planDiagonal * 1.2);
             const floorGeo = new THREE.PlaneGeometry(floorWidth, floorDepth);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+            const floorMat = new THREE.MeshStandardMaterial({ color: currentTheme === 'light' ? 0xf8fafc : 0x1e293b, roughness: 0.8 });
             const floorMesh = new THREE.Mesh(floorGeo, floorMat);
             floorMesh.rotation.x = -Math.PI / 2;
             floorMesh.position.set(0, 0, 0);
@@ -2597,10 +2722,17 @@
                     let target = interactiveIntersects[0].object;
                     while (target.parent && target.parent !== threeScene) target = target.parent;
                     if (target.userData && target.userData.id) {
-                        select3DElement(target.userData.id, target);
-                        
-                        let isCeiling = projectData.electrical.some(el => el.id === target.userData.id && el.type === 'light_ceiling');
-                        dragging3DElementId = target.userData.id;
+                        const targetId = target.userData.id;
+                        select3DElement(targetId, target);
+                        const selectedElectrical = projectData.electrical.find(el => el.id === targetId);
+                        if (selectedElectrical && (isLightingControl(selectedElectrical) ||
+                            selectedElectrical.type === 'light_ceiling' || selectedElectrical.type === 'wall_light')) {
+                            build3DScene();
+                            target = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === targetId) || target;
+                        }
+
+                        let isCeiling = selectedElectrical && selectedElectrical.type === 'light_ceiling';
+                        dragging3DElementId = targetId;
                         if (isCeiling) {
                             dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), target.position);
                         } else {
@@ -2715,8 +2847,8 @@
             const name = foundEl
                 ? (ELEMENT_LABELS[foundEl.type] || foundEl.type)
                 : foundOp ? (foundOp.type === 'door_single' ? 'Porte' : 'Fenêtre') : 'Élément';
-            document.getElementById('inspector-3d-element-name').textContent = name;
-            document.getElementById('inspector-3d-element-id').textContent = 'Référence : ' + id;
+            document.getElementById('inspector-3d-element-name').textContent =
+                foundEl ? electricalDisplayName(foundEl) : name;
 
             if (foundEl && foundEl.type === 'light_ceiling') {
                 distanceContainer.classList.add('hidden');
@@ -2853,6 +2985,7 @@
         function isLightingControl(el) {
             return el.type === 'switch_simple' || el.type === 'switch_va_et_vient' || el.type === 'switch_pushbutton';
         }
+        function controlCableLinkId(switchId, lightId) { return switchId + '::' + lightId; }
 
         function maxPointsForCircuit(circuit) {
             const root = circuitRoot(circuit);
@@ -3287,7 +3420,7 @@
             const csv = '﻿' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\r\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-            a.download = 'archiz_pro_metre.csv';
+            a.download = 'clic_and_volt_pro_metre.csv';
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -3328,6 +3461,156 @@
             });
         }
 
+        function electricalDisplayName(el) {
+            const sameType = projectData.electrical.filter(candidate => candidate.type === el.type);
+            const ordinal = sameType.findIndex(candidate => candidate.id === el.id) + 1;
+            return (ELEMENT_LABELS[el.type] || el.type) + ' ' + ordinal;
+        }
+
+        function focusAssociatedElement(id) {
+            selected3DId = id;
+            if (currentMode === '3d') {
+                build3DScene();
+                const obj = interactiveObjects3D.find(candidate => candidate.userData && candidate.userData.id === id);
+                if (obj) select3DElement(id, obj);
+            } else {
+                syncElementInspectors();
+                redraw2D();
+            }
+        }
+
+        function updateLightingAssociations(el) {
+            const boxes = [
+                document.getElementById('lighting-associations'),
+                document.getElementById('lighting-associations-2d')
+            ].filter(Boolean);
+            const isLight = el && (el.type === 'light_ceiling' || el.type === 'wall_light');
+            if (!el || (!isLight && !isLightingControl(el))) {
+                boxes.forEach(box => box.classList.add('hidden'));
+                return;
+            }
+
+            const network = getCableNetwork();
+            const links = network.controlLinks || [];
+            const switches = new Map(links.map(link => [link.switchId, link]));
+            const lightById = new Map(projectData.electrical
+                .filter(candidate => candidate.type === 'light_ceiling' || candidate.type === 'wall_light')
+                .map(light => [light.id, light]));
+            const switchById = new Map(projectData.electrical.filter(isLightingControl).map(sw => [sw.id, sw]));
+            const linkButton = item =>
+                '<button type="button" data-related-id="' + esc(item.id) +
+                '" class="text-left text-[11px] text-amber-300 underline decoration-dotted">' +
+                esc(electricalDisplayName(item)) + '</button>';
+            let content = '<div class="text-[11px] font-semibold uppercase tracking-wide text-amber-300">Commandes d’éclairage calculées</div>';
+
+            if (isLightingControl(el)) {
+                const lightIds = switches.get(el.id) ? switches.get(el.id).lightIds : [];
+                content += '<div class="text-[11px] text-slate-300">Point(s) lumineux commandé(s)</div>';
+                if (!lightIds.length) {
+                    content += '<div class="text-[11px] text-slate-500">Aucune association calculée (vérifiez le tableau et les trajets).</div>';
+                } else {
+                    content += '<ol class="list-decimal list-inside space-y-1">';
+                    lightIds.forEach(id => {
+                        const light = lightById.get(id);
+                        if (!light) return;
+                        content += '<li class="text-[11px] text-slate-300">' + linkButton(light);
+                        const otherSwitches = links
+                            .filter(link => link.switchId !== el.id && link.lightIds.includes(id))
+                            .map(link => switchById.get(link.switchId))
+                            .filter(Boolean);
+                        if (otherSwitches.length) {
+                            const partnerLabel = el.type === 'switch_va_et_vient' &&
+                                otherSwitches.some(other => other.type === 'switch_va_et_vient')
+                                ? 'Autre interrupteur va-et-vient'
+                                : 'Autre commande du point';
+                            content += '<div class="ml-4 text-[11px] text-sky-300">' + partnerLabel + ' : ' +
+                                otherSwitches.map(linkButton).join(', ') + '</div>';
+                        }
+                        content += '</li>';
+                    });
+                    content += '</ol>';
+                }
+                const configuredIds = Array.isArray(el.controlledLightIds) ? el.controlledLightIds : lightIds;
+                content += '<details class="pt-1"><summary class="cursor-pointer text-[11px] text-emerald-300">Modifier les associations</summary><div class="mt-1 space-y-1">';
+                if (!lightById.size) content += '<div class="text-[11px] text-slate-500">Ajoutez un point lumineux au plan.</div>';
+                lightById.forEach(light => {
+                    content += '<label class="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" data-association-switch="' +
+                        esc(el.id) + '" data-association-light="' + esc(light.id) + '"' +
+                        (configuredIds.includes(light.id) ? ' checked' : '') + ' class="accent-emerald-500">' +
+                        esc(electricalDisplayName(light)) + '</label>';
+                });
+                content += '</div></details>';
+            } else {
+                const controllingSwitches = links
+                    .filter(link => link.lightIds.includes(el.id))
+                    .map(link => switchById.get(link.switchId))
+                    .filter(Boolean);
+                content += '<div class="text-[11px] text-slate-300">Interrupteur(s) associé(s)</div>';
+                if (!controllingSwitches.length) {
+                    content += '<div class="text-[11px] text-slate-500">Aucune association calculée (vérifiez le tableau et les trajets).</div>';
+                } else {
+                    content += '<div class="flex flex-wrap gap-x-2 gap-y-1">' + controllingSwitches.map(linkButton).join('') + '</div>';
+                    const vaEtVient = controllingSwitches.filter(sw => sw.type === 'switch_va_et_vient');
+                    if (vaEtVient.length > 1) {
+                        content += '<div class="text-[11px] text-sky-300">Va-et-vient : ' + vaEtVient.map(linkButton).join(' ↔ ') + '</div>';
+                    }
+                }
+                content += '<details class="pt-1"><summary class="cursor-pointer text-[11px] text-emerald-300">Modifier les associations</summary><div class="mt-1 space-y-1">';
+                if (!switchById.size) content += '<div class="text-[11px] text-slate-500">Ajoutez un interrupteur au plan.</div>';
+                switchById.forEach(sw => {
+                    const association = switches.get(sw.id);
+                    const configuredIds = Array.isArray(sw.controlledLightIds)
+                        ? sw.controlledLightIds
+                        : association ? association.lightIds : [];
+                    content += '<label class="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" data-association-switch="' +
+                        esc(sw.id) + '" data-association-light="' + esc(el.id) + '"' +
+                        (configuredIds.includes(el.id) ? ' checked' : '') + ' class="accent-emerald-500">' +
+                        esc(electricalDisplayName(sw)) + '</label>';
+                });
+                content += '</div></details>';
+            }
+
+            boxes.forEach(box => {
+                box.innerHTML = content;
+                box.classList.remove('hidden');
+                box.querySelectorAll('[data-related-id]').forEach(button => {
+                    button.addEventListener('click', () => focusAssociatedElement(button.dataset.relatedId));
+                });
+                box.querySelectorAll('[data-association-switch]').forEach(input => {
+                    input.addEventListener('change', () => setLightingAssociation(
+                        input.dataset.associationSwitch,
+                        input.dataset.associationLight,
+                        input.checked
+                    ));
+                });
+            });
+        }
+
+        function setLightingAssociation(switchId, lightId, isAssociated) {
+            const sw = projectData.electrical.find(candidate => candidate.id === switchId && isLightingControl(candidate));
+            const light = projectData.electrical.find(candidate =>
+                candidate.id === lightId && (candidate.type === 'light_ceiling' || candidate.type === 'wall_light'));
+            if (!sw || !light) {
+                showNotification('Association impossible : interrupteur ou luminaire introuvable.', 'error');
+                return;
+            }
+
+            const automaticLinks = getCableNetwork().controlLinks || [];
+            const initialIds = Array.isArray(sw.controlledLightIds)
+                ? sw.controlledLightIds
+                : (automaticLinks.find(link => link.switchId === sw.id) || { lightIds: [] }).lightIds;
+            const nextIds = new Set(initialIds);
+            if (isAssociated) nextIds.add(light.id);
+            else nextIds.delete(light.id);
+            saveStateToUndo();
+            sw.controlledLightIds = [...nextIds];
+            _cableCache.sig = null;
+            if (currentMode === '3d') build3DScene();
+            syncElementInspectors();
+            redraw2D();
+            showNotification('Association d’éclairage mise à jour.', 'success');
+        }
+
         function syncElementInspectors() {
             const el = projectData.electrical.find(e => e.id === selected3DId);
             const op = !el ? projectData.openings.find(o => o.id === selected3DId) : null;
@@ -3337,10 +3620,10 @@
             if (emptyDock) emptyDock.classList.toggle('hidden', isSelected);
             const dockInspector = document.getElementById('inspector-3d');
             if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected);
+            updateLightingAssociations(el);
             if (isSelected) {
                 document.getElementById('inspector-3d-element-name').textContent =
-                    el ? (ELEMENT_LABELS[el.type] || el.type) : op.type === 'door_single' ? 'Porte' : 'Fenêtre';
-                document.getElementById('inspector-3d-element-id').textContent = 'Référence : ' + selected3DId;
+                    el ? electricalDisplayName(el) : op.type === 'door_single' ? 'Porte' : 'Fenêtre';
             }
             const circ = !!(el && isCircuitPoint(el));
             const c3 = document.getElementById('circuit-select-container');
@@ -3452,7 +3735,7 @@
         // Symboles de plan : le mur est à gauche (x = -1), la face avant vers +x
         function drawElementSymbol2D(el) {
             const c = getElCoords(el);
-            const col = EL_COLORS[el.type] || '#94a3b8';
+            const col = el.type === 'wall_light' ? '#facc15' : EL_COLORS[el.type] || '#94a3b8';
             const ink = '#0f172a', paper = '#f8fafc';
             const circ = circuitOf(el);
             const ang = elFrontAngle(el);
@@ -3522,18 +3805,28 @@
                 }
                 ringX = 8; ringR = 10;
             } else if (t === 'wall_light') {
-                line(-1, -7, -1, 7, 2.2);
-                line(-1, 0, 5, 0, 1.8);
+                ctx2D.fillStyle = '#facc15';
+                ctx2D.strokeStyle = '#ca8a04';
+                ctx2D.lineWidth = 1.8;
                 ctx2D.beginPath();
-                ctx2D.arc(10, 0, 5.2, 0, Math.PI * 2);
-                ctx2D.fillStyle = '#fef3c7';
+                ctx2D.roundRect(-3, -7, 3, 14, 1);
+                ctx2D.fill();
+                ctx2D.stroke();
+                line(0, 0, 4, 0, 2, '#eab308');
+                ctx2D.beginPath();
+                ctx2D.moveTo(4, -6);
+                ctx2D.quadraticCurveTo(15, -5, 15, 0);
+                ctx2D.quadraticCurveTo(15, 5, 4, 6);
+                ctx2D.closePath();
+                ctx2D.fillStyle = '#facc15';
                 ctx2D.fill();
                 ctx2D.lineWidth = 1.8;
-                ctx2D.strokeStyle = col;
+                ctx2D.strokeStyle = '#ca8a04';
                 ctx2D.stroke();
-                line(6.3, -3.7, 13.7, 3.7, 1.4, ink);
-                line(6.3, 3.7, 13.7, -3.7, 1.4, ink);
-                ringX = 9; ringR = 10;
+                line(17, -5, 21, -7, 1.5, '#eab308');
+                line(18, 0, 23, 0, 1.5, '#eab308');
+                line(17, 5, 21, 7, 1.5, '#eab308');
+                ringX = 10; ringR = 14;
             } else if (t === 'light_ceiling') {
                 ctx2D.rotate(-ang);
                 ctx2D.beginPath();
@@ -3574,12 +3867,12 @@
                 ctx2D.stroke();
                 ctx2D.globalAlpha = 1;
             }
-            if (el.id === selected3DId) {
+            if (!isPrintRendering && el.id === selected3DId) {
                 ctx2D.beginPath();
                 if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
                 else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + 4, 0, Math.PI * 2);
                 ctx2D.lineWidth = 2;
-                ctx2D.strokeStyle = '#ffffff';
+                ctx2D.strokeStyle = currentTheme === 'light' || isPrintRendering ? '#047857' : '#ffffff';
                 ctx2D.setLineDash([4, 3]);
                 ctx2D.stroke();
                 ctx2D.setLineDash([]);
@@ -3603,11 +3896,21 @@
             // 1. Câbles (trait plein = plafond, pointillé = plinthe)
             if (showCables2D && projectData.electrical.length) {
                 const net = getCableNetwork();
+                const selectedElement = projectData.electrical.find(el => el.id === selected3DId);
+                const isLightingSelection = selectedElement &&
+                    (isLightingControl(selectedElement) || selectedElement.type === 'light_ceiling' || selectedElement.type === 'wall_light');
+                const selectedLinkIds = new Set(isLightingSelection
+                    ? (net.controlLinks || [])
+                        .filter(link => link.switchId === selected3DId || link.lightIds.includes(selected3DId))
+                        .flatMap(link => link.linkIds || [])
+                    : []);
+                const hasLinkFocus = selectedLinkIds.size > 0;
                 ctx2D.lineCap = 'round';
                 ctx2D.globalAlpha = 0.85;
                 // Le cheminement bas et le cheminement haut ont les mêmes coordonnées en plan : on les décale
                 // de part et d'autre de l'axe pour que les deux restent visibles (haut : trait plein, bas : pointillé).
                 net.segments.forEach(s => {
+                    const linkHighlighted = (s.links || []).some(id => selectedLinkIds.has(id));
                     const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, len = Math.hypot(dx, dy);
                     if (len < 0.05) return;
                     const isLow = s.a.z < 50 && s.b.z < 50;
@@ -3615,19 +3918,24 @@
                     const ox = -dy / len * off, oy = dx / len * off;
                     const ids = [...new Set((s.cids || []).filter(Boolean))];
                     const circs = ids.map(id => projectData.circuits.find(c => c.id === id)).filter(Boolean);
-                    ctx2D.lineWidth = 3;
+                    ctx2D.globalAlpha = hasLinkFocus ? (linkHighlighted ? 1 : 0.16) : 0.85;
+                    ctx2D.lineWidth = hasLinkFocus && linkHighlighted ? 5 : 3;
                     ctx2D.beginPath();
                     ctx2D.moveTo(s.a.x + ox, s.a.y + oy);
                     ctx2D.lineTo(s.b.x + ox, s.b.y + oy);
                     if (circs.length <= 1) {
-                        ctx2D.strokeStyle = circs.length ? circuitColor(circs[0]) : '#94a3b8';
+                        ctx2D.strokeStyle = hasLinkFocus
+                            ? (linkHighlighted ? '#facc15' : (currentTheme === 'light' ? '#94a3b8' : '#64748b'))
+                            : circs.length ? circuitColor(circs[0]) : '#94a3b8';
                         ctx2D.setLineDash(isLow ? [8, 6] : []);
                         ctx2D.stroke();
                     } else {
                         // tronçon partagé : bandes alternées aux couleurs de chaque circuit
                         const n = circs.length, seg = isLow ? 5 : 8;
                         circs.forEach((c, k) => {
-                            ctx2D.strokeStyle = circuitColor(c);
+                            ctx2D.strokeStyle = hasLinkFocus
+                                ? (linkHighlighted ? '#facc15' : (currentTheme === 'light' ? '#94a3b8' : '#64748b'))
+                                : circuitColor(c);
                             ctx2D.setLineDash([seg, seg * (n - 1)]);
                             ctx2D.lineDashOffset = -seg * k;
                             ctx2D.stroke();
@@ -3767,7 +4075,7 @@
         }
 
         // ---------- Sauvegarde automatique ----------
-        const AUTOSAVE_KEY = 'archiz_pro_autosave_v1';
+        const AUTOSAVE_KEY = 'clic_and_volt_pro_autosave_v1';
         let _lastAutosave = '';
 
         function startAutosave() {
@@ -3825,14 +4133,87 @@
         }
 
         function triggerSaveProject() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
+            const requestedName = prompt('Nom du fichier à enregistrer :', 'clic_and_volt_pro_projet');
+            if (requestedName === null) return;
+            const fileName = requestedName.trim()
+                .replace(/\.json$/i, '')
+                .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+                .replace(/[. ]+$/g, '');
+            if (!fileName) {
+                showNotification('Saisissez un nom de fichier valide.', 'error');
+                return;
+            }
+            const data = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json;charset=utf-8' });
+            const dataUrl = URL.createObjectURL(data);
             const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", "archiz_pro_projet.json");
+            downloadAnchor.setAttribute("href", dataUrl);
+            downloadAnchor.setAttribute("download", fileName + '.json');
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
-            showNotification("Projet enregistré au format JSON", "success");
+            setTimeout(() => URL.revokeObjectURL(dataUrl), 1000);
+            showNotification('Projet enregistré sous « ' + fileName + '.json »', 'success');
+        }
+
+        function printPlan(mode) {
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                showNotification('Autorisez les fenêtres contextuelles pour imprimer ou créer un PDF.', 'error');
+                return;
+            }
+            try {
+                let imageUrl;
+                if (mode === '3d') {
+                    on3DWindowResize();
+                    threeRenderer.render(threeScene, threeCamera);
+                    imageUrl = threeRenderer.domElement.toDataURL('image/png');
+                } else {
+                    resize2DCanvas();
+                    const previouslySelectedId = selected3DId;
+                    selected3DId = null;
+                    isPrintRendering = true;
+                    try {
+                        redraw2D();
+                        imageUrl = canvas2D.toDataURL('image/png');
+                    } finally {
+                        isPrintRendering = false;
+                        selected3DId = previouslySelectedId;
+                        redraw2D();
+                    }
+                }
+                if (!imageUrl) throw new Error('La vue à imprimer est vide.');
+                const title = mode === '3d' ? 'Plan 3D' : 'Plan 2D';
+                printWindow.document.open();
+                printWindow.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>' + title +
+                    ' — Clic & Volt</title><style id="print-style">@page{size:landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;align-items:center;gap:10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}</style></head><body><div class="toolbar"><h1>Clic & Volt — ' +
+                    title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select><button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><img class="plan" id="plan" alt="' +
+                    title + '"></body></html>');
+                printWindow.document.close();
+                const image = printWindow.document.getElementById('plan');
+                image.onload = () => {
+                    printWindow.document.getElementById('print-button').disabled = false;
+                    printWindow.focus();
+                };
+                image.onerror = () => {
+                    printWindow.close();
+                    showNotification('Impossible de préparer l’image du plan pour l’impression.', 'error');
+                };
+                const orientation = printWindow.document.getElementById('orientation');
+                orientation.addEventListener('change', () => {
+                    printWindow.document.getElementById('print-style').textContent =
+                        '@page{size:' + orientation.value + ';margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;align-items:center;gap:10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}';
+                });
+                printWindow.document.getElementById('print-button').addEventListener('click', () => {
+                    printWindow.focus();
+                    printWindow.print();
+                });
+                image.src = imageUrl;
+                showNotification('Choisissez l’orientation dans la fenêtre ouverte, puis imprimez ou enregistrez en PDF.', 'info');
+            } catch (error) {
+                printWindow.close();
+                console.error('Échec de la préparation du plan à imprimer.', error);
+                showNotification('Impossible de préparer le plan à imprimer.', 'error');
+            }
         }
 
         function triggerLoadProject(event) {
