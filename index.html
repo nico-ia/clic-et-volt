@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Archiz Pro - Suite Architecturale Professionnelle</title>
+    <title>Archiz - Plan 2D & Modélisateur 3D</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -27,7 +27,7 @@
             </div>
             <div>
                 <h1 class="font-bold text-lg tracking-wide text-white flex items-center gap-2">
-                    Archiz <span class="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30">Pro Suite</span>
+                    Archiz
                 </h1>
                 <p class="text-xs text-slate-400">Plan 2D & Modélisateur 3D (Câblage auto & Repiquage)</p>
             </div>
@@ -136,32 +136,16 @@
                         </div>
                     </div>
 
-                    <!-- Room Templates -->
-                    <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2">
-                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                            <span>Pièces Prédéfinies</span>
-                            <i class="fa-solid fa-shapes text-emerald-400"></i>
-                        </label>
-                        <div class="grid grid-cols-2 gap-2 text-xs">
-                            <button onclick="addPresetRoom('square')" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition font-medium flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-square text-emerald-400"></i> Carré 4x4m
-                            </button>
-                            <button onclick="addPresetRoom('rectangle')" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition font-medium flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-vector-square text-cyan-400"></i> Salon 6x4m
-                            </button>
-                        </div>
-                    </div>
-
                     <!-- Wall Inspector -->
                     <div id="wall-inspector" class="bg-slate-950/80 p-3 rounded-xl border border-emerald-500/30 space-y-3 hidden">
                         <label class="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
-                            <span>Inspecteur de Mur</span>
+                            <span id="wall-inspector-title">Inspecteur de Mur</span>
                             <i class="fa-solid fa-pen-to-square"></i>
                         </label>
-                        <p class="text-[11px] text-slate-400">Modifiez la longueur exacte ou déplacez le mur.</p>
+                        <p id="wall-inspector-description" class="text-[11px] text-slate-400">Modifiez la longueur exacte ou déplacez le mur.</p>
                         
                         <!-- Length input -->
-                        <div>
+                        <div id="inspector-length-container">
                             <div class="flex justify-between text-xs text-slate-300 mb-1">
                                 <span>Longueur du mur</span>
                                 <span id="inspector-length-val" class="text-emerald-400 font-bold">4.00 m</span>
@@ -169,14 +153,14 @@
                             <input type="number" id="inspector-length-input" step="0.1" min="0.5" max="30" onchange="updateSelectedWallLength(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
                         </div>
 
-                        <div>
+                        <div id="inspector-thickness-container">
                             <div class="flex justify-between text-xs text-slate-400 mb-1">
                                 <span>Épaisseur</span>
                                 <span id="inspector-thickness-val">10 cm</span>
                             </div>
                             <input type="range" id="inspector-thickness" min="5" max="50" step="5" value="10" oninput="updateSelectedWallProp('thickness', this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
                         </div>
-                        <div>
+                        <div id="inspector-height-container">
                             <div class="flex justify-between text-xs text-slate-400 mb-1">
                                 <span>Hauteur</span>
                                 <span id="inspector-height-val">2.50 m</span>
@@ -196,7 +180,7 @@
                         </label>
                         <div>
                             <div class="flex justify-between text-xs text-slate-400 mb-1">
-                                <span>Épaisseur</span>
+                                <span id="inspector-thickness-label">Épaisseur</span>
                                 <span id="val-thickness">10 cm</span>
                             </div>
                             <input type="range" id="input-thickness" min="5" max="50" step="5" value="10" oninput="updateWallSpec('thickness', this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
@@ -217,8 +201,8 @@
                             <button onclick="toggleGridSnap()" id="btn-grid-snap" class="p-2.5 rounded-lg border border-emerald-500 bg-emerald-500/20 text-emerald-300 font-medium flex items-center justify-center gap-1.5 transition">
                                 <i class="fa-solid fa-magnet"></i> Grille : ON
                             </button>
-                            <button onclick="toggleAngleSnap()" id="btn-angle-snap" class="p-2.5 rounded-lg border border-slate-800 bg-slate-800 text-slate-400 font-medium flex items-center justify-center gap-1.5 transition">
-                                <i class="fa-solid fa-compass"></i> Ortho : OFF
+                            <button onclick="toggleAngleSnap()" id="btn-angle-snap" class="p-2.5 rounded-lg border border-emerald-500 bg-emerald-500/20 text-emerald-300 font-medium flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-compass"></i> Ortho : ON
                             </button>
                             <button onclick="toggleCables2D()" id="btn-cables-2d" class="p-2.5 rounded-lg border border-emerald-500 bg-emerald-500/20 text-emerald-300 font-medium flex items-center justify-center gap-1.5 transition">
                                 <i class="fa-solid fa-bezier-curve"></i> Câbles : ON
@@ -347,6 +331,9 @@
                     <div>
                         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Appareillage Électrique</label>
                         <div class="grid grid-cols-2 gap-2 text-xs">
+                            <button onclick="setPlacementType('panel')" id="btn-place-panel" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition col-span-2">
+                                <i class="fa-solid fa-box text-cyan-400 text-base"></i> Tableau Électrique
+                            </button>
                             <button onclick="setPlacementType('outlet_16a')" id="btn-place-outlet_16a" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition">
                                 <i class="fa-solid fa-plug text-orange-400 text-base"></i> Prise 16A
                             </button>
@@ -370,9 +357,6 @@
                             </button>
                             <button onclick="setPlacementType('light_ceiling')" id="btn-place-light_ceiling" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition col-span-2">
                                 <i class="fa-solid fa-lightbulb text-yellow-400 text-base"></i> Plafonnier (Cliquer au plafond)
-                            </button>
-                            <button onclick="setPlacementType('panel')" id="btn-place-panel" class="place-btn relative p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl flex flex-col items-center gap-1 text-slate-200 transition col-span-2">
-                                <i class="fa-solid fa-box text-cyan-400 text-base"></i> Tableau Électrique
                             </button>
                         </div>
                     </div>
@@ -454,7 +438,7 @@
         let currentMode = '2d';
         let currentTool = 'wall';
         let gridSnap = true;
-        let angleSnap = false;
+        let angleSnap = true;
 
         let projectData = {
             walls: [],
@@ -480,8 +464,10 @@
         let drawingStartPoint = null; 
         let mouseCurrentPos = null;   
         let selectedWallId = null;
+        let selectedWallIds = [];
         let draggingWall = null;
-        let dragOffset = { x: 0, y: 0 };
+        let selectionBoxStart = null;
+        let selectionBoxEnd = null;
         let activeWallThickness = 10; // cm
         let activeWallHeight = 250; // cm
 
@@ -560,7 +546,7 @@
             }
             redoStack.push(JSON.stringify(projectData));
             projectData = JSON.parse(undoStack.pop());
-            selectedWallId = null;
+            setSelectedWalls([]);
             selected3DId = null;
             redraw2D();
             if (currentMode === '3d') build3DScene();
@@ -575,7 +561,7 @@
             }
             undoStack.push(JSON.stringify(projectData));
             projectData = JSON.parse(redoStack.pop());
-            selectedWallId = null;
+            setSelectedWalls([]);
             selected3DId = null;
             redraw2D();
             if (currentMode === '3d') build3DScene();
@@ -609,33 +595,6 @@
             }
         }
 
-        function addPresetRoom(type) {
-            saveStateToUndo();
-            const h = activeWallHeight;
-            const t = activeWallThickness;
-            let newWalls = [];
-            if (type === 'square') {
-                newWalls = [
-                    { id: 'w_' + Date.now() + '_1', x1: 100, y1: 100, x2: 500, y2: 100, thickness: t, height: h },
-                    { id: 'w_' + Date.now() + '_2', x1: 500, y1: 100, x2: 500, y2: 500, thickness: t, height: h },
-                    { id: 'w_' + Date.now() + '_3', x1: 500, y1: 500, x2: 100, y2: 500, thickness: t, height: h },
-                    { id: 'w_' + Date.now() + '_4', x1: 100, y1: 500, x2: 100, y2: 100, thickness: t, height: h }
-                ];
-            } else if (type === 'rectangle') {
-                newWalls = [
-                    { id: 'w_' + Date.now() + '_1', x1: 100, y1: 100, x2: 700, y2: 100, thickness: t, height: h },
-                    { id: 'w_' + Date.now() + '_2', x1: 700, y1: 100, x2: 700, y2: 500, thickness: t, height: h },
-                    { id: 'w_' + Date.now() + '_3', x1: 700, y1: 500, x2: 100, y2: 500, thickness: t, height: h },
-                    { id: 'w_' + Date.now() + '_4', x1: 100, y1: 500, x2: 100, y2: 100, thickness: t, height: h }
-                ];
-            }
-            projectData.walls.push(...newWalls);
-            recenter2DView();
-            updateStats();
-            redraw2D();
-            showNotification("Pièce prédéfinie ajoutée !", "success");
-        }
-
         function init2DCanvas() {
             canvas2D = document.getElementById('floorplan-canvas');
             ctx2D = canvas2D.getContext('2d');
@@ -647,7 +606,7 @@
 
             canvas2D.addEventListener('mousedown', on2DMouseDown);
             canvas2D.addEventListener('mousemove', on2DMouseMove);
-            canvas2D.addEventListener('mouseup', on2DMouseUp);
+            window.addEventListener('mouseup', on2DMouseUp);
             canvas2D.addEventListener('wheel', on2DWheel);
             
             canvas2D.addEventListener('contextmenu', (e) => {
@@ -738,7 +697,7 @@
             }
 
             projectData.walls.forEach(wall => {
-                const isSelected = wall.id === selectedWallId;
+                const isSelected = selectedWallIds.includes(wall.id);
                 
                 ctx2D.strokeStyle = isSelected ? '#34d399' : '#334155';
                 ctx2D.lineWidth = wall.thickness + 4;
@@ -785,10 +744,57 @@
                 ctx2D.lineTo(mouseCurrentPos.x, mouseCurrentPos.y);
                 ctx2D.stroke();
 
+                const dx = mouseCurrentPos.x - drawingStartPoint.x;
+                const dy = mouseCurrentPos.y - drawingStartPoint.y;
+                const length = Math.hypot(dx, dy);
+                if (length > 0) {
+                    const labelX = (drawingStartPoint.x + mouseCurrentPos.x) / 2 - dy / length * 18;
+                    const labelY = (drawingStartPoint.y + mouseCurrentPos.y) / 2 + dx / length * 18;
+                    const label = (length / 100).toFixed(2) + ' m';
+                    ctx2D.font = 'bold 14px Inter, sans-serif';
+                    ctx2D.textAlign = 'center';
+                    ctx2D.textBaseline = 'middle';
+                    const labelWidth = ctx2D.measureText(label).width + 12;
+                    ctx2D.fillStyle = '#020617';
+                    ctx2D.fillRect(labelX - labelWidth / 2, labelY - 10, labelWidth, 20);
+                    ctx2D.fillStyle = '#a7f3d0';
+                    ctx2D.fillText(label, labelX, labelY);
+                }
+
                 ctx2D.fillStyle = '#34d399';
                 ctx2D.beginPath();
                 ctx2D.arc(drawingStartPoint.x, drawingStartPoint.y, 6 / zoom, 0, Math.PI * 2);
                 ctx2D.fill();
+            }
+
+            if (currentTool === 'select') {
+                selectedWallIds.forEach(id => {
+                    const wall = projectData.walls.find(w => w.id === id);
+                    if (!wall) return;
+                    [ [wall.x1, wall.y1], [wall.x2, wall.y2] ].forEach(([x, y]) => {
+                        ctx2D.beginPath();
+                        ctx2D.arc(x, y, 7 / zoom, 0, Math.PI * 2);
+                        ctx2D.fillStyle = '#f8fafc';
+                        ctx2D.fill();
+                        ctx2D.lineWidth = 2 / zoom;
+                        ctx2D.strokeStyle = '#059669';
+                        ctx2D.stroke();
+                    });
+                });
+            }
+
+            if (selectionBoxStart && selectionBoxEnd) {
+                const left = Math.min(selectionBoxStart.x, selectionBoxEnd.x);
+                const top = Math.min(selectionBoxStart.y, selectionBoxEnd.y);
+                const width = Math.abs(selectionBoxEnd.x - selectionBoxStart.x);
+                const height = Math.abs(selectionBoxEnd.y - selectionBoxStart.y);
+                ctx2D.fillStyle = 'rgba(16, 185, 129, 0.12)';
+                ctx2D.fillRect(left, top, width, height);
+                ctx2D.strokeStyle = '#34d399';
+                ctx2D.lineWidth = 1 / zoom;
+                ctx2D.setLineDash([5 / zoom, 4 / zoom]);
+                ctx2D.strokeRect(left, top, width, height);
+                ctx2D.setLineDash([]);
             }
 
             ctx2D.restore();
@@ -816,7 +822,7 @@
                 return;
             }
 
-            if (e.button === 1 || e.shiftKey || currentTool === 'pan') {
+            if (e.button === 1 || (e.shiftKey && currentTool !== 'select') || currentTool === 'pan') {
                 isPanning = true;
                 startPanX = e.clientX - panX;
                 startPanY = e.clientY - panY;
@@ -903,9 +909,8 @@
             } else if (currentTool === 'select') {
                 const hit = pickElement2D(coords);
                 if (hit) {
-                    selectedWallId = null;
+                    setSelectedWalls([]);
                     draggingWall = null;
-                    document.getElementById('wall-inspector').classList.add('hidden');
                     selected3DId = hit.id;
                     draggingEl2D = { id: hit.id, moved: false };
                     syncElementInspectors();
@@ -913,6 +918,39 @@
                     return;
                 }
                 if (selected3DId) { selected3DId = null; syncElementInspectors(); }
+                const additiveSelection = e.ctrlKey || e.metaKey || e.shiftKey;
+                let endpointHit = null;
+                let endpointDistance = 14 / zoom;
+                projectData.walls.forEach(w => {
+                    [['start', w.x1, w.y1], ['end', w.x2, w.y2]].forEach(([endpoint, x, y]) => {
+                        const distance = Math.hypot(coords.x - x, coords.y - y);
+                        if (distance < endpointDistance) {
+                            endpointDistance = distance;
+                            endpointHit = { wall: w, endpoint };
+                        }
+                    });
+                });
+                if (endpointHit) {
+                    if (additiveSelection) {
+                        const nextIds = selectedWallIds.includes(endpointHit.wall.id)
+                            ? selectedWallIds.filter(id => id !== endpointHit.wall.id)
+                            : [...selectedWallIds, endpointHit.wall.id];
+                        setSelectedWalls(nextIds);
+                        draggingWall = null;
+                    } else {
+                        setSelectedWalls([endpointHit.wall.id]);
+                        draggingWall = {
+                            wall: endpointHit.wall,
+                            mode: endpointHit.endpoint,
+                            last: coords,
+                            moved: false
+                        };
+                    }
+                    selectionBoxStart = null;
+                    selectionBoxEnd = null;
+                    redraw2D();
+                    return;
+                }
                 let foundId = null;
                 projectData.walls.forEach(w => {
                     const dist = distToSegment(coords, {x: w.x1, y: w.y1}, {x: w.x2, y: w.y2});
@@ -920,30 +958,27 @@
                         foundId = w.id;
                     }
                 });
-                selectedWallId = foundId;
-                const inspector = document.getElementById('wall-inspector');
-                if (selectedWallId) {
-                    inspector.classList.remove('hidden');
-                    const wall = projectData.walls.find(w => w.id === selectedWallId);
-                    if (wall) {
-                        document.getElementById('inspector-thickness').value = wall.thickness;
-                        document.getElementById('inspector-thickness-val').textContent = wall.thickness + ' cm';
-                        document.getElementById('inspector-height').value = wall.height;
-                        document.getElementById('inspector-height-val').textContent = (wall.height / 100).toFixed(2) + ' m';
-                        
-                        const currentLenM = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) / 100;
-                        document.getElementById('inspector-length-input').value = currentLenM.toFixed(2);
-                        document.getElementById('inspector-length-val').textContent = currentLenM.toFixed(2) + ' m';
-                        
-                        draggingWall = wall;
-                        saveStateToUndo();
-                        const midX = (wall.x1 + wall.x2) / 2;
-                        const midY = (wall.y1 + wall.y2) / 2;
-                        dragOffset = { x: coords.x - midX, y: coords.y - midY };
-                    }
-                } else {
-                    inspector.classList.add('hidden');
+                if (additiveSelection && foundId) {
+                    const nextIds = selectedWallIds.includes(foundId)
+                        ? selectedWallIds.filter(id => id !== foundId)
+                        : [...selectedWallIds, foundId];
+                    setSelectedWalls(nextIds);
                     draggingWall = null;
+                    selectionBoxStart = null;
+                    selectionBoxEnd = null;
+                } else {
+                    const wall = projectData.walls.find(w => w.id === foundId);
+                    if (wall) {
+                        setSelectedWalls([wall.id]);
+                        draggingWall = { wall, mode: 'move', last: coords, moved: false };
+                        selectionBoxStart = null;
+                        selectionBoxEnd = null;
+                    } else {
+                        if (!additiveSelection) setSelectedWalls([]);
+                        draggingWall = null;
+                        selectionBoxStart = coords;
+                        selectionBoxEnd = coords;
+                    }
                 }
             }
             redraw2D();
@@ -965,42 +1000,43 @@
                 return;
             }
 
-            if (currentTool === 'select' && draggingWall) {
-                const midX = (draggingWall.x1 + draggingWall.x2) / 2;
-                const midY = (draggingWall.y1 + draggingWall.y2) / 2;
-                const targetMidX = coords.x - dragOffset.x;
-                const targetMidY = coords.y - dragOffset.y;
-                const dx = targetMidX - midX;
-                const dy = targetMidY - midY;
-
-                // Detect connected endpoints for live shape preservation
-                const tol = 10;
-                projectData.walls.forEach(w => {
-                    if (w.id === draggingWall.id) return;
-                    if (Math.hypot(w.x1 - draggingWall.x1, w.y1 - draggingWall.y1) < tol) {
-                        w.x1 += dx; w.y1 += dy;
-                    }
-                    if (Math.hypot(w.x2 - draggingWall.x1, w.y2 - draggingWall.y1) < tol) {
-                        w.x2 += dx; w.y2 += dy;
-                    }
-                    if (Math.hypot(w.x1 - draggingWall.x2, w.y1 - draggingWall.y2) < tol) {
-                        w.x1 += dx; w.y1 += dy;
-                    }
-                    if (Math.hypot(w.x2 - draggingWall.x2, w.y2 - draggingWall.y2) < tol) {
-                        w.x2 += dx; w.y2 += dy;
-                    }
-                });
-
-                draggingWall.x1 += dx;
-                draggingWall.y1 += dy;
-                draggingWall.x2 += dx;
-                draggingWall.y2 += dy;
-                
-                const currentLenM = Math.hypot(draggingWall.x2 - draggingWall.x1, draggingWall.y2 - draggingWall.y1) / 100;
-                document.getElementById('inspector-length-input').value = currentLenM.toFixed(2);
-                document.getElementById('inspector-length-val').textContent = currentLenM.toFixed(2) + ' m';
-
+            if (currentTool === 'select' && selectionBoxStart) {
+                selectionBoxEnd = coords;
                 redraw2D();
+                return;
+            }
+
+            if (currentTool === 'select' && draggingWall) {
+                const drag = draggingWall;
+                const dx = coords.x - drag.last.x;
+                const dy = coords.y - drag.last.y;
+                if (!drag.moved && Math.hypot(dx, dy) > 1) {
+                    saveStateToUndo();
+                    drag.moved = true;
+                }
+                if (drag.moved) {
+                    if (drag.mode === 'start') {
+                        if (Math.hypot(drag.wall.x2 - coords.x, drag.wall.y2 - coords.y) > 1) {
+                            drag.wall.x1 = coords.x;
+                            drag.wall.y1 = coords.y;
+                        }
+                    } else if (drag.mode === 'end') {
+                        if (Math.hypot(drag.wall.x1 - coords.x, drag.wall.y1 - coords.y) > 1) {
+                            drag.wall.x2 = coords.x;
+                            drag.wall.y2 = coords.y;
+                        }
+                    } else {
+                        drag.wall.x1 += dx;
+                        drag.wall.y1 += dy;
+                        drag.wall.x2 += dx;
+                        drag.wall.y2 += dy;
+                    }
+                    drag.last = coords;
+                    const lengthM = Math.hypot(drag.wall.x2 - drag.wall.x1, drag.wall.y2 - drag.wall.y1) / 100;
+                    document.getElementById('inspector-length-input').value = lengthM.toFixed(2);
+                    document.getElementById('inspector-length-val').textContent = lengthM.toFixed(2) + ' m';
+                    redraw2D();
+                }
                 return;
             }
 
@@ -1024,8 +1060,54 @@
 
         function on2DMouseUp(e) {
             if (isPanning) isPanning = false;
+            if (selectionBoxStart && selectionBoxEnd) {
+                const start = selectionBoxStart;
+                const end = selectionBoxEnd;
+                const left = Math.min(start.x, end.x);
+                const right = Math.max(start.x, end.x);
+                const top = Math.min(start.y, end.y);
+                const bottom = Math.max(start.y, end.y);
+                const isEnclosing = end.x >= start.x;
+                const inRect = p => p.x >= left && p.x <= right && p.y >= top && p.y <= bottom;
+                const segmentIntersectsRect = (a, b) => {
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    let t0 = 0, t1 = 1;
+                    const p = [-dx, dx, -dy, dy];
+                    const q = [a.x - left, right - a.x, a.y - top, bottom - a.y];
+                    for (let i = 0; i < 4; i++) {
+                        if (p[i] === 0) {
+                            if (q[i] < 0) return false;
+                        } else {
+                            const t = q[i] / p[i];
+                            if (p[i] < 0) t0 = Math.max(t0, t);
+                            else t1 = Math.min(t1, t);
+                            if (t0 > t1) return false;
+                        }
+                    }
+                    return true;
+                };
+                const matched = Math.hypot(end.x - start.x, end.y - start.y) > 4 / zoom
+                    ? projectData.walls.filter(w => {
+                        const a = { x: w.x1, y: w.y1 }, b = { x: w.x2, y: w.y2 };
+                        return isEnclosing
+                            ? inRect(a) && inRect(b)
+                            : segmentIntersectsRect(a, b);
+                    }).map(w => w.id)
+                    : null;
+                if (matched) {
+                    const ids = e.ctrlKey || e.metaKey || e.shiftKey
+                        ? [...new Set([...selectedWallIds, ...matched])]
+                        : matched;
+                    setSelectedWalls(ids);
+                } else if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                    setSelectedWalls([]);
+                }
+                selectionBoxStart = null;
+                selectionBoxEnd = null;
+            }
             if (draggingWall) draggingWall = null;
             if (draggingEl2D) draggingEl2D = null;
+            redraw2D();
         }
 
         function distToSegment(p, p1, p2) {
@@ -1041,6 +1123,8 @@
             drawingStartPoint = null;
             mouseCurrentPos = null;
             draggingWall = null;
+            selectionBoxStart = null;
+            selectionBoxEnd = null;
             document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.className = "tool-btn p-3 rounded-xl border border-slate-800 bg-slate-800 text-slate-300 text-xs font-medium flex flex-col items-center gap-1.5 hover:border-slate-700 transition shadow-sm";
             });
@@ -1051,7 +1135,7 @@
             const toolBadges = { wall: 'Tracer Mur', select: 'Sélectionner / Glisser', place: 'Placer appareil' };
             const toolHints = {
                 wall: 'Cliquez pour placer le premier point du mur (Clic droit pour fermer/arrêter)',
-                select: 'Cliquez et glissez un mur ou un appareil pour le déplacer (Suppr pour supprimer)',
+                select: 'Cliquez un mur ; glissez dans le vide pour encadrer ; tirez une extrémité ; Ctrl/Cmd/Shift pour ajouter',
                 place: 'Choisissez un élément à gauche puis cliquez près d\'un mur pour le poser'
             };
             document.getElementById('active-tool-badge').textContent = toolBadges[tool] || tool;
@@ -1059,10 +1143,42 @@
             document.getElementById('place-palette').classList.toggle('hidden', tool !== 'place');
             if (tool !== 'select' && selected3DId) { selected3DId = null; syncElementInspectors(); }
             if (tool !== 'select') {
-                selectedWallId = null;
-                document.getElementById('wall-inspector').classList.add('hidden');
+                setSelectedWalls([]);
             }
             redraw2D();
+        }
+
+        function setSelectedWalls(ids) {
+            const selected = new Set(ids);
+            selectedWallIds = projectData.walls.filter(w => selected.has(w.id)).map(w => w.id);
+            selectedWallId = selectedWallIds[0] || null;
+
+            const inspector = document.getElementById('wall-inspector');
+            inspector.classList.toggle('hidden', selectedWallIds.length === 0);
+            if (!selectedWallIds.length) return;
+
+            const walls = projectData.walls.filter(w => selected.has(w.id));
+            const multiple = walls.length > 1;
+            document.getElementById('wall-inspector-title').textContent = multiple
+                ? walls.length + ' murs sélectionnés' : 'Inspecteur de Mur';
+            document.getElementById('wall-inspector-description').textContent = multiple
+                ? 'Modifiez ensemble l’épaisseur des murs sélectionnés.' : 'Modifiez la longueur exacte ou déplacez le mur.';
+            document.getElementById('inspector-length-container').classList.toggle('hidden', multiple);
+            document.getElementById('inspector-height-container').classList.toggle('hidden', multiple);
+            document.getElementById('inspector-thickness-label').textContent = multiple
+                ? 'Épaisseur (' + walls.length + ' murs)' : 'Épaisseur';
+
+            const thicknesses = new Set(walls.map(w => w.thickness));
+            document.getElementById('inspector-thickness').value = walls[0].thickness;
+            document.getElementById('inspector-thickness-val').textContent = thicknesses.size === 1
+                ? walls[0].thickness + ' cm' : 'Variable';
+            if (!multiple) {
+                document.getElementById('inspector-height').value = walls[0].height;
+                document.getElementById('inspector-height-val').textContent = (walls[0].height / 100).toFixed(2) + ' m';
+                const lengthM = Math.hypot(walls[0].x2 - walls[0].x1, walls[0].y2 - walls[0].y1) / 100;
+                document.getElementById('inspector-length-input').value = lengthM.toFixed(2);
+                document.getElementById('inspector-length-val').textContent = lengthM.toFixed(2) + ' m';
+            }
         }
 
         function updateWallSpec(prop, val) {
@@ -1076,15 +1192,19 @@
         }
 
         function updateSelectedWallProp(prop, val) {
-            if (!selectedWallId) return;
-            const wall = projectData.walls.find(w => w.id === selectedWallId);
-            if (!wall) return;
+            if (!selectedWallIds.length) return;
             saveStateToUndo();
             if (prop === 'thickness') {
-                wall.thickness = Math.max(5, Math.min(50, parseInt(val)));
-                document.getElementById('inspector-thickness').value = wall.thickness;
-                document.getElementById('inspector-thickness-val').textContent = wall.thickness + ' cm';
+                const thickness = Math.max(5, Math.min(50, parseInt(val)));
+                selectedWallIds.forEach(id => {
+                    const wall = projectData.walls.find(w => w.id === id);
+                    if (wall) wall.thickness = thickness;
+                });
+                document.getElementById('inspector-thickness').value = thickness;
+                document.getElementById('inspector-thickness-val').textContent = thickness + ' cm';
             } else if (prop === 'height') {
+                const wall = projectData.walls.find(w => w.id === selectedWallId);
+                if (!wall) return;
                 wall.height = parseInt(val);
                 document.getElementById('inspector-height-val').textContent = (val / 100).toFixed(2) + ' m';
             }
@@ -1104,43 +1224,25 @@
             const newLenCm = newLenM * 100;
             const ratio = newLenCm / currentLen;
 
-            const oldX2 = wall.x2;
-            const oldY2 = wall.y2;
-
             wall.x2 = wall.x1 + (wall.x2 - wall.x1) * ratio;
             wall.y2 = wall.y1 + (wall.y2 - wall.y1) * ratio;
 
-            const dx = wall.x2 - oldX2;
-            const dy = wall.y2 - oldY2;
-
-            // Keep connected endpoints of other walls updated in direct live style
-            const tol = 10;
-            projectData.walls.forEach(w => {
-                if (w.id === wall.id) return;
-                if (Math.hypot(w.x1 - oldX2, w.y1 - oldY2) < tol) {
-                    w.x1 += dx; w.y1 += dy;
-                }
-                if (Math.hypot(w.x2 - oldX2, w.y2 - oldY2) < tol) {
-                    w.x2 += dx; w.y2 += dy;
-                }
-            });
-
             document.getElementById('inspector-length-val').textContent = newLenM.toFixed(2) + ' m';
             redraw2D();
-            showNotification("Longueur du mur mise à jour avec liaisons", "success");
+            showNotification("Longueur du mur mise à jour", "success");
         }
 
         function deleteSelectedWall() {
-            if (!selectedWallId) return;
+            if (!selectedWallIds.length) return;
+            const ids = new Set(selectedWallIds);
             saveStateToUndo();
-            projectData.walls = projectData.walls.filter(w => w.id !== selectedWallId);
-            projectData.openings = projectData.openings.filter(o => o.wallId !== selectedWallId);
-            projectData.electrical = projectData.electrical.filter(el => el.wallId !== selectedWallId);
-            selectedWallId = null;
-            document.getElementById('wall-inspector').classList.add('hidden');
+            projectData.walls = projectData.walls.filter(w => !ids.has(w.id));
+            projectData.openings = projectData.openings.filter(o => !ids.has(o.wallId));
+            projectData.electrical = projectData.electrical.filter(el => !ids.has(el.wallId));
+            setSelectedWalls([]);
             updateStats();
             redraw2D();
-            showNotification('Mur supprimé avec succès', 'success');
+            showNotification(ids.size > 1 ? ids.size + ' murs supprimés avec succès' : 'Mur supprimé avec succès', 'success');
         }
 
         function toggleGridSnap() {
@@ -1176,7 +1278,7 @@
                 projectData.walls = [];
                 projectData.openings = [];
                 projectData.electrical = [];
-                selectedWallId = null;
+                setSelectedWalls([]);
                 selected3DId = null;
                 document.getElementById('wall-inspector').classList.add('hidden');
                 updateStats();
@@ -1494,16 +1596,16 @@
                 let dist = el.distanceFromStart !== undefined ? el.distanceFromStart : t.len / 2;
                 dist = Math.max(5, Math.min(t.len - 5, dist));
                 const zEl = Math.max(C.lowZ, Math.min(ceilZ, E.z));
-                const shift = 8 + 9;
                 const list = spans.get(w.id);
                 const own = list.find(sp => dist > sp.lo && dist < sp.hi && E.z >= sp.z0 && E.z <= sp.z1) || null;
                 const stubOK = (r) => !list.some(sp => sp !== own && Math.max(r, dist) > sp.lo && Math.min(r, dist) < sp.hi && E.z >= sp.z0 && E.z <= sp.z1);
-                const cands = [dist + shift, dist - shift];
+                // Keep the vertical drop above the device unless an opening blocks that position.
+                const cands = [dist];
                 list.forEach(sp => cands.push(sp.lo - 0.5, sp.hi + 0.5));
                 const valid = cands
                     .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, ceilZ) && stubOK(r))
                     .sort((p, q) => Math.abs(p - dist) - Math.abs(q - dist) || q - p);
-                let r = valid.length ? valid[0] : Math.max(10, Math.min(t.len - 10, dist + shift));
+                let r = valid.length ? valid[0] : Math.max(10, Math.min(t.len - 10, dist));
                 if (!valid.length) result.warnings.push('Aucune descente possible pour ' + el.id);
                 t.st.push(r);
                 place.set(el.id, { t, E, dist, r, zEl });
@@ -1534,13 +1636,35 @@
 
             // 7. Graphe
             const nodes = new Map();
+            const nodeBuckets = new Map();
             const edgeKeys = new Set();
             const allEdges = [];
             const key = (x, y, z) => Math.round(x * 10) + '|' + Math.round(y * 10) + '|' + Math.round(z * 10);
+            const bucketKey = (x, y, z) => Math.floor(x) + '|' + Math.floor(y) + '|' + Math.floor(z);
+            // Independently computed junctions can differ by a few millimetres due to floating-point rounding.
+            const findNode = (x, y, z) => {
+                const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z);
+                for (let ix = bx - 1; ix <= bx + 1; ix++) {
+                    for (let iy = by - 1; iy <= by + 1; iy++) {
+                        for (let iz = bz - 1; iz <= bz + 1; iz++) {
+                            const bucket = nodeBuckets.get(ix + '|' + iy + '|' + iz) || [];
+                            const found = bucket.find(n => Math.hypot(n.x - x, n.y - y, n.z - z) <= 0.2);
+                            if (found) return found;
+                        }
+                    }
+                }
+                return null;
+            };
+            let nodeId = 0;
             const node = (x, y, z) => {
-                const k = key(x, y, z);
-                let n = nodes.get(k);
-                if (!n) { n = { k, x, y, z, adj: [], light: false }; nodes.set(k, n); }
+                let n = findNode(x, y, z);
+                if (n) return n;
+                const k = key(x, y, z) + '#' + nodeId++;
+                n = { k, x, y, z, adj: [], light: false };
+                nodes.set(k, n);
+                const bucket = bucketKey(x, y, z);
+                if (!nodeBuckets.has(bucket)) nodeBuckets.set(bucket, []);
+                nodeBuckets.get(bucket).push(n);
                 return n;
             };
             const addEdge = (n1, n2, kind, extraCost) => {
@@ -1595,7 +1719,7 @@
                     if (insideBody(pa.x, pa.y) || insideBody(pb.x, pb.y)) return;
                     levels.forEach(L => {
                         if (blockedH(w.id, s - 0.01, s + 0.01, L.z)) return;
-                        const na = nodes.get(key(pa.x, pa.y, L.z)), nb = nodes.get(key(pb.x, pb.y, L.z));
+                        const na = findNode(pa.x, pa.y, L.z), nb = findNode(pb.x, pb.y, L.z);
                         if (na && nb) addEdge(na, nb, 'cross', C.crossPenalty);
                     });
                 });
@@ -1604,7 +1728,7 @@
             // Colonnes verticales dans les angles / jonctions (sauf devant une ouverture)
             junctions.forEach(j => {
                 if (blockedV(j.a.wall.id, j.s, C.lowZ, ceilZ) || blockedV(j.b.wall.id, j.u, C.lowZ, ceilZ)) return;
-                const lo = nodes.get(key(j.p.x, j.p.y, C.lowZ)), hi = nodes.get(key(j.p.x, j.p.y, ceilZ));
+                const lo = findNode(j.p.x, j.p.y, C.lowZ), hi = findNode(j.p.x, j.p.y, ceilZ);
                 if (lo && hi) addEdge(lo, hi, 'riser');
             });
 
@@ -2485,6 +2609,12 @@
                         if (threeControls) threeControls.enabled = false;
                         return;
                     }
+                }
+                if (selected3DId) {
+                    selected3DId = null;
+                    updateSelectionHighlight(null);
+                    syncElementInspectors();
+                    redraw2D();
                 }
             }
         }
@@ -3684,7 +3814,7 @@
                 };
                 undoStack = [];
                 redoStack = [];
-                selectedWallId = null;
+                setSelectedWalls([]);
                 selected3DId = null;
                 recenter2DView();
                 updateStats();
@@ -3716,7 +3846,7 @@
                             saveStateToUndo();
                             projectData = parsed;
                             ensureProjectDefaults();
-                            selectedWallId = null;
+                            setSelectedWalls([]);
                             selected3DId = null;
                             recenter2DView();
                             updateStats();
