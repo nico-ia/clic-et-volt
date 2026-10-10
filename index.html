@@ -56,6 +56,7 @@
         .rt tbody tr:nth-child(even) td { background: rgba(30, 41, 59, 0.45); }
         .rt tr.rt-warn td { background: rgba(244, 63, 94, 0.15); color: #fecdd3; }
         .rt-note, .rt-empty { font-size: 10px; color: #64748b; margin-top: 6px; }
+        .rt tbody tr.rt-gap td, body.theme-light .rt tbody tr.rt-gap td { border: 0; background: transparent; padding: 0; height: 16px; }
         body.theme-light .rt-title { color: #0f172a; }
         body.theme-light .rt th, body.theme-light .rt td { border-color: #cbd5e1; }
         body.theme-light .rt th { background: #e2e8f0; color: #0f172a; }
@@ -1212,11 +1213,21 @@
                     draggingWall = null;
                     selected3DId = hit.id;
                     draggingEl2D = { id: hit.id, moved: false };
+                    // comme en 3D : cliquer un point de circuit sélectionne son câblage
+                    const hitEl = projectData.electrical.find(x => x.id === hit.id);
+                    const hitCircuit = hitEl && isCircuitPoint(hitEl) ? circuitOf(hitEl) : null;
+                    selectedCircuitId = hitCircuit ? hitCircuit.id : null;
                     syncElementInspectors();
+                    updateCircuitsUI();
                     redraw2D();
                     return;
                 }
-                if (selected3DId) { selected3DId = null; syncElementInspectors(); }
+                if (selected3DId || selectedCircuitId) {
+                    selected3DId = null;
+                    selectedCircuitId = null;
+                    syncElementInspectors();
+                    updateCircuitsUI();
+                }
                 const additiveSelection = e.ctrlKey || e.metaKey || e.shiftKey;
                 let endpointHit = null;
                 let endpointDistance = 14 / zoom;
@@ -1450,7 +1461,7 @@
             document.getElementById('active-tool-badge').textContent = toolBadges[tool] || tool;
             document.getElementById('drawing-instruction-hint').textContent = toolHints[tool] || '';
             document.getElementById('place-palette').classList.toggle('hidden', tool !== 'place');
-            if (tool !== 'select' && selected3DId) { selected3DId = null; syncElementInspectors(); }
+            if (tool !== 'select' && selected3DId) { selected3DId = null; selectedCircuitId = null; syncElementInspectors(); updateCircuitsUI(); }
             if (tool !== 'select') {
                 setSelectedWalls([]);
             }
@@ -3658,10 +3669,10 @@
             Object.keys(counts).forEach(t => {
                 if (gangs.tally[t]) {
                     [1, 2, 3, 4].forEach(n => {
-                        if (gangs.tally[t][n]) countLines.push({ label: ELEMENT_LABELS[t] + ' ' + GANG_NAMES[n], count: gangs.tally[t][n] });
+                        if (gangs.tally[t][n]) countLines.push({ type: t, gang: n, label: ELEMENT_LABELS[t] + ' ' + GANG_NAMES[n], count: gangs.tally[t][n] });
                     });
                 } else {
-                    countLines.push({ label: ELEMENT_LABELS[t] || t, count: counts[t] });
+                    countLines.push({ type: t, gang: 0, label: ELEMENT_LABELS[t] || t, count: counts[t] });
                 }
             });
             return { rows, alerts, infos, sections, conduitM, counts, countLines };
@@ -3727,16 +3738,36 @@
         }
 
         // ---------- Métré en tableaux (écran + impression) ----------
+        // Quantitatif par catégories : null = ligne d'espacement entre deux catégories
+        const BOM_DEVICE_ORDER = ['panel', 'light_ceiling', 'wall_light', 'switch_simple', 'switch_va_et_vient', 'switch_pushbutton', 'outlet_16a', 'outlet_20a', 'outlet_32a'];
+
         function buildBomRows(rep) {
-            const rows = [];
-            [...rep.sections.entries()].sort((a, b) => a[0] - b[0]).forEach(([sec, m]) =>
-                rows.push(['Câble', 'Câble 3G' + sec + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
-            if (rep.conduitM > 0) rows.push(['Gaine', 'Gaine / conduit (marge 10 %)', Math.ceil(rep.conduitM * 1.1), 'm']);
-            rep.countLines.forEach(line => rows.push(['Appareillage', line.label, line.count, 'u']));
+            const groups = [];
+
+            const openings = [];
             const doors = projectData.openings.filter(o => o.type === 'door_single').length;
             const wins = projectData.openings.filter(o => o.type === 'window_std').length;
-            if (doors) rows.push(['Ouvertures', 'Porte simple', doors, 'u']);
-            if (wins) rows.push(['Ouvertures', 'Fenêtre', wins, 'u']);
+            if (doors) openings.push(['Ouvertures', 'Porte simple', doors, 'u']);
+            if (wins) openings.push(['Ouvertures', 'Fenêtre', wins, 'u']);
+            groups.push(openings);
+
+            // appareillage : tableau, puis points lumineux, puis interrupteurs, puis prises
+            const rank = t => { const i = BOM_DEVICE_ORDER.indexOf(t); return i < 0 ? 99 : i; };
+            groups.push(rep.countLines.slice()
+                .sort((x, y) => rank(x.type) - rank(y.type) || (x.gang || 0) - (y.gang || 0))
+                .map(line => ['Appareillage', line.label, line.count, 'u']));
+
+            const cables = [];
+            if (rep.conduitM > 0) cables.push(['Gaines et câbles', 'Gaine / conduit (marge 10 %)', Math.ceil(rep.conduitM * 1.1), 'm']);
+            [...rep.sections.entries()].sort((x, y) => x[0] - y[0]).forEach(([sec, m]) =>
+                cables.push(['Gaines et câbles', 'Câble 3G' + sec + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
+            groups.push(cables);
+
+            const rows = [];
+            groups.filter(g => g.length).forEach((g, i) => {
+                if (i) rows.push(null);
+                g.forEach(r => rows.push(r));
+            });
             return rows;
         }
 
@@ -3747,7 +3778,8 @@
                 html += '<p class="rt-empty">Aucun matériel à décompter : placez un tableau et des appareils.</p>';
             } else {
                 html += '<table class="rt"><thead><tr><th>Catégorie</th><th>Désignation</th><th class="num">Quantité</th><th>Unité</th></tr></thead><tbody>' +
-                    bom.map(r => '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="num">' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>').join('') +
+                    bom.map(r => r ? '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="num">' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>'
+                        : '<tr class="rt-gap" aria-hidden="true"><td colspan="4"></td></tr>').join('') +
                     '</tbody></table>';
             }
             html += '<h3 class="rt-title">Circuits</h3>';
@@ -3776,7 +3808,7 @@
             const css = '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;padding:16px;background:#fff;color:#0f172a;font:13px Arial,sans-serif}' +
                 '.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}.toolbar h1{font-size:18px;margin:0 auto 0 0}.toolbar button{font:inherit;padding:6px 12px;cursor:pointer}' +
                 '.rt-title{font-size:14px;margin:18px 0 6px}.rt{width:100%;border-collapse:collapse;margin-bottom:6px}.rt th,.rt td{border:1px solid #94a3b8;padding:5px 8px;text-align:left;vertical-align:top}' +
-                '.rt th{background:#e2e8f0}.rt .num{text-align:right;white-space:nowrap}.rt tr{break-inside:avoid}.rt-warn td{background:#fee2e2}.rt-note,.rt-empty{font-size:11px;color:#475569}.rt-alerts{margin:0;padding-left:18px}.rt-alerts li{margin-bottom:3px}' +
+                '.rt th{background:#e2e8f0}.rt .num{text-align:right;white-space:nowrap}.rt tr{break-inside:avoid}.rt-warn td{background:#fee2e2}.rt tr.rt-gap td{border:0;background:#fff;padding:0;height:14px}.rt-note,.rt-empty{font-size:11px;color:#475569}.rt-alerts{margin:0;padding-left:18px}.rt-alerts li{margin-bottom:3px}' +
                 '@media print{.toolbar{display:none}body{padding:0}}';
             win.document.open();
             win.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Métré — Clic & Volt</title><style>' + css + '</style></head><body>' +
@@ -3830,13 +3862,8 @@
         function exportBOM() {
             const rep = computeCircuitReport();
             const rows = [['Catégorie', 'Désignation', 'Quantité', 'Unité']];
-            [...rep.sections.entries()].sort((a, b) => a[0] - b[0]).forEach(([s, m]) => rows.push(['Câble', 'Câble 3G' + s + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
-            if (rep.conduitM > 0) rows.push(['Gaine', 'Gaine / conduit (marge 10 %)', Math.ceil(rep.conduitM * 1.1), 'm']);
-            rep.countLines.forEach(line => rows.push(['Appareillage', line.label, line.count, 'u']));
-            const doors = projectData.openings.filter(o => o.type === 'door_single').length;
-            const wins = projectData.openings.filter(o => o.type === 'window_std').length;
-            if (doors) rows.push(['Ouvertures', 'Porte simple', doors, 'u']);
-            if (wins) rows.push(['Ouvertures', 'Fenêtre', wins, 'u']);
+            buildBomRows(rep).forEach(r => rows.push(r || []));
+            rows.push([]);
             rep.rows.forEach(r => rows.push(['Circuit', r.circuit.name + ' (' + r.circuit.breakerRating + 'A, ' + r.circuit.wireSection + ' mm²)', r.points + ' pts / ' + r.cableM.toFixed(1) + ' m / ΔU ' + r.drop.toFixed(1) + ' %', '']));
             const csv = '﻿' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\r\n');
             const a = document.createElement('a');
@@ -4543,6 +4570,11 @@
                         .flatMap(link => link.linkIds || [])
                     : []);
                 const hasLinkFocus = selectedLinkIds.size > 0;
+                const focusCircuit = !hasLinkFocus && selectedCircuitId
+                    ? projectData.circuits.find(c => c.id === selectedCircuitId) || null
+                    : null;
+                const focusMode = hasLinkFocus || !!focusCircuit;
+                const dimColor = currentTheme === 'light' ? '#94a3b8' : '#64748b';
                 ctx2D.lineCap = 'round';
                 ctx2D.globalAlpha = 0.85;
                 // Le cheminement bas et le cheminement haut ont les mêmes coordonnées en plan : on les décale
@@ -4556,14 +4588,15 @@
                     const ox = -dy / len * off, oy = dx / len * off;
                     const ids = [...new Set((s.cids || []).filter(Boolean))];
                     const circs = ids.map(id => projectData.circuits.find(c => c.id === id)).filter(Boolean);
-                    ctx2D.globalAlpha = hasLinkFocus ? (linkHighlighted ? 1 : 0.16) : 0.85;
-                    ctx2D.lineWidth = hasLinkFocus && linkHighlighted ? 5 : 3;
+                    const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && (s.cids || []).includes(focusCircuit.id));
+                    ctx2D.globalAlpha = focusMode ? (focusHit ? 1 : 0.16) : 0.85;
+                    ctx2D.lineWidth = focusMode && focusHit ? 5 : 3;
                     ctx2D.beginPath();
                     ctx2D.moveTo(s.a.x + ox, s.a.y + oy);
                     ctx2D.lineTo(s.b.x + ox, s.b.y + oy);
-                    if (circs.length <= 1) {
-                        ctx2D.strokeStyle = hasLinkFocus
-                            ? (linkHighlighted ? '#facc15' : (currentTheme === 'light' ? '#94a3b8' : '#64748b'))
+                    if (focusMode || circs.length <= 1) {
+                        ctx2D.strokeStyle = focusMode
+                            ? (focusHit ? (hasLinkFocus ? '#facc15' : circuitColor(focusCircuit)) : dimColor)
                             : circs.length ? circuitColor(circs[0]) : '#94a3b8';
                         ctx2D.setLineDash(isLow ? [8, 6] : []);
                         ctx2D.stroke();
@@ -4571,9 +4604,7 @@
                         // tronçon partagé : bandes alternées aux couleurs de chaque circuit
                         const n = circs.length, seg = isLow ? 5 : 8;
                         circs.forEach((c, k) => {
-                            ctx2D.strokeStyle = hasLinkFocus
-                                ? (linkHighlighted ? '#facc15' : (currentTheme === 'light' ? '#94a3b8' : '#64748b'))
-                                : circuitColor(c);
+                            ctx2D.strokeStyle = circuitColor(c);
                             ctx2D.setLineDash([seg, seg * (n - 1)]);
                             ctx2D.lineDashOffset = -seg * k;
                             ctx2D.stroke();
