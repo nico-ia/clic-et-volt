@@ -47,6 +47,32 @@
         body.theme-light .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; }
         .theme-toggle-sun { color: #f4c430 !important; }
         .wall-light-placement-icon { color: #facc15 !important; }
+        .rt-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .05em; }
+        .rt { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .rt th, .rt td { border: 1px solid #334155; padding: 6px 10px; text-align: left; vertical-align: top; }
+        .rt th { background: #1e293b; color: #e2e8f0; }
+        .rt td { color: #cbd5e1; }
+        .rt .num { text-align: right; white-space: nowrap; }
+        .rt tbody tr:nth-child(even) td { background: rgba(30, 41, 59, 0.45); }
+        .rt tr.rt-warn td { background: rgba(244, 63, 94, 0.15); color: #fecdd3; }
+        .rt-note, .rt-empty { font-size: 10px; color: #64748b; margin-top: 6px; }
+        body.theme-light .rt-title { color: #0f172a; }
+        body.theme-light .rt th, body.theme-light .rt td { border-color: #cbd5e1; }
+        body.theme-light .rt th { background: #e2e8f0; color: #0f172a; }
+        body.theme-light .rt td { color: #334155; }
+        body.theme-light .rt tbody tr:nth-child(even) td { background: #f1f5f9; }
+        body.theme-light .rt tr.rt-warn td { background: #fee2e2; color: #991b1b; }
+        /* Sidebars repliables / redimensionnables */
+        .sb-collapsed { width: 0 !important; min-width: 0 !important; border-width: 0 !important; overflow: hidden !important; }
+        .sb-resizer { width: 6px; flex: 0 0 6px; cursor: col-resize; background: transparent; z-index: 25; transition: background .15s; touch-action: none; }
+        .sb-resizer:hover, .sb-resizer.active { background: rgba(16, 185, 129, 0.55); }
+        .sb-toggle { position: absolute; top: 50%; transform: translateY(-50%); z-index: 30; width: 18px; height: 56px; display: flex; align-items: center; justify-content: center; background: #0f172a; border: 1px solid #334155; color: #94a3b8; cursor: pointer; font-size: 10px; }
+        .sb-toggle:hover { color: #fff; background: #1e293b; }
+        .sb-toggle.left { left: 0; border-radius: 0 8px 8px 0; border-left: 0; }
+        .sb-toggle.right { right: 0; border-radius: 8px 0 0 8px; border-right: 0; }
+        body.theme-light .sb-toggle { background: #ffffff; border-color: #cbd5e1; color: #475569; }
+        body.sb-dragging { cursor: col-resize !important; user-select: none; }
+        body.sb-dragging canvas { pointer-events: none; }
         @media print {
             html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
         }
@@ -103,7 +129,7 @@
         <!-- ================= 2D MODE VIEW ================= -->
         <div id="view-2d" class="absolute inset-0 flex bg-slate-950">
             <!-- 2D Sidebar -->
-            <div class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
+            <div id="sidebar-2d" class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
                 <div class="p-3 border-b border-slate-800 font-semibold text-sm text-slate-300 flex items-center justify-between">
                     <span><i class="fa-solid fa-toolbox mr-2 text-emerald-400"></i>Boîte à outils 2D</span>
                     <span id="active-tool-badge" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">Tracé de mur</span>
@@ -148,7 +174,7 @@
                             </optgroup>
                         </select>
                         <div id="door-hinge-placement-container" class="hidden space-y-1">
-                            <label for="door-hinge-placement" class="text-[11px] text-slate-300">Ouverture de porte (vue côté pose)</label>
+                            <label for="door-hinge-placement" class="text-[11px] text-slate-300">Charnière, vue de face (porte poussant)</label>
                             <select id="door-hinge-placement" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
@@ -168,12 +194,13 @@
                             <select id="el2d-circuit" onchange="setSelectedCircuit(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
                         </div>
                         <div id="door-hinge-2d-container" class="hidden space-y-1">
-                            <label for="door-hinge-2d" class="text-xs text-slate-300">Sens d'ouverture (vue côté pose)</label>
+                            <label for="door-hinge-2d" class="text-xs text-slate-300">Charnière, vue de face (porte poussant)</label>
                             <select id="door-hinge-2d" onchange="setSelectedDoorHinge(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
                             </select>
                         </div>
+                        <div id="opening-controls-2d" class="hidden space-y-2"></div>
                         <div class="flex gap-2">
                             <button id="el2d-dup" onclick="duplicateSelectedElement()" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-clone"></i> Dupliquer</button>
                             <button onclick="deleteSelected3DElement()" class="flex-1 py-2 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-trash"></i> Supprimer</button>
@@ -206,7 +233,7 @@
                         </div>
                         <div id="inspector-height-container">
                             <div class="flex justify-between text-xs text-slate-400 mb-1">
-                                <span>Hauteur</span>
+                                <span id="inspector-height-label">Hauteur</span>
                                 <span id="inspector-height-val">2.50 m</span>
                             </div>
                             <input type="range" id="inspector-height" min="200" max="400" step="10" value="250" oninput="updateSelectedWallProp('height', this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
@@ -235,6 +262,24 @@
                                 <span id="val-height">2.50 m</span>
                             </div>
                             <input type="range" id="input-height" min="200" max="400" step="10" value="250" oninput="updateWallSpec('height', this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                        </div>
+                    </div>
+
+                    <!-- Orientation du plan -->
+                    <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
+                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                            <span>Orientation du plan</span>
+                            <i class="fa-solid fa-compass text-emerald-400"></i>
+                        </label>
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span>Rotation de la vue</span>
+                            <span id="rot2d-val" class="text-emerald-400 font-bold">0°</span>
+                        </div>
+                        <input type="range" id="rot2d-slider" min="0" max="359" step="1" value="0" oninput="setPlanRotation(this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <button onclick="rotatePlan(-90)" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition" title="Tourner de 90° vers la gauche">↺ 90°</button>
+                            <button onclick="setPlanRotation(0)" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition" title="Remettre le plan dans son orientation d'origine">Réinit.</button>
+                            <button onclick="rotatePlan(90)" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition" title="Tourner de 90° vers la droite">↻ 90°</button>
                         </div>
                     </div>
 
@@ -278,6 +323,8 @@
                     <button onclick="zoomCanvas(1.15)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Zoom avant" aria-label="Zoom avant"><i class="fa-solid fa-plus"></i><span>Zoom +</span></button>
                     <button onclick="zoomCanvas(0.85)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Zoom arrière" aria-label="Zoom arrière"><i class="fa-solid fa-minus"></i><span>Zoom -</span></button>
                     <button onclick="resetZoomPan()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Recentrer le plan" aria-label="Recentrer le plan"><i class="fa-solid fa-expand"></i><span>Centrer</span></button>
+                    <button onclick="rotatePlan(-90)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Tourner le plan de 90° vers la gauche" aria-label="Tourner le plan vers la gauche">↺<span>90°</span></button>
+                    <button onclick="rotatePlan(90)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Tourner le plan de 90° vers la droite" aria-label="Tourner le plan vers la droite">↻<span>90°</span></button>
                     <button id="btn-pan-canvas" onclick="setTool('pan')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Activer le déplacement du plan à la souris gauche" aria-label="Déplacer le plan avec le bouton gauche"><i class="fa-solid fa-hand"></i><span></span></button>
                 </div>
             </div>
@@ -285,7 +332,7 @@
 
         <!-- ================= 3D MODE VIEW ================= -->
         <div id="view-3d" class="absolute inset-0 hidden bg-black flex">
-            <aside class="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
+            <aside id="sidebar-3d-left" class="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
                 <div class="p-3 border-b border-slate-800 font-semibold text-sm text-slate-300 flex items-center gap-2">
                     <i class="fa-solid fa-chart-simple text-emerald-400"></i> Inspection & contrôles 3D
                 </div>
@@ -338,7 +385,7 @@
             </div>
 
             <!-- 3D Sidebar -->
-            <div class="w-80 shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col z-20 shadow-xl">
+            <div id="sidebar-3d-right" class="w-80 shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col z-20 shadow-xl">
                 <div class="p-3 border-b border-slate-800 font-semibold text-sm text-slate-300 flex items-center justify-between">
                     <span><i class="fa-solid fa-cube mr-2 text-emerald-400"></i>Placement 3D Unifié</span>
                     <span id="placement-status-badge" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">Mode Sélection</span>
@@ -356,7 +403,7 @@
                             </button>
                         </div>
                         <div id="door-hinge-3d-placement-container" class="hidden space-y-1 mt-2">
-                            <label for="door-hinge-3d-placement" class="text-[11px] text-slate-300">Ouverture (vue côté pose)</label>
+                            <label for="door-hinge-3d-placement" class="text-[11px] text-slate-300">Charnière, vue de face (porte poussant)</label>
                             <select id="door-hinge-3d-placement" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
@@ -410,12 +457,13 @@
                         <div id="lighting-associations" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
                         <p class="text-[11px] text-slate-400">Modifiez la position, la hauteur ou basculez de côté.</p>
                         <div id="door-hinge-3d-container" class="hidden space-y-1">
-                            <label for="door-hinge-3d" class="text-xs text-slate-300">Sens d'ouverture (vue côté pose)</label>
+                            <label for="door-hinge-3d" class="text-xs text-slate-300">Charnière, vue de face (porte poussant)</label>
                             <select id="door-hinge-3d" onchange="setSelectedDoorHinge(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
                             </select>
                         </div>
+                        <div id="opening-controls-3d" class="hidden space-y-2"></div>
                         
                         <!-- Side toggle for wall elements -->
                         <div id="side-toggle-container" class="space-y-1 pt-1">
@@ -462,16 +510,21 @@
 
         <!-- ================= MÉTRÉ & CONTRÔLES VIEW ================= -->
         <div id="view-report" class="absolute inset-0 hidden bg-slate-950 overflow-y-auto custom-scrollbar">
-            <div class="max-w-3xl mx-auto p-6">
+            <div class="max-w-5xl mx-auto p-6">
                 <section id="report-box" class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
                     <label class="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center justify-between">
                         <span>Métré & contrôles</span>
                         <i class="fa-solid fa-clipboard-check text-emerald-400"></i>
                     </label>
                     <div id="report-content" class="space-y-3 text-sm text-slate-300"></div>
-                    <button onclick="exportBOM()" class="w-full py-2 bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-file-csv"></i> Exporter le métré (CSV)
-                    </button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="printReport()" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-print"></i> Imprimer le métré
+                        </button>
+                        <button onclick="exportBOM()" class="py-2 bg-emerald-600/30 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-file-csv"></i> Exporter le métré (CSV)
+                        </button>
+                    </div>
                 </section>
             </div>
         </div>
@@ -514,6 +567,7 @@
         // 2D State
         let canvas2D, ctx2D;
         let panX = 0, panY = 0, zoom = 1.0;
+        let rot2D = 0; // rotation de la vue 2D (radians, autour du centre du canvas)
         let isPanning = false, startPanX = 0, startPanY = 0;
         
         let drawingStartPoint = null; 
@@ -573,6 +627,121 @@
                 }
             });
         });
+
+        // =====================================================================
+        //  SIDEBARS : repli au clic + redimensionnement à la souris
+        // =====================================================================
+        const SIDEBAR_MIN = 200, SIDEBAR_DEFAULT = 320;
+        const SIDEBARS = [];
+
+        function sidebarMax() { return Math.max(SIDEBAR_MIN + 40, Math.min(640, Math.round(window.innerWidth * 0.45))); }
+
+        function readSidebarPrefs() {
+            try { return JSON.parse(localStorage.getItem('clic_and_volt_sidebars') || '{}') || {}; } catch (e) { return {}; }
+        }
+
+        function saveSidebarPrefs() {
+            try {
+                const prefs = {};
+                SIDEBARS.forEach(sb => { prefs[sb.key] = { width: sb.width, collapsed: sb.collapsed }; });
+                localStorage.setItem('clic_and_volt_sidebars', JSON.stringify(prefs));
+            } catch (e) { /* stockage indisponible : on ignore */ }
+        }
+
+        function layoutSidebars() {
+            SIDEBARS.forEach(sb => {
+                const w = Math.max(SIDEBAR_MIN, Math.min(sidebarMax(), sb.width));
+                sb.el.style.width = w + 'px';
+                sb.el.style.flexShrink = '0';
+                sb.el.classList.toggle('sb-collapsed', sb.collapsed);
+                sb.resizer.style.display = sb.collapsed ? 'none' : '';
+                const offset = sb.collapsed ? 0 : w + 6;
+                sb.toggle.style[sb.side] = offset + 'px';
+                sb.toggle.innerHTML = '<i class="fa-solid fa-chevron-' + ((sb.side === 'left') === sb.collapsed ? 'right' : 'left') + '"></i>';
+                sb.toggle.title = sb.collapsed ? 'Afficher le panneau' : 'Replier le panneau';
+                sb.toggle.setAttribute('aria-label', sb.toggle.title);
+                sb.toggle.setAttribute('aria-expanded', sb.collapsed ? 'false' : 'true');
+            });
+            refreshViewportSizes();
+        }
+
+        function refreshViewportSizes() {
+            if (currentMode === '2d') resize2DCanvas();
+            else if (currentMode === '3d') on3DWindowResize();
+        }
+
+        function initSidebars() {
+            const prefs = readSidebarPrefs();
+            const defs = [
+                { key: '2d-left', id: 'sidebar-2d', side: 'left', parent: 'view-2d' },
+                { key: '3d-left', id: 'sidebar-3d-left', side: 'left', parent: 'view-3d' },
+                { key: '3d-right', id: 'sidebar-3d-right', side: 'right', parent: 'view-3d' }
+            ];
+            defs.forEach(d => {
+                const el = document.getElementById(d.id);
+                const parent = document.getElementById(d.parent);
+                if (!el || !parent) return;
+                const saved = prefs[d.key] || {};
+                const sb = {
+                    key: d.key, side: d.side, el,
+                    width: Math.max(SIDEBAR_MIN, Math.min(640, +saved.width || SIDEBAR_DEFAULT)),
+                    collapsed: !!saved.collapsed
+                };
+                const resizer = document.createElement('div');
+                resizer.className = 'sb-resizer';
+                resizer.title = 'Glisser pour redimensionner (double-clic : largeur par défaut)';
+                resizer.setAttribute('role', 'separator');
+                resizer.setAttribute('aria-orientation', 'vertical');
+                el.insertAdjacentElement(d.side === 'left' ? 'afterend' : 'beforebegin', resizer);
+                sb.resizer = resizer;
+
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'sb-toggle ' + d.side;
+                toggle.addEventListener('click', () => {
+                    sb.collapsed = !sb.collapsed;
+                    layoutSidebars();
+                    saveSidebarPrefs();
+                });
+                parent.appendChild(toggle);
+                sb.toggle = toggle;
+
+                resizer.addEventListener('pointerdown', e => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const startX = e.clientX, startW = el.getBoundingClientRect().width;
+                    resizer.setPointerCapture(e.pointerId);
+                    resizer.classList.add('active');
+                    document.body.classList.add('sb-dragging');
+                    const move = ev => {
+                        const dx = ev.clientX - startX;
+                        sb.width = Math.max(SIDEBAR_MIN, Math.min(sidebarMax(), startW + (d.side === 'left' ? dx : -dx)));
+                        layoutSidebars();
+                    };
+                    const up = () => {
+                        resizer.removeEventListener('pointermove', move);
+                        resizer.removeEventListener('pointerup', up);
+                        resizer.removeEventListener('pointercancel', up);
+                        resizer.classList.remove('active');
+                        document.body.classList.remove('sb-dragging');
+                        saveSidebarPrefs();
+                    };
+                    resizer.addEventListener('pointermove', move);
+                    resizer.addEventListener('pointerup', up);
+                    resizer.addEventListener('pointercancel', up);
+                });
+                resizer.addEventListener('dblclick', () => {
+                    sb.width = SIDEBAR_DEFAULT;
+                    layoutSidebars();
+                    saveSidebarPrefs();
+                });
+                SIDEBARS.push(sb);
+            });
+            window.addEventListener('resize', layoutSidebars);
+            layoutSidebars();
+        }
+
+        window.addEventListener('DOMContentLoaded', initSidebars);
 
         function initializeTheme() {
             try {
@@ -719,15 +888,14 @@
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
-            const wx = (mouseX - panX) / zoom;
-            const wy = (mouseY - panY) / zoom;
+            const anchor = viewToWorld(mouseX, mouseY);
 
             const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-            const newZoom = Math.max(0.2, Math.min(5.0, zoom * zoomFactor));
+            zoom = Math.max(0.2, Math.min(5.0, zoom * zoomFactor));
 
-            panX = mouseX - wx * newZoom;
-            panY = mouseY - wy * newZoom;
-            zoom = newZoom;
+            const moved = worldToView(anchor.x, anchor.y);
+            panX += mouseX - moved.x;
+            panY += mouseY - moved.y;
 
             document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(zoom * 100)}%`;
             redraw2D();
@@ -743,9 +911,11 @@
         function recenter2DView() {
             if (!canvas2D) return;
             if (projectData.walls.length === 0) {
-                panX = canvas2D.width / 2;
-                panY = canvas2D.height / 2;
                 zoom = 1.0;
+                panX = 0; panY = 0;
+                const o = worldToView(0, 0);
+                panX = canvas2D.width / 2 - o.x;
+                panY = canvas2D.height / 2 - o.y;
                 return;
             }
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -758,8 +928,10 @@
             const centerX = (minX + maxX) / 2;
             const centerY = (minY + maxY) / 2;
             zoom = 1.0;
-            panX = canvas2D.width / 2 - centerX * zoom;
-            panY = canvas2D.height / 2 - centerY * zoom;
+            panX = 0; panY = 0;
+            const c = worldToView(centerX, centerY);
+            panX = canvas2D.width / 2 - c.x;
+            panY = canvas2D.height / 2 - c.y;
         }
 
         function redraw2D() {
@@ -772,16 +944,18 @@
 
             ctx2D.save();
             ctx2D.translate(panX, panY);
+            ctx2D.rotate(rot2D);
             ctx2D.scale(zoom, zoom);
 
             if (gridSnap) {
                 ctx2D.strokeStyle = currentTheme === 'light' ? '#cbd5e1' : '#1e293b';
                 ctx2D.lineWidth = 1 / zoom;
                 const gridSize = 50;
-                const startX = Math.floor(-panX / zoom / gridSize) * gridSize - gridSize * 2;
-                const endX = startX + canvas2D.width / zoom + gridSize * 4;
-                const startY = Math.floor(-panY / zoom / gridSize) * gridSize - gridSize * 2;
-                const endY = startY + canvas2D.height / zoom + gridSize * 4;
+                const corners = [viewToWorld(0, 0), viewToWorld(canvas2D.width, 0), viewToWorld(0, canvas2D.height), viewToWorld(canvas2D.width, canvas2D.height)];
+                const startX = Math.floor(Math.min(...corners.map(c => c.x)) / gridSize) * gridSize - gridSize;
+                const endX = Math.max(...corners.map(c => c.x)) + gridSize;
+                const startY = Math.floor(Math.min(...corners.map(c => c.y)) / gridSize) * gridSize - gridSize;
+                const endY = Math.max(...corners.map(c => c.y)) + gridSize;
 
                 for (let x = startX; x <= endX; x += gridSize) {
                     ctx2D.beginPath();
@@ -846,10 +1020,14 @@
                     ctx2D.textAlign = 'center';
                     ctx2D.textBaseline = 'middle';
                     const labelWidth = ctx2D.measureText(label).width + 12;
+                    ctx2D.save();
+                    ctx2D.translate(labelX, labelY);
+                    ctx2D.rotate(-rot2D);
                     ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
-                    ctx2D.fillRect(labelX - labelWidth / 2, labelY - 10, labelWidth, 20);
+                    ctx2D.fillRect(-labelWidth / 2, -10, labelWidth, 20);
                     ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#a7f3d0';
-                    ctx2D.fillText(label, labelX, labelY);
+                    ctx2D.fillText(label, 0, 0);
+                    ctx2D.restore();
                 }
 
                 ctx2D.fillStyle = '#34d399';
@@ -893,10 +1071,40 @@
 
         function worldToCanvasCoords(clientX, clientY) {
             const rect = canvas2D.getBoundingClientRect();
-            const x = (clientX - rect.left - panX) / zoom;
-            const y = (clientY - rect.top - panY) / zoom;
-            return { x, y };
+            return viewToWorld(clientX - rect.left, clientY - rect.top);
         }
+
+        // Repère écran <-> repère plan (translation, rotation puis zoom)
+        function viewToWorld(sx, sy) {
+            const dx = sx - panX, dy = sy - panY;
+            const c = Math.cos(-rot2D), s = Math.sin(-rot2D);
+            return { x: (dx * c - dy * s) / zoom, y: (dx * s + dy * c) / zoom };
+        }
+
+        function worldToView(wx, wy) {
+            const c = Math.cos(rot2D), s = Math.sin(rot2D);
+            const x = wx * zoom, y = wy * zoom;
+            return { x: panX + x * c - y * s, y: panY + x * s + y * c };
+        }
+
+        function rotateView2D(rad) {
+            if (!canvas2D) return;
+            const cx = canvas2D.width / 2, cy = canvas2D.height / 2;
+            const anchor = viewToWorld(cx, cy);
+            rot2D = ((rad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+            const p = worldToView(anchor.x, anchor.y);
+            panX += cx - p.x;
+            panY += cy - p.y;
+            const deg = Math.round(rot2D * 180 / Math.PI) % 360;
+            const slider = document.getElementById('rot2d-slider');
+            const label = document.getElementById('rot2d-val');
+            if (slider) slider.value = deg;
+            if (label) label.textContent = deg + '°';
+            redraw2D();
+        }
+
+        function setPlanRotation(deg) { rotateView2D((parseFloat(deg) || 0) * Math.PI / 180); }
+        function rotatePlan(deltaDeg) { rotateView2D(rot2D + deltaDeg * Math.PI / 180); }
 
         function on2DMouseDown(e) {
             const coords = worldToCanvasCoords(e.clientX, e.clientY);
@@ -1263,19 +1471,22 @@
             document.getElementById('wall-inspector-title').textContent = multiple
                 ? walls.length + ' murs sélectionnés' : 'Inspecteur de Mur';
             document.getElementById('wall-inspector-description').textContent = multiple
-                ? 'Modifiez ensemble l’épaisseur des murs sélectionnés.' : 'Modifiez la longueur exacte ou déplacez le mur.';
+                ? 'Modifiez ensemble l’épaisseur et la hauteur des murs sélectionnés.' : 'Modifiez la longueur exacte ou déplacez le mur.';
             document.getElementById('inspector-length-container').classList.toggle('hidden', multiple);
-            document.getElementById('inspector-height-container').classList.toggle('hidden', multiple);
             document.getElementById('inspector-thickness-label').textContent = multiple
                 ? 'Épaisseur (' + walls.length + ' murs)' : 'Épaisseur';
+            document.getElementById('inspector-height-label').textContent = multiple
+                ? 'Hauteur (' + walls.length + ' murs)' : 'Hauteur';
 
             const thicknesses = new Set(walls.map(w => w.thickness));
             document.getElementById('inspector-thickness').value = walls[0].thickness;
             document.getElementById('inspector-thickness-val').textContent = thicknesses.size === 1
                 ? walls[0].thickness + ' cm' : 'Variable';
+            const heights = new Set(walls.map(w => w.height));
+            document.getElementById('inspector-height').value = walls[0].height;
+            document.getElementById('inspector-height-val').textContent = heights.size === 1
+                ? (walls[0].height / 100).toFixed(2) + ' m' : 'Variable';
             if (!multiple) {
-                document.getElementById('inspector-height').value = walls[0].height;
-                document.getElementById('inspector-height-val').textContent = (walls[0].height / 100).toFixed(2) + ' m';
                 const lengthM = Math.hypot(walls[0].x2 - walls[0].x1, walls[0].y2 - walls[0].y1) / 100;
                 document.getElementById('inspector-length-input').value = lengthM.toFixed(2);
                 document.getElementById('inspector-length-val').textContent = lengthM.toFixed(2) + ' m';
@@ -1304,10 +1515,13 @@
                 document.getElementById('inspector-thickness').value = thickness;
                 document.getElementById('inspector-thickness-val').textContent = thickness + ' cm';
             } else if (prop === 'height') {
-                const wall = projectData.walls.find(w => w.id === selectedWallId);
-                if (!wall) return;
-                wall.height = parseInt(val);
-                document.getElementById('inspector-height-val').textContent = (val / 100).toFixed(2) + ' m';
+                const height = Math.max(200, Math.min(400, parseInt(val)));
+                selectedWallIds.forEach(id => {
+                    const wall = projectData.walls.find(w => w.id === id);
+                    if (wall) wall.height = height;
+                });
+                document.getElementById('inspector-height').value = height;
+                document.getElementById('inspector-height-val').textContent = (height / 100).toFixed(2) + ' m';
             }
             redraw2D();
         }
@@ -1585,6 +1799,15 @@
             const sill = isDoor ? 0 : (op.sillHeight !== undefined ? op.sillHeight : 90);
             const top = isDoor ? 210 : sill + (op.height || 120);
             return { d, half: width / 2, z0: sill, z1: top, isDoor };
+        }
+
+        // Position de la charnière dans le repère du mur (x local : du départ vers la fin du mur).
+        // Convention « poussant » (cf. schéma DP / GP) : on regarde la porte de face, depuis le côté opposé au côté de pose,
+        // la porte s'ouvrant en s'éloignant de vous. Côté A (side = 1) : « gauche » = côté départ du mur ;
+        // côté B (side = -1), on regarde le mur dans l'autre sens, d'où l'inversion.
+        // Résultat : -1 = charnière côté départ du mur, +1 = côté fin.
+        function doorHingeSign(op) {
+            return (op.hingeSide === 'right' ? 1 : -1) * (op.side === -1 ? -1 : 1);
         }
 
         class MinHeap {
@@ -2413,6 +2636,8 @@
 
             if (op.type === 'door_single') {
                 const doorHeight = 210;
+                const doorWidth = op.width || 96;
+                const halfOpening = doorWidth / 2;
                 group.position.set(posX, doorHeight / 2, posZ);
                 group.rotation.y = -angle;
 
@@ -2421,33 +2646,35 @@
 
                 const postGeo = new THREE.BoxGeometry(6, doorHeight, wallThickness + 4);
                 const leftPost = new THREE.Mesh(postGeo, frameMat);
-                leftPost.position.set(-45, 0, 0);
+                leftPost.position.set(-(halfOpening - 3), 0, 0);
                 group.add(leftPost);
 
                 const rightPost = new THREE.Mesh(postGeo, frameMat);
-                rightPost.position.set(45, 0, 0);
+                rightPost.position.set(halfOpening - 3, 0, 0);
                 group.add(rightPost);
 
-                const headerGeo = new THREE.BoxGeometry(96, 6, wallThickness + 4);
+                const headerGeo = new THREE.BoxGeometry(doorWidth, 6, wallThickness + 4);
                 const header = new THREE.Mesh(headerGeo, frameMat);
                 header.position.set(0, doorHeight / 2 - 3, 0);
                 group.add(header);
 
-                const leafGeo = new THREE.BoxGeometry(86, doorHeight - 8, 4);
+                const innerHalf = halfOpening - 5;
+                const leafGeo = new THREE.BoxGeometry(2 * innerHalf, doorHeight - 8, 4);
                 const leaf = new THREE.Mesh(leafGeo, panelMat);
                 const hingeSide = op.hingeSide === 'right' ? 'right' : 'left';
                 const side = op.side === -1 ? -1 : 1;
-                const dir = hingeSide === 'right' ? -1 : 1;
+                // Même repère que le plan 2D ; gauche/droite : voir doorHingeSign.
+                const hx = doorHingeSign(op);
                 const pivot = new THREE.Group();
-                pivot.position.set(dir * 43, 0, 0);
-                pivot.rotation.y = side * dir * Math.PI / 2;
-                leaf.position.set(dir * 43, 0, 0);
+                pivot.position.set(hx * innerHalf, 0, 0);
+                pivot.rotation.y = -side * hx * Math.PI / 2;
+                leaf.position.set(-hx * innerHalf, 0, 0);
                 pivot.add(leaf);
                 group.add(pivot);
             } else {
-                const winWidth = 120;
-                const winHeight = 120;
-                const sillHeight = 90;
+                const winWidth = op.width || 120;
+                const winHeight = op.height || 120;
+                const sillHeight = op.sillHeight !== undefined ? op.sillHeight : 90;
                 const centerY = sillHeight + winHeight / 2;
 
                 group.position.set(posX, centerY, posZ);
@@ -2460,7 +2687,7 @@
                 const outerFrame = new THREE.Mesh(outerGeo, frameMat);
                 group.add(outerFrame);
 
-                const glassGeo = new THREE.BoxGeometry(winWidth - 12, winHeight - 12, 4);
+                const glassGeo = new THREE.BoxGeometry(Math.max(4, winWidth - 12), Math.max(4, winHeight - 12), 4);
                 const glass = new THREE.Mesh(glassGeo, glassMat);
                 group.add(glass);
             }
@@ -2720,8 +2947,10 @@
                                     type: activePlacementType,
                                     wallId: wall.id,
                                     distanceFromStart: distanceCm,
-                                    height: activePlacementType === 'door_single' ? 210 : 120
+                                    height: activePlacementType === 'door_single' ? 210 : 120,
+                                    width: activePlacementType === 'door_single' ? 96 : 120
                                 };
+                                if (activePlacementType === 'window_std') opening.sillHeight = 90;
                                 if (activePlacementType === 'door_single') {
                                     opening.hingeSide = doorHingeForPlacement();
                                     opening.side = side;
@@ -3492,15 +3721,69 @@
                 if (rep.infos.length) {
                     html += '<div class="space-y-1">' + rep.infos.map(a => '<div class="text-[11px] text-sky-300"><i class="fa-solid fa-circle-info mr-1"></i>' + esc(a) + '</div>').join('') + '</div>';
                 }
-                const secs = [...rep.sections.entries()].sort((a, b) => a[0] - b[0]);
-                html += '<div class="space-y-0.5">';
-                secs.forEach(([s, m]) => { html += '<div class="flex justify-between"><span>Câble 3G' + s + ' mm²</span><span class="text-slate-100 font-semibold">' + Math.ceil(m * 1.1) + ' m</span></div>'; });
-                if (rep.conduitM > 0) html += '<div class="flex justify-between"><span>Gaine / conduit</span><span class="text-slate-100 font-semibold">' + Math.ceil(rep.conduitM * 1.1) + ' m</span></div>';
-                rep.countLines.forEach(line => { html += '<div class="flex justify-between"><span>' + esc(line.label) + '</span><span class="text-slate-100 font-semibold">' + line.count + '</span></div>'; });
-                html += '</div>';
-                if (secs.length) html += '<div class="text-[10px] text-slate-500">Longueurs avec 10 % de marge. Contrôles indicatifs : à faire valider par un électricien (NF C 15-100).</div>';
+                html += reportTablesHtml(rep);
                 box.innerHTML = html;
             }
+        }
+
+        // ---------- Métré en tableaux (écran + impression) ----------
+        function buildBomRows(rep) {
+            const rows = [];
+            [...rep.sections.entries()].sort((a, b) => a[0] - b[0]).forEach(([sec, m]) =>
+                rows.push(['Câble', 'Câble 3G' + sec + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
+            if (rep.conduitM > 0) rows.push(['Gaine', 'Gaine / conduit (marge 10 %)', Math.ceil(rep.conduitM * 1.1), 'm']);
+            rep.countLines.forEach(line => rows.push(['Appareillage', line.label, line.count, 'u']));
+            const doors = projectData.openings.filter(o => o.type === 'door_single').length;
+            const wins = projectData.openings.filter(o => o.type === 'window_std').length;
+            if (doors) rows.push(['Ouvertures', 'Porte simple', doors, 'u']);
+            if (wins) rows.push(['Ouvertures', 'Fenêtre', wins, 'u']);
+            return rows;
+        }
+
+        function reportTablesHtml(rep) {
+            const bom = buildBomRows(rep);
+            let html = '<h3 class="rt-title">Quantitatif</h3>';
+            if (!bom.length) {
+                html += '<p class="rt-empty">Aucun matériel à décompter : placez un tableau et des appareils.</p>';
+            } else {
+                html += '<table class="rt"><thead><tr><th>Catégorie</th><th>Désignation</th><th class="num">Quantité</th><th>Unité</th></tr></thead><tbody>' +
+                    bom.map(r => '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="num">' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>').join('') +
+                    '</tbody></table>';
+            }
+            html += '<h3 class="rt-title">Circuits</h3>';
+            html += '<table class="rt"><thead><tr><th>Circuit</th><th class="num">Calibre</th><th class="num">Section</th><th class="num">Points</th><th class="num">Câble</th><th class="num">ΔU</th><th>Contrôle</th></tr></thead><tbody>' +
+                rep.rows.map(r => {
+                    const c = r.circuit;
+                    return '<tr' + (r.warnings.length ? ' class="rt-warn"' : '') + '><td>' + esc(c.name) + '</td><td class="num">' + c.breakerRating + ' A</td><td class="num">' + c.wireSection + ' mm²</td><td class="num">' + r.points + ' / ' + c.maxPoints +
+                        '</td><td class="num">' + (r.cableM > 0 ? r.cableM.toFixed(1) + ' m' : '—') + '</td><td class="num">' + (r.cableM > 0 ? r.drop.toFixed(1) + ' %' : '—') +
+                        '</td><td>' + (r.warnings.length ? esc(r.warnings.join(' ; ')) : 'OK') + '</td></tr>';
+                }).join('') + '</tbody></table>';
+            html += '<p class="rt-note">Longueurs de câble avec 10 % de marge. Contrôles indicatifs : à faire valider par un électricien (NF C 15-100).</p>';
+            return html;
+        }
+
+        function printReport() {
+            const win = window.open('', '_blank');
+            if (!win) {
+                showNotification('Autorisez les fenêtres contextuelles pour imprimer le métré.', 'error');
+                return;
+            }
+            const rep = computeCircuitReport();
+            const date = new Date().toLocaleDateString('fr-FR');
+            const alerts = rep.alerts.length
+                ? '<h3 class="rt-title">Alertes</h3><ul class="rt-alerts">' + rep.alerts.map(a => '<li>' + esc(a) + '</li>').join('') + '</ul>'
+                : '';
+            const css = '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;padding:16px;background:#fff;color:#0f172a;font:13px Arial,sans-serif}' +
+                '.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}.toolbar h1{font-size:18px;margin:0 auto 0 0}.toolbar button{font:inherit;padding:6px 12px;cursor:pointer}' +
+                '.rt-title{font-size:14px;margin:18px 0 6px}.rt{width:100%;border-collapse:collapse;margin-bottom:6px}.rt th,.rt td{border:1px solid #94a3b8;padding:5px 8px;text-align:left;vertical-align:top}' +
+                '.rt th{background:#e2e8f0}.rt .num{text-align:right;white-space:nowrap}.rt tr{break-inside:avoid}.rt-warn td{background:#fee2e2}.rt-note,.rt-empty{font-size:11px;color:#475569}.rt-alerts{margin:0;padding-left:18px}.rt-alerts li{margin-bottom:3px}' +
+                '@media print{.toolbar{display:none}body{padding:0}}';
+            win.document.open();
+            win.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Métré — Clic & Volt</title><style>' + css + '</style></head><body>' +
+                '<div class="toolbar"><h1>Clic & Volt — Métré & contrôles <small style="font-weight:normal;color:#64748b">(' + date + ')</small></h1><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button></div>' +
+                reportTablesHtml(rep) + alerts + '</body></html>');
+            win.document.close();
+            win.focus();
         }
 
         function solutionForWarning(message) {
@@ -3795,6 +4078,7 @@
             const dockInspector = document.getElementById('inspector-3d');
             if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected);
             updateLightingAssociations(el);
+            syncOpeningControls(op);
             if (isSelected) {
                 document.getElementById('inspector-3d-element-name').textContent =
                     el ? electricalDisplayName(el) : op.type === 'door_single' ? 'Porte' : 'Fenêtre';
@@ -3827,6 +4111,112 @@
                 fillCircuitSelect(document.getElementById('el2d-circuit'), el);
             }
         }
+
+        // ---------- Dimensions des ouvertures (portes : largeur ; fenêtres : largeur, hauteur, allège) ----------
+        const OPENING_ROWS = [
+            ['width', 'Largeur'],
+            ['height', 'Hauteur de la fenêtre'],
+            ['sill', 'Hauteur d’allège (sol → bas de la fenêtre)']
+        ];
+
+        function initOpeningControls() {
+            ['3d', '2d'].forEach(suffix => {
+                const box = document.getElementById('opening-controls-' + suffix);
+                if (!box) return;
+                box.innerHTML = '<div data-op-title class="text-xs font-semibold text-slate-200"></div>' +
+                    OPENING_ROWS.map(([prop, label]) =>
+                        '<div data-op-row="' + prop + '" class="space-y-1"><div class="text-xs text-slate-300">' + label + '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                        '<input type="range" step="1" data-op-range="' + prop + '" oninput="setSelectedOpeningProp(\'' + prop + '\', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">' +
+                        '<input type="number" step="1" data-op-num="' + prop + '" onchange="setSelectedOpeningProp(\'' + prop + '\', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-1 text-xs text-white focus:outline-none focus:border-emerald-500">' +
+                        '<span class="text-[10px] text-slate-500">cm</span></div></div>').join('');
+            });
+        }
+
+        function openingLimits(op, wall) {
+            const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+            const wallH = wall.height || 250;
+            const isDoor = op.type === 'door_single';
+            const b = openingBox(op, wall);
+            const width = Math.round(b.half * 2);
+            const height = isDoor ? 210 : Math.round(b.z1 - b.z0);
+            const sill = Math.round(b.z0);
+            const wMin = isDoor ? 60 : 30;
+            const wMax = Math.max(wMin, Math.min(isDoor ? 200 : 300, Math.floor(len - 20)));
+            return {
+                isDoor, len, wallH,
+                width: { min: wMin, max: wMax, val: width },
+                height: { min: 30, max: Math.max(30, Math.min(250, wallH - 5 - sill)), val: height },
+                sill: { min: 0, max: Math.max(0, wallH - 5 - height), val: sill }
+            };
+        }
+
+        function syncOpeningControls(op) {
+            ['opening-controls-3d', 'opening-controls-2d'].forEach(id => {
+                const box = document.getElementById(id);
+                if (!box) return;
+                const wall = op ? projectData.walls.find(w => w.id === op.wallId) : null;
+                box.classList.toggle('hidden', !wall);
+                if (!wall) return;
+                const lim = openingLimits(op, wall);
+                box.querySelector('[data-op-title]').textContent = lim.isDoor ? 'Dimensions de la porte' : 'Dimensions de la fenêtre';
+                box.querySelectorAll('[data-op-row]').forEach(row => {
+                    const prop = row.dataset.opRow;
+                    const show = !lim.isDoor || prop === 'width';
+                    row.classList.toggle('hidden', !show);
+                    if (!show) return;
+                    const L = lim[prop];
+                    row.querySelectorAll('input').forEach(inp => { inp.min = L.min; inp.max = L.max; inp.value = L.val; });
+                });
+            });
+        }
+
+        let _openingUndoStamp = { key: null, t: 0 };
+        function openingUndoOnce(key) {
+            const now = Date.now();
+            if (_openingUndoStamp.key !== key || now - _openingUndoStamp.t > 800) saveStateToUndo();
+            _openingUndoStamp = { key, t: now };
+        }
+
+        function setSelectedOpeningProp(prop, raw) {
+            const op = projectData.openings.find(o => o.id === selected3DId);
+            if (!op) return;
+            const wall = projectData.walls.find(w => w.id === op.wallId);
+            if (!wall) return;
+            const value = parseFloat(String(raw).replace(',', '.'));
+            if (!isFinite(value)) { syncOpeningControls(op); return; }
+            const lim = openingLimits(op, wall);
+            if (lim.isDoor && prop !== 'width') return;
+            const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+            openingUndoOnce(op.id + ':' + prop);
+
+            if (prop === 'width') {
+                const w = clamp(Math.round(value), lim.width.min, lim.width.max);
+                const box = openingBox(op, wall);
+                op.width = w;
+                const edge = Math.max(10, w / 2);
+                op.distanceFromStart = Math.round(clamp(box.d, edge, Math.max(edge, lim.len - edge)));
+            } else if (prop === 'height') {
+                op.height = clamp(Math.round(value), lim.height.min, lim.height.max);
+                if (op.sillHeight === undefined) op.sillHeight = lim.sill.val;
+            } else if (prop === 'sill') {
+                op.sillHeight = clamp(Math.round(value), 0, lim.sill.max);
+                if (!op.height) op.height = lim.height.val;
+            } else {
+                return;
+            }
+            _cableCache.sig = null;
+            syncOpeningControls(op);
+            const distInput = document.getElementById('inspector-distance-input');
+            if (distInput && op.distanceFromStart !== undefined) {
+                distInput.value = op.distanceFromStart;
+                document.getElementById('inspector-distance-val').textContent = op.distanceFromStart + ' cm';
+            }
+            if (currentMode === '3d') build3DScene();
+            redraw2D();
+        }
+
+        window.addEventListener('DOMContentLoaded', initOpeningControls);
 
         function setSelectedDoorHinge(side) {
             const op = projectData.openings.find(o => o.id === selected3DId && o.type === 'door_single');
@@ -4060,7 +4450,9 @@
                 ctx2D.font = 'bold 6.5px Inter, sans-serif';
                 ctx2D.textAlign = 'center';
                 ctx2D.textBaseline = 'middle';
-                ctx2D.fillText(textAt.label, c.x + fx * (textAt.x + 1), c.y + fy * (textAt.x + 1));
+                ctx2D.translate(c.x + fx * (textAt.x + 1), c.y + fy * (textAt.x + 1));
+                ctx2D.rotate(-rot2D);
+                ctx2D.fillText(textAt.label, 0, 0);
                 ctx2D.restore();
             }
         }
@@ -4123,12 +4515,16 @@
                     });
                 });
                 placed.push({ x: best.x, y: best.y, hw });
+                ctx2D.save();
+                ctx2D.translate(best.x, best.y);
+                ctx2D.rotate(-rot2D);
                 ctx2D.lineJoin = 'round';
                 ctx2D.lineWidth = 4;
                 ctx2D.strokeStyle = bg;
-                ctx2D.strokeText(label, best.x, best.y);
+                ctx2D.strokeText(label, 0, 0);
                 ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f1f5f9';
-                ctx2D.fillText(label, best.x, best.y);
+                ctx2D.fillText(label, 0, 0);
+                ctx2D.restore();
             });
             ctx2D.textBaseline = 'alphabetic';
         }
@@ -4194,7 +4590,8 @@
                 const p = openingPos2D(op);
                 if (!p) return;
                 const isDoor = op.type === 'door_single';
-                const w = isDoor ? 96 : 120;
+                const opWall = projectData.walls.find(x => x.id === op.wallId);
+                const w = opWall ? openingBox(op, opWall).half * 2 : (isDoor ? 96 : 120);
                 ctx2D.save();
                 ctx2D.translate(p.x, p.y);
                 ctx2D.rotate(p.angle);
@@ -4204,15 +4601,16 @@
                 ctx2D.lineWidth = 2;
                 ctx2D.beginPath();
                 if (isDoor) {
-                    const hingeX = op.hingeSide === 'right' ? w / 2 : -w / 2;
+                    const hx = doorHingeSign(op);
+                    const hingeX = hx * w / 2;
                     const swing = op.side === -1 ? 1 : -1;
-                    const start = op.hingeSide === 'right' ? Math.PI : 0;
-                    const end = op.hingeSide === 'right'
+                    const start = hx > 0 ? Math.PI : 0;
+                    const end = hx > 0
                         ? (swing > 0 ? Math.PI / 2 : 3 * Math.PI / 2)
                         : (swing > 0 ? Math.PI / 2 : -Math.PI / 2);
-                    const anticlockwise = op.hingeSide === 'right' ? swing > 0 : swing < 0;
+                    const anticlockwise = hx > 0 ? swing > 0 : swing < 0;
                     ctx2D.moveTo(hingeX, p.th / 2);
-                    ctx2D.lineTo(hingeX + (op.hingeSide === 'right' ? -1 : 1) * w * Math.cos(end), p.th / 2 + w * Math.sin(end));
+                    ctx2D.lineTo(hingeX + (hx > 0 ? -1 : 1) * w * Math.cos(end), p.th / 2 + w * Math.sin(end));
                     ctx2D.arc(hingeX, p.th / 2, w, start, end, anticlockwise);
                 } else {
                     ctx2D.rect(-w / 2, -p.th / 2 + 3, w, p.th - 6);
@@ -4297,7 +4695,8 @@
                 }
                 saveStateToUndo();
                 if (type === 'door_single' || type === 'window_std') {
-                    const opening = { id: 'op_' + uid, type, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: type === 'door_single' ? 210 : 120 };
+                    const opening = { id: 'op_' + uid, type, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: type === 'door_single' ? 210 : 120, width: type === 'door_single' ? 96 : 120 };
+                    if (type === 'window_std') opening.sillHeight = 90;
                     if (type === 'door_single') {
                         opening.hingeSide = doorHingeForPlacement();
                         opening.side = info.side;
