@@ -10,7 +10,8 @@ function init3DScene() {
     threeCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
     threeCamera.position.set(0, 500, 600);
 
-    threeRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    // Profondeur logarithmique (B2) : précision suffisante à 1 cm près, même pour les appareils collés aux murs
+    threeRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });
     threeRenderer.setSize(container.clientWidth, container.clientHeight);
     threeRenderer.shadowMap.enabled = true;
     container.appendChild(threeRenderer.domElement);
@@ -30,7 +31,14 @@ function init3DScene() {
 
     threeRenderer.domElement.addEventListener('pointerdown', on3DPointerDown);
     threeRenderer.domElement.addEventListener('pointermove', on3DPointerMove);
+    threeRenderer.domElement.addEventListener('pointerleave', hidePlanTooltip);
     threeRenderer.domElement.addEventListener('pointerup', on3DPointerUp);
+    // tracé de mur 3D : clic droit = terminer la chaîne (le menu contextuel est masqué dans ce mode)
+    threeRenderer.domElement.addEventListener('contextmenu', e => {
+        if (activePlacementType !== 'wall') return;
+        e.preventDefault();
+        if (wallDraft3D) endWallTrace3D();
+    });
     window.addEventListener('resize', on3DWindowResize);
     animate3D();
 }
@@ -66,26 +74,45 @@ function setCameraView(view) {
     if (threeControls) threeControls.target.copy(center);
 }
 
+// Entrée en 3D : la caméra recule pour montrer tout le projet (étendue des murs et hauteur des étages)
+function frame3DOnProject() {
+    if (!threeCamera || !threeControls) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    wallsOn().forEach(w => {
+        minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
+        maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
+    });
+    const halfW = isFinite(minX) ? (maxX - minX) / 2 + 150 : 400;
+    const halfD = isFinite(minY) ? (maxY - minY) / 2 + 150 : 400;
+    const levels = Math.max(1, (projectData.levels || []).length);
+    const height = levels * 300;
+    const radius = Math.max(Math.hypot(halfW, halfD), height * 0.6);
+    const halfFov = (threeCamera.fov * Math.PI / 180) / 2;
+    const dist = (radius / Math.sin(halfFov)) * 1.1;
+    const centre = new THREE.Vector3(0, height / 2, 0);
+    const dir = new THREE.Vector3(0, 500, 600).normalize();   // même angle que la vue isométrique
+    threeCamera.position.copy(centre).addScaledVector(dir, dist);
+    threeCamera.lookAt(centre);
+    threeControls.maxDistance = Math.max(threeControls.maxDistance || 0, dist * 2);
+    threeControls.target.copy(centre);
+    threeControls.update();
+}
+
 function setPlacementType(type) {
     activePlacementType = activePlacementType === type ? null : type;
+    wallDraft3D = null;
+    wallCursor3D = null;
+    updateWallPreview3D();
     document.querySelectorAll('.place-btn').forEach(btn => {
         btn.classList.remove('tool-active-yellow');
     });
-    const banner = document.getElementById('placement-banner');
-    const bannerText = document.getElementById('placement-banner-text');
-    document.getElementById('door-hinge-placement-container').classList.toggle('hidden', activePlacementType !== 'door_single');
-    document.getElementById('door-hinge-3d-placement-container').classList.toggle('hidden', activePlacementType !== 'door_single');
-
+    refreshPlacementHints();
     if (activePlacementType) {
         const btn = document.getElementById('btn-place-' + type);
         if (btn) btn.classList.add('tool-active-yellow');
-        document.getElementById('placement-status-badge').textContent = 'Mode Placement: ' + type;
-        banner.classList.remove('hidden');
-        bannerText.textContent = type === 'light_ceiling' ? "Cliquez sur le plafond pour poser un plafonnier" : "Cliquez sur le bon côté du mur 3D pour y fixer l'élément";
-    } else {
-        document.getElementById('placement-status-badge').textContent = 'Mode Sélection';
-        banner.classList.add('hidden');
     }
+    refreshToolButtons();
+    refreshToolHint();
 }
 
 function doorHingeForPlacement() {
@@ -134,7 +161,7 @@ function findNearestElement(target, allowedTypes) {
     let minDistance = Infinity;
     const targetCoords = getElCoords(target);
 
-    projectData.electrical.forEach(el => {
+    electricalOn().forEach(el => {
         if (allowedTypes.includes(el.type) && el.id !== target.id) {
             const elCoords = getElCoords(el);
             const dist = Math.hypot(elCoords.x - targetCoords.x, elCoords.y - targetCoords.y);
@@ -240,15 +267,250 @@ class MinHeap {
 }
 
 // Calcule le réseau de gaines (coordonnées plan : x, y = plan, z = hauteur). Aucune dépendance à THREE.
+// D5b : pour un étage sans tableau, la trémie reliée au niveau du tableau sert de source (pseudo-tableau à son mur)
+// Hauteur du point de dérivation d'une trémie à un niveau (cm, 150 par défaut)
+const DERIV_BOX_H = 14;   // hauteur de la boîte de dérivation (cm)
+function levelCeilingOf(levelId) {
+    const lv = (projectData.levels || []).find(l => l.id === levelId);
+    return lv && Number.isFinite(Number(lv.ceilingHeight)) ? Number(lv.ceilingHeight) : 250;
+}
+// Le centre de la boîte reste dans la pièce : son sommet ne dépasse jamais le plafond
+function derivHeightOf(sh, levelId) {
+    const h = sh.derivHeight && sh.derivHeight[levelId];
+    const wanted = Number.isFinite(h) ? h : 150;
+    return Math.min(wanted, levelCeilingOf(levelId) - DERIV_BOX_H / 2);
+}
+
+// Position du point de dérivation le long du mur de la trémie, par niveau (cm) ; par défaut, celle de la trémie
+// Le point reste dans l'ouverture de la trémie (la gaine ne se prolonge pas au-delà) : bord de la boîte compris
+function clampDerivDist(sh, d) {
+    const half = (sh.size || 40) / 2;
+    return Math.max(sh.distanceFromStart - half + DERIV_BOX_H / 2, Math.min(sh.distanceFromStart + half - DERIV_BOX_H / 2, d));
+}
+// La boîte de dérivation reste fixe dans la largeur de la trémie : elle est toujours au centre
+function derivDistOf(sh, levelId) {
+    return sh.distanceFromStart;
+}
+
+// Trémies reliant deux niveaux, de la plus proche à la plus éloignée des appareils de référence (somme des distances en plan)
+function shaftCandidatesBetween(levelA, levelB, refs) {
+    const cands = (projectData.shafts || []).filter(s => {
+        const ids = s.levelIds || [s.levelId];
+        return ids.includes(levelA) && ids.includes(levelB);
+    });
+    return cands.map(sh => {
+        const pt = shaftPos2D(sh);
+        const cost = pt ? refs.reduce((acc, ref) => { const E = getElCoords(ref); return acc + Math.hypot(pt.x - E.x, pt.y - E.y); }, 0) : Infinity;
+        return { sh, cost };
+    }).sort((p, q) => p.cost - q.cost).map(c => c.sh);
+}
+
+// Une trémie relie deux niveaux si elle a un mur utilisable sur chacun d'eux
+function shaftValidOn(sh, levelId) {
+    const saved = activeLevelId;
+    try {
+        activeLevelId = levelId;
+        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
+        const info = pt && nearestWallInfo(pt);
+        return !!info && info.d <= (sh.size || 40) / 2 + 10;
+    } finally {
+        activeLevelId = saved;
+    }
+}
+
+// Arbre des niveaux vers le niveau du tableau (parcours en largeur depuis le tableau) :
+// chaque niveau garde la trémie qui le relie au niveau « plus proche du tableau ». Même arbre des deux côtés, donc tracé cohérent.
+function levelTreeToPanel(panelLevelId) {
+    const adj = new Map();
+    (projectData.shafts || []).forEach(sh => {
+        const ids = (sh.levelIds && sh.levelIds.length ? sh.levelIds : [sh.levelId]).filter(Boolean);
+        if (ids.length < 2) return;
+        ids.forEach(a => ids.forEach(b => {
+            if (a === b) return;
+            if (!shaftValidOn(sh, a) || !shaftValidOn(sh, b)) return;
+            if (!adj.has(a)) adj.set(a, []);
+            adj.get(a).push({ to: b, shaft: sh.id });
+        }));
+    });
+    const parent = new Map();
+    const seen = new Set([panelLevelId]);
+    const queue = [panelLevelId];
+    while (queue.length) {
+        const cur = queue.shift();
+        (adj.get(cur) || []).forEach(e => {
+            if (seen.has(e.to)) return;
+            seen.add(e.to);
+            parent.set(e.to, { to: cur, shaft: e.shaft });
+            queue.push(e.to);
+        });
+    }
+    return parent;
+}
+
+// Suite des trémies (dans l'ordre) qui relie un niveau au tableau ; null si aucun chemin
+function hopsToPanel(levelId, tree, panelLevelId) {
+    const hops = [];
+    let cur = levelId;
+    let guard = 0;
+    while (cur !== panelLevelId) {
+        const p = tree.get(cur);
+        if (!p || guard++ > 50) return null;
+        hops.push({ from: cur, to: p.to, shaft: p.shaft });
+        cur = p.to;
+    }
+    return hops;
+}
+
+// Circuits (identifiants) dont les appareils d'un niveau sont présents sur ce niveau
+function circuitIdsOfLevel(levelId) {
+    const ids = new Set();
+    electricalOn(levelId).filter(isCircuitPoint).forEach(el => { const c = circuitOf(el); if (c) ids.add(c.id); });
+    return [...ids];
+}
+
+// Circuits qui empruntent une liaison verticale de trémie (du niveau from vers to)
+function circuitsOnHop(hop, tree, panelLevelId) {
+    const ids = new Set();
+    (projectData.levels || []).forEach(lv => {
+        const path = hopsToPanel(lv.id, tree, panelLevelId);
+        if (!path || !path.some(h => h.from === hop.from && h.to === hop.to && h.shaft === hop.shaft)) return;
+        circuitIdsOfLevel(lv.id).forEach(cid => ids.add(cid));
+    });
+    return [...ids];
+}
+
+// Circuits qui arrivent à ce niveau par la trémie donnée (depuis un niveau plus éloigné du tableau)
+function circuitsEnteringLevel(levelId, shaftId, tree, panelLevelId) {
+    const ids = new Set();
+    (projectData.levels || []).forEach(lv => {
+        if (lv.id === levelId) return;
+        const path = hopsToPanel(lv.id, tree, panelLevelId);
+        if (!path || !path.some(h => h.to === levelId && h.shaft === shaftId)) return;
+        circuitIdsOfLevel(lv.id).forEach(cid => ids.add(cid));
+    });
+    return [...ids];
+}
+
+function shaftFeedFor(levelId) {
+    const panelEl = projectData.electrical.find(e => e.type === 'panel');
+    if (!panelEl) return { feed: null, reason: 'none' };
+    if (levelId === panelEl.levelId) {
+        // niveau du tableau lui-même : sa trémie de dérivation vers un autre étage (sert à l'affichage)
+        const sh = (projectData.shafts || []).find(s => (s.levelIds || []).length >= 2 && s.levelIds.includes(levelId) && shaftValidOn(s, levelId));
+        if (!sh) return { feed: null, reason: 'noShaft' };
+        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
+        const info = pt && nearestWallInfo(pt);
+        if (!info) return { feed: null, reason: 'noWall' };
+        const feed = { id: 'feed_' + sh.id, type: 'panel', levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isFeed: true };
+        return { feed, reason: null, shaft: sh, nextLevelId: sh.levelIds.find(id => id !== levelId), panelLevelId: levelId, tree: null };
+    }
+    const tree = levelTreeToPanel(panelEl.levelId);
+    const step = tree.get(levelId);
+    if (!step) return { feed: null, reason: 'noShaft' };
+    const sh = (projectData.shafts || []).find(s => s.id === step.shaft);
+    if (!sh) return { feed: null, reason: 'noShaft' };
+    const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
+    const info = pt && nearestWallInfo(pt);
+    if (!info) return { feed: null, reason: 'noWall' };
+    const feed = { id: 'feed_' + sh.id, type: 'panel', levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isFeed: true };
+    return { feed, reason: null, shaft: sh, nextLevelId: step.to, panelLevelId: panelEl.levelId, tree };
+}
+
+// Pseudo-élément placé à la trémie qui joint deux niveaux (même logique que le pseudo-tableau d'un étage)
+// refs : les deux appareils de la commande ; même choix de trémie des deux côtés, donc tracé cohérent
+function shaftProxyOn(levelId, otherLevelId, proxyId, type, height, refs) {
+    for (const sh of shaftCandidatesBetween(levelId, otherLevelId, refs)) {
+        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
+        const info = pt && nearestWallInfo(pt);
+        if (info && info.d <= (sh.size || 40) / 2 + 10) {
+            return { id: proxyId, type, levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isProxy: true };
+        }
+    }
+    return null;
+}
+
+// Commande entre niveaux (ex. va-et-vient RDC / sous-sol) : la liaison est coupée à la trémie.
+// Côté interrupteur : une lumière d'un autre niveau devient un point de raccord « xl| » à la trémie.
+// Côté lumière : un interrupteur d'un autre niveau devient un point de raccord « xs| » à la trémie.
+function crossLevelControlProxies(result) {
+    const here = electricalOn();
+    const hereIds = new Set(here.map(e => e.id));
+    const lightsHere = here.filter(e => e.type === 'light_ceiling' || e.type === 'wall_light');
+    const proxies = [];
+    here.filter(isLightingControl).forEach(sw => {
+        (Array.isArray(sw.controlledLightIds) ? sw.controlledLightIds : []).forEach(lid => {
+            if (hereIds.has(lid)) return;
+            const light = projectData.electrical.find(e => e.id === lid && (e.type === 'light_ceiling' || e.type === 'wall_light'));
+            if (!light) return;
+            const pos = shaftProxyOn(activeLevelId, light.levelId, 'xl|' + lid, 'wall_light', 110, [sw, light]);
+            if (!pos) {
+                result.warnings.push('Commande de ' + electricalDisplayName(light) + ' (autre niveau) : aucune trémie entre les deux niveaux');
+                return;
+            }
+            pos.realId = lid;
+            proxies.push(pos);
+        });
+    });
+    projectData.electrical.filter(e => isLightingControl(e) && !hereIds.has(e.id)).forEach(sw => {
+        const mine = (Array.isArray(sw.controlledLightIds) ? sw.controlledLightIds : []).filter(lid => lightsHere.some(l => l.id === lid));
+        if (!mine.length) return;
+        const pos = shaftProxyOn(activeLevelId, sw.levelId, 'xs|' + sw.id, 'switch_simple', 110,
+            [sw, lightsHere.find(l => l.id === mine[0])]);
+        if (!pos) return;
+        pos.realId = sw.id;
+        pos.controlledLightIds = mine;
+        proxies.push(pos);
+    });
+    return proxies;
+}
+
+// Point de dérivation de chaque trémie qui relie cet étage à un autre : là où la gaine se raccorde à cet étage
+function derivationPointsOn(levelId) {
+    const out = [];
+    shaftsOn(levelId).forEach(sh => {
+        if ((sh.levelIds || [sh.levelId]).length < 2) return;
+        // mur de CE niveau le plus proche du point de la trémie (le mur de la trémie peut être à un autre étage)
+        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
+        const info = pt && nearestWallInfo(pt);
+        if (!info || info.d > (sh.size || 40) / 2 + 10) return;
+        out.push({ id: 'dv|' + sh.id, type: 'derivation', levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isProxy: true });
+    });
+    return out;
+}
+
 function computeCableNetwork() {
     ensureCircuitAssignment();
     const C = CABLE_CFG;
-    const walls = projectData.walls.filter(w => Math.hypot(w.x2 - w.x1, w.y2 - w.y1) > 1);
-    const els = projectData.electrical;
-    const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [] };
-    const panel = els.find(e => e.type === 'panel') || null;
+    const walls = wallsOn().filter(w => Math.hypot(w.x2 - w.x1, w.y2 - w.y1) > 1);
+    const els = electricalOn();
+    const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {} };
+    let panel = els.find(e => e.type === 'panel') || null;
     const wired = els.filter(e => e.type !== 'panel');
+    let feedInfo = null;   // niveau sans tableau : trémie qui le relie au tableau d'un autre étage
+    // un niveau sans appareil mais avec une trémie vers un autre étage doit aussi être raccordé (ses trémies passent les circuits)
+    const hasShaftLinks = wired.length > 0 || derivationPointsOn(activeLevelId).length > 0;
+    if (!panel && hasShaftLinks) {
+        const fed = shaftFeedFor(activeLevelId);
+        feedInfo = fed;
+        panel = fed.feed;
+        if (!panel) {
+            if (!wired.length) return result;   // étage sans appareil ni trémie utilisable : rien à signaler
+            result.unrouted += wired.length;
+            result.warnings.push(fed.reason === 'noWall'
+                ? 'Trémie sans mur à cet étage : appareils non reliés'
+                : 'Pas de tableau ni de trémie vers le tableau à cet étage : appareils non reliés');
+            return result;
+        }
+    }
+    // commandes entre niveaux : points de raccord à la trémie, traités comme des appareils du niveau
+    const crossProxies = crossLevelControlProxies(result);
+    wired.push(...crossProxies);
+    // points de dérivation : chacun est raccordé au tableau de cet étage par le câble de la gaine
+    const derivPts = derivationPointsOn(activeLevelId);
+    wired.push(...derivPts);
     if (!walls.length || !panel || !wired.length) return result;
+    // le pseudo-tableau d'une trémie est traité comme un appareil du niveau
+    const allEls = (panel.isFeed ? els.concat([panel]) : els).concat(crossProxies, derivPts);
 
     const ceilZ = Math.min(...walls.map(w => w.height || 250)) - C.ceilGap;
     const levels = [{ kind: 'low', z: C.lowZ }, { kind: 'ceil', z: ceilZ }];
@@ -293,7 +555,7 @@ function computeCableNetwork() {
     const m = C.openMargin;
     const spans = new Map();
     walls.forEach(w => {
-        const list = projectData.openings.filter(o => o.wallId === w.id).map(o => {
+        const list = openingsOn().filter(o => o.wallId === w.id).map(o => {
             const b = openingBox(o, w);
             return { lo: b.d - b.half - m, hi: b.d + b.half + m, z0: b.z0 - m, z1: b.z1 + m };
         });
@@ -307,7 +569,7 @@ function computeCableNetwork() {
 
     // 4. Position de la descente verticale de chaque appareil mural
     const place = new Map();
-    els.forEach(el => {
+    allEls.forEach(el => {
         if (el.type === 'light_ceiling') return;
         const w = walls.find(x => x.id === el.wallId);
         if (!w) return;
@@ -362,11 +624,11 @@ function computeCableNetwork() {
     const key = (x, y, z) => Math.round(x * 10) + '|' + Math.round(y * 10) + '|' + Math.round(z * 10);
     const bucketKey = (x, y, z) => Math.floor(x) + '|' + Math.floor(y) + '|' + Math.floor(z);
     // Independently computed junctions can differ by a few millimetres due to floating-point rounding.
+    // B2 : on ne visite que les cases pouvant contenir un point à moins de 0,2 (même ordre, même résultat)
     const findNode = (x, y, z) => {
-        const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z);
-        for (let ix = bx - 1; ix <= bx + 1; ix++) {
-            for (let iy = by - 1; iy <= by + 1; iy++) {
-                for (let iz = bz - 1; iz <= bz + 1; iz++) {
+        for (let ix = Math.floor(x - 0.2); ix <= Math.floor(x + 0.2); ix++) {
+            for (let iy = Math.floor(y - 0.2); iy <= Math.floor(y + 0.2); iy++) {
+                for (let iz = Math.floor(z - 0.2); iz <= Math.floor(z + 0.2); iz++) {
                     const bucket = nodeBuckets.get(ix + '|' + iy + '|' + iz) || [];
                     const found = bucket.find(n => Math.hypot(n.x - x, n.y - y, n.z - z) <= 0.2);
                     if (found) return found;
@@ -399,13 +661,20 @@ function computeCableNetwork() {
         allEdges.push(e);
         return e;
     };
-    const insideBody = (x, y) => walls.some(w => {
+    // géométrie des murs calculée une seule fois (B2) : mêmes opérations que l'ancienne version, résultat identique
+    const wallGeo = walls.map(w => {
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
-        const ux = dx / len, uy = dy / len;
-        const s = (x - w.x1) * ux + (y - w.y1) * uy;
-        const d = Math.abs(-(x - w.x1) * uy + (y - w.y1) * ux);
-        return s > -0.5 && s < len + 0.5 && d < (w.thickness || 10) / 2 + 1;
+        return { x1: w.x1, y1: w.y1, len, ux: dx / len, uy: dy / len, half: (w.thickness || 10) / 2 + 1 };
     });
+    const insideBody = (x, y) => {
+        for (let i = 0; i < wallGeo.length; i++) {
+            const g = wallGeo[i];
+            const s = (x - g.x1) * g.ux + (y - g.y1) * g.uy;
+            const d = Math.abs(-(x - g.x1) * g.uy + (y - g.y1) * g.ux);
+            if (s > -0.5 && s < g.len + 0.5 && d < g.half) return true;
+        }
+        return false;
+    };
     const segmentHitsWall = (x1, y1, x2, y2) => {
         for (let i = 1; i < 12; i++) {
             const f = i / 12;
@@ -531,36 +800,47 @@ function computeCableNetwork() {
         return null;
     };
     const R = new Map();
-    els.forEach(el => R.set(el.id, resolve(el)));
+    allEls.forEach(el => R.set(el.id, resolve(el)));
     const unresolved = wired.filter(el => !R.get(el.id));
     result.unrouted += unresolved.length;
     if (!R.get(panel.id)) { result.unrouted += wired.length - unresolved.length; return result; }
 
     // 9. Plus courts chemins (Dijkstra, un passage par un plafonnier n'est jamais un raccourci)
     const maps = new Map();
+    // Dijkstra sur tableaux indexés (B2) : même tas, mêmes relaxations dans le même ordre => mêmes distances et chemins
+    const nodeCount = nodes.size;
+    let nodeIdx = 0;
+    nodes.forEach(n => { n.idx = nodeIdx++; });
     const mapFor = (src) => {
         let r = maps.get(src);
         if (r) return r;
-        const dist = new Map([[src, 0]]);
-        const prev = new Map();
+        const D = new Float64Array(nodeCount).fill(Infinity);
+        const P = new Array(nodeCount).fill(null);
+        D[src.idx] = 0;
         const heap = new MinHeap();
         heap.push(0, src);
         while (heap.size) {
             const [d, n] = heap.pop();
-            if (d > (dist.get(n) ?? Infinity)) continue;
+            if (d > D[n.idx]) continue;
             if (n.light && n !== src) continue;
             for (const e of n.adj) {
                 if (e.dead) continue;
                 const o = e.a === n ? e.b : e.a;
                 const nd = d + e.cost;
-                if (nd < (dist.get(o) ?? Infinity)) {
-                    dist.set(o, nd);
-                    prev.set(o, [n, e]);
+                if (nd < D[o.idx]) {
+                    D[o.idx] = nd;
+                    P[o.idx] = [n, e];
                     heap.push(nd, o);
                 }
             }
         }
-        r = { dist, prev };
+        r = {
+            dist: {
+                get: (n) => { const v = D[n.idx]; return v === Infinity ? undefined : v; },
+                has: (n) => D[n.idx] !== Infinity
+            },
+            prev: { get: (n) => P[n.idx] || undefined }
+        };
         maps.set(src, r);
         return r;
     };
@@ -586,7 +866,7 @@ function computeCableNetwork() {
         if (!Array.isArray(sw.controlledLightIds)) return;
         manuallyConfigured.add(sw.id);
         sw.controlledLightIds.forEach(id => {
-            const light = lights.find(candidate => candidate.id === id);
+            const light = lights.find(candidate => candidate.id === id || candidate.id === 'xl|' + id);
             if (light && isFinite(rdist(sw, light))) {
                 ctrl.get(sw.id).push(light);
                 taken.add(light.id);
@@ -608,12 +888,18 @@ function computeCableNetwork() {
         lights.forEach(l => { const d = rdist(sw, l); if (isFinite(d) && (!best || d < best.d)) best = { l, d }; });
         if (best) ctrl.get(sw.id).push(best.l);
     });
+    // identifiants réels pour l'interface ; les identifiants de raccord ne servent qu'au tracé
     result.controlLinks = switches.map(sw => ({
-        switchId: sw.id,
-        lightIds: ctrl.get(sw.id).map(light => light.id),
+        switchId: sw.realId || sw.id,
+        lightIds: ctrl.get(sw.id).map(light => light.realId || light.id),
         linkIds: ctrl.get(sw.id).map(light => controlCableLinkId(sw.id, light.id))
     }));
 
+    // circuit d'une boîte posée : celui choisi dans son inspecteur, sinon l'éclairage
+    const boxCircuitId = (jb) => {
+        const c = projectData.circuits.find(x => x.id === (jb.circuitId || DEFAULT_CIRCUIT_BY_TYPE.light_ceiling));
+        return c ? c.id : '_none';
+    };
     const units = [];
     alive.filter(el => el.type.startsWith('outlet')).forEach(el => {
         const c = circuitOf(el);
@@ -686,34 +972,98 @@ function computeCableNetwork() {
         byCircuit.get(k).push(u);
     });
     byCircuit.forEach((list, k) => {
-        const tree = [{ el: panel, deg: 0, depth: 0, free: true }];
+        const cidOf = k === '_none' ? null : k;
+        const tree = [{ el: panel, deg: 0, depth: 0, free: true, boxId: null }];
+        // appareils servis par chaque boîte retenue (le calcul du câblage n'en dépend pas)
+        const countServed = id => { if (id) result.boxServed[id] = (result.boxServed[id] || 0) + 1; };
         const rest = list.slice();
+        // boîtes de dérivation posées dans ce circuit : raccordées au tableau seulement si un appareil s'y relie
+        const pending = alive.filter(el => el.type === 'junction_box' && boxCircuitId(el) === k);
+        // mode étoile (F2) : chaque appareil se raccorde au tableau ou à une boîte posée (I2) ; mode chaîné : comportement actuel
+        const circ = projectData.circuits.find(c => c.id === k);
+        const star = !!circ && circ.wiringMode === 'star';
         while (rest.length) {
             let best = null;
-            rest.forEach((u, ui) => tree.forEach(tn => {
-                if (!tn.free && tn.deg >= C.maxDegree) return;
-                const d = rdist(tn.el, u.entry);
-                if (!best || d < best.d) best = { d, ui, tn };
-            }));
+            rest.forEach((u, ui) => {
+                tree.forEach(tn => {
+                    if (star && !tn.free) return;
+                    if (!tn.free && tn.deg >= C.maxDegree) return;
+                    const d = rdist(tn.el, u.entry);
+                    if (!best || d < best.d) best = { d, ui, tn, bx: null };
+                });
+                // une boîte pas encore raccordée coûte son trajet depuis le tableau
+                pending.forEach(bx => {
+                    // étoile : la boîte est la plus proche de l'appareil que le tableau ; son trajet n'est compté qu'une fois
+                    const dBox = rdist(bx, u.entry);
+                    const d = star ? (dBox < rdist(panel, u.entry) ? dBox : Infinity) : rdist(panel, bx) + dBox;
+                    if (isFinite(d) && (!best || d < best.d)) best = { d, ui, tn: null, bx };
+                });
+            });
             if (!best || !isFinite(best.d)) { result.unrouted += rest.length; break; }
+            if (best.bx) {
+                const bx = best.bx;
+                pending.splice(pending.indexOf(bx), 1);
+                const l0 = addLink(panel, bx, std, cidOf);
+                if (l0 === null) continue;
+                best.tn = { el: bx, deg: 0, depth: tree[0].depth + l0 + 60, free: true, boxId: bx.id };
+                tree.push(best.tn);
+            }
             const u = rest.splice(best.ui, 1)[0];
             const cid = u.cid;
             const len = addLink(best.tn.el, u.entry, u.wires, cid);
             if (len === null) { result.unrouted++; continue; }
             best.tn.deg++;
-            const entryNode = { el: u.entry, deg: 1, depth: best.tn.depth + len + 60 };
+            const entryNode = { el: u.entry, deg: 1, depth: best.tn.depth + len + 60, boxId: best.tn.boxId || null };
             tree.push(entryNode);
+            countServed(entryNode.boxId);
             if (cid) result.circuitRuns[cid] = Math.max(result.circuitRuns[cid] || 0, entryNode.depth);
             u.members.forEach(mb => {
                 const l2 = addLink(u.entry, mb, ret, cid);
                 if (l2 === null) { result.unrouted++; return; }
                 entryNode.deg++;
-                const mn = { el: mb, deg: 1, depth: entryNode.depth + l2 + 60 };
+                const mn = { el: mb, deg: 1, depth: entryNode.depth + l2 + 60, boxId: entryNode.boxId };
                 tree.push(mn);
+                countServed(mn.boxId);
                 if (cid) result.circuitRuns[cid] = Math.max(result.circuitRuns[cid] || 0, mn.depth);
             });
         }
     });
+
+    // raccordement : tableau de cet étage → point de dérivation (la gaine vers les autres niveaux)
+    // boîtes de dérivation : chaque tronçon de gaine est tracé dans la couleur des circuits qui le traversent
+    const treePanelId = feedInfo ? feedInfo.panelLevelId : panel.levelId;
+    const tree = feedInfo ? feedInfo.tree : levelTreeToPanel(treePanelId);
+    derivPts.forEach(dp => {
+        if (!R.get(dp.id)) { result.unrouted++; return; }
+        const shaftId = dp.id.slice(3);   // 'dv|' + id de la trémie
+        const cidsIn = circuitsEnteringLevel(activeLevelId, shaftId, tree, treePanelId);
+        if (!cidsIn.length) {
+            // trémie sans circuit venant d'un autre étage : tronçon neutre, retiré du métré par circuit
+            if (addLink(panel, dp, std, null) === null) result.unrouted++;
+            else result.linkInfo.pop();
+            return;
+        }
+        cidsIn.forEach(cid => { if (addLink(panel, dp, std, cid) === null) result.unrouted++; });
+    });
+
+    // niveau sans tableau : la gaine monte ou descend de la trémie de cet étage jusqu'à la trémie du niveau suivant
+    // (vers le tableau). Les couleurs de chaque circuit qui emprunte ce tronçon sont conservées.
+    if (feedInfo && feedInfo.feed && feedInfo.shaft && R.get(panel.id)) {
+        const elevOf = id => Number(((projectData.levels || []).find(l => l.id === id) || {}).elevation) || 0;
+        const E0 = R.get(panel.id).stub[0];   // point de la trémie sur cet étage, à sa hauteur
+        const next = feedInfo.nextLevelId;
+        const hop = { from: activeLevelId, to: next, shaft: feedInfo.shaft.id };
+        // hauteur de la même trémie au niveau suivant, rapportée au repère de cet étage
+        const zNext = derivHeightOf(feedInfo.shaft, next) + (elevOf(next) - elevOf(activeLevelId));
+        const vEnd = { x: E0.x, y: E0.y, z: zNext };
+        const vLen = Math.abs(zNext - E0.z);
+        const cidsUp = circuitsOnHop(hop, feedInfo.tree, feedInfo.panelLevelId);
+        if (!cidsUp.length) addPriv([E0, vEnd], std, null, null);
+        cidsUp.forEach(cid => {
+            addPriv([E0, vEnd], std, cid, null);
+            result.linkInfo.push({ circuitId: cid, length: vLen });
+        });
+    }
 
     used.forEach((u, e) => result.segments.push({
         a: { x: e.a.x, y: e.a.y, z: e.a.z }, b: { x: e.b.x, y: e.b.y, z: e.b.z }, cables: u.cables, cids: u.cids, links: u.links
@@ -726,6 +1076,7 @@ function computeCableNetwork() {
 function renderCableNetwork(cx, cy) {
     const net = getCableNetwork();
     updateCircuitsUI();
+    if (!showCables2D) return;   // câbles masqués (réglage commun avec la 2D)
     if (net.unrouted > 0) {
         console.warn(net.unrouted + ' liaison(s) non routée(s)');
         if (typeof showNotification === 'function') showNotification(net.unrouted + ' appareil(s) n\'ont pas pu être reliés au tableau', 'error');
@@ -880,6 +1231,35 @@ function renderCableNetwork(cx, cy) {
     return net;
 }
 
+// Étages voisins (dessus et dessous) affichés en fantôme dans la 3D : visibles, mais ni cliquables ni sélectionnables
+let ghostLevelsOn = true;
+function toggleGhostLevels() {
+    ghostLevelsOn = !ghostLevelsOn;
+    const b = document.getElementById('ghost-toggle');
+    if (b) b.classList.toggle('opacity-50', !ghostLevelsOn);
+    build3DScene();
+}
+
+// Câblage d'un niveau fantôme : même calcul que le niveau affiché, fait sur ce niveau puis rendu en gris.
+// Mis en cache par données ; pendant un glissement on garde le dernier résultat (le calcul est trop lourd à chaque image).
+const _ghostNetCache = new Map();
+function ghostCableNetwork(levelId) {
+    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
+    const hit = _ghostNetCache.get(levelId);
+    if (hit && (hit.sig === sig || dragging3DElementId)) return hit.net;
+    const saved = activeLevelId;
+    let net = null;
+    try {
+        activeLevelId = levelId;
+        ensureCircuitAssignment();
+        net = computeCableNetwork();
+    } finally {
+        activeLevelId = saved;
+    }
+    _ghostNetCache.set(levelId, { sig, net });
+    return net;
+}
+
 function build3DScene() {
     if (!threeScene) return;
     if (selectedCircuitId && !projectData.circuits.some(c => c.id === selectedCircuitId)) selectedCircuitId = null;
@@ -894,39 +1274,128 @@ function build3DScene() {
         selectedHighlightMesh = null;
     }
 
-    if (projectData.walls.length === 0) {
+    if (wallsOn().length === 0) {
         selected3DId = null;
         syncElementInspectors();
         updateCircuitsUI();
         return;
     }
 
+    const { cx, cy } = scene3DCentre();
+    // étendue réelle des murs du niveau (pour la taille du sol)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    projectData.walls.forEach(w => {
-        minX = Math.min(minX, w.x1, w.x2);
-        minY = Math.min(minY, w.y1, w.y2);
-        maxX = Math.max(maxX, w.x1, w.x2);
-        maxY = Math.max(maxY, w.y1, w.y2);
+    wallsOn().forEach(w => {
+        minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
+        maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
     });
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
 
     const floorWidth = (maxX - minX) + 400;
     const floorDepth = (maxY - minY) + 400;
     const planDiagonal = Math.hypot(floorWidth, floorDepth);
     threeCamera.far = Math.max(10000, planDiagonal * 4);
     threeCamera.updateProjectionMatrix();
-    if (threeControls) threeControls.maxDistance = Math.max(500, planDiagonal * 1.2);
+    if (threeControls) threeControls.maxDistance = Math.max(500, planDiagonal * 3);
     const floorGeo = new THREE.PlaneGeometry(floorWidth, floorDepth);
-    const floorMat = new THREE.MeshStandardMaterial({ color: currentTheme === 'light' ? 0xf8fafc : 0x1e293b, roughness: 0.8 });
+    // sol translucide : on voit les étages et les gaines à travers ; ordre de dessin fixe (comme les murs)
+    const floorMat = new THREE.MeshStandardMaterial({ color: currentTheme === 'light' ? 0xf8fafc : 0x1e293b, roughness: 0.8, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.renderOrder = 1;
     floorMesh.rotation.x = -Math.PI / 2;
-    floorMesh.position.set(0, 0, 0);
+    // Sol 0,5 cm sous y = 0 : la face basse des murs ne le touche plus (le décalage de profondeur ne marche plus avec la profondeur logarithmique)
+    floorMesh.position.set(0, -0.5, 0);
     floorMesh.receiveShadow = true;
     threeScene.add(floorMesh);
     wallMeshes3D.push(floorMesh);
 
-    const maxH = Math.max(...projectData.walls.map(w => w.height || 250), 250);
+    // quadrillage au sol, maille de 50 cm comme en 2D, centré comme le sol
+    if (gridVisible) {
+        const gridSize = Math.max(floorWidth, floorDepth);
+        const divisions = Math.min(400, Math.max(2, Math.round(gridSize / 50)));
+        const dark = currentTheme !== 'light';
+        const grid = new THREE.GridHelper(gridSize, divisions, dark ? 0x94a3b8 : 0x475569, dark ? 0x475569 : 0x94a3b8);
+        grid.position.set(0, 0.5, 0);
+        grid.material.transparent = true;
+        grid.material.opacity = 0.7;
+        grid.renderOrder = 2;
+        threeScene.add(grid);
+        wallMeshes3D.push(grid);
+    }
+
+    // fantômes : tous les autres niveaux, chacun à sa vraie hauteur par rapport au niveau affiché
+    if (ghostLevelsOn) {
+        const actLevel = (projectData.levels || []).find(l => l.id === activeLevelId);
+        const actElev = Number(actLevel && actLevel.elevation) || 0;
+        const others = (projectData.levels || []).filter(l => l.id !== activeLevelId);
+        const ghostDrawnIds = new Set();   // trémies / escaliers reliant plusieurs niveaux : un seul fantôme
+        others.forEach(lv => {
+            const dy = (Number(lv.elevation) || 0) - actElev;
+            wallsOn(lv.id).forEach(w => {
+                const x1 = w.x1 - cx, z1 = w.y1 - cy, x2 = w.x2 - cx, z2 = w.y2 - cy;
+                const length = Math.hypot(x2 - x1, z2 - z1);
+                if (length < 1) return;
+                const height = w.height || 250;
+                const geo = new THREE.BoxGeometry(w.thickness || 10, height, length);
+                // même couleur que les murs réels, plus transparente
+                const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.12, depthWrite: false }));
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.5 }));
+                ghost.add(edges);
+                ghost.position.set((x1 + x2) / 2, dy + height / 2, (z1 + z2) / 2);
+                ghost.rotation.y = -Math.atan2(z2 - z1, x2 - x1) + Math.PI / 2;
+                ghost.renderOrder = 2;
+                // pas de userData interactif : le fantôme n'est dans aucune liste cliquable
+                threeScene.add(ghost);
+                wallMeshes3D.push(ghost);
+            });
+            // tout le niveau en fantôme (transparent, jamais cliquable) : ouvertures, trémies, escaliers, appareils
+            openingsOn(lv.id).forEach(op => addGhostOpening3D(op, dy, cx, cy));
+            // toutes les trémies de ce niveau, réelles ou non, sont représentées de la même façon (une fois par trémie)
+            shaftsOn(lv.id).forEach(sh => {
+                if (ghostDrawnIds.has('sh|' + sh.id)) return;
+                ghostDrawnIds.add('sh|' + sh.id);
+                addGhostShaft3D(sh, cx, cy);
+            });
+            stairsOn(lv.id).forEach(st => {
+                if (ghostDrawnIds.has(st.id) || (st.levelIds || [st.levelId]).includes(activeLevelId)) return;
+                ghostDrawnIds.add(st.id);
+                addStair3D(st, cx, cy, true);
+            });
+            // appareils de ce niveau, modèles complets rendus transparents (comme en réel, sans interaction)
+            electricalOn(lv.id).forEach(el => {
+                const mesh = createElementMesh3D(el, cx, cy);
+                if (!mesh) return;
+                mesh.position.y += dy;
+                makeGhost3D(mesh, 0.3);
+                mesh.renderOrder = 3;
+                threeScene.add(mesh);
+                wallMeshes3D.push(mesh);
+            });
+            // câblage de ce niveau en fantôme (lignes grises, sans interaction)
+            const ghostNet = ghostCableNetwork(lv.id);
+            const pts = [], cols = [];
+            (ghostNet && ghostNet.segments || []).forEach(sg => {
+                // chaque tronçon prend la couleur de son circuit, comme sur le plan réel
+                const cid = (sg.cids || []).find(Boolean);
+                const cc = cid ? projectData.circuits.find(c => c.id === cid) : null;
+                const col = cc ? new THREE.Color(circuitColor(cc)) : new THREE.Color('#94a3b8');
+                pts.push(sg.a.x - cx, sg.a.z + dy, sg.a.y - cy, sg.b.x - cx, sg.b.z + dy, sg.b.y - cy);
+                cols.push(col.r, col.g, col.b, col.r, col.g, col.b);
+            });
+            if (pts.length) {
+                const lineGeo = new THREE.BufferGeometry();
+                lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+                lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+                const cableGhost = new THREE.LineSegments(lineGeo,
+                    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false }));
+                cableGhost.renderOrder = 3;
+                threeScene.add(cableGhost);
+                wallMeshes3D.push(cableGhost);
+            }
+        });
+    }
+    // circuit sélectionné : ses appareils et câbles sont surlignés aussi sur les autres niveaux
+    addCircuitCrossLevelHighlights(cx, cy);
+
+    const maxH = Math.max(...wallsOn().map(w => w.height || 250), 250);
     const ceilingGeo = new THREE.PlaneGeometry(floorWidth, floorDepth);
     const ceilingMat = new THREE.MeshBasicMaterial({
         transparent: true,
@@ -942,7 +1411,105 @@ function build3DScene() {
     threeScene.add(ceilingMesh3D);
     wallMeshes3D.push(ceilingMesh3D);
 
-    projectData.walls.forEach(w => {
+    // Trémies (D5) : cadre clair au sol, à la place de chaque trémie du niveau affiché
+    shaftsOn().forEach(sh => {
+        const w = projectData.walls.find(x => x.id === sh.wallId);
+        if (!w) return;
+        const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) || 1;
+        const d = Math.max(10, Math.min(len - 10, sh.distanceFromStart !== undefined ? sh.distanceFromStart : len / 2));
+        const s = sh.size || 40;
+        const frame = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
+            new THREE.LineBasicMaterial({ color: 0xfbbf24 }));
+        const sp = shaftPos2D(sh) || { x: w.x1 + (w.x2 - w.x1) * d / len, y: w.y1 + (w.y2 - w.y1) * d / len };
+        frame.position.set(sp.x - cx, 1, sp.y - cy);
+        threeScene.add(frame);
+        wallMeshes3D.push(frame);
+        // colonne visible en permanence (même aspect qu'à la sélection) : repère la trémie en 3D
+        const span = shaftSpan3D(sh);
+        const column = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
+            new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.85 }));
+        column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+        threeScene.add(column);
+        wallMeshes3D.push(column);
+        // zone invisible de la trémie (hauteur de la pièce) : permet de la sélectionner au clic en 3D
+        const hit = new THREE.Mesh(
+            new THREE.BoxGeometry(s, span.height, s),
+            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+        hit.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+        hit.userData = { type: 'shaft', id: sh.id };
+        threeScene.add(hit);
+        wallMeshes3D.push(hit);
+        interactiveObjects3D.push(hit);
+        // trémie sélectionnée : volume blanc translucide dans la colonne (en plus du cadre de sélection)
+        if (sh.id === selected3DId) {
+            const sel = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
+                new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.3, depthWrite: false }));
+            sel.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+            sel.renderOrder = 5;
+            threeScene.add(sel);
+            wallMeshes3D.push(sel);
+        }
+        // étiquette visible au-dessus de la trémie : les niveaux qu'elle relie
+        const labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 512; labelCanvas.height = 96;
+        const lctx = labelCanvas.getContext('2d');
+        lctx.fillStyle = 'rgba(15,23,42,0.85)';
+        lctx.fillRect(0, 0, 512, 96);
+        lctx.fillStyle = '#fbbf24';
+        lctx.font = 'bold 40px sans-serif';
+        lctx.textAlign = 'center';
+        lctx.textBaseline = 'middle';
+        lctx.fillText(shaftLevelNames(sh).join(' ↔ '), 256, 48);
+        const labelTex = new THREE.CanvasTexture(labelCanvas);
+        // l'étiquette se place en bas de la trémie si elle relie un niveau plus bas, en haut sinon ;
+        // elle est masquée par les murs et les gaines (pas de passage par-dessus)
+        const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, depthTest: true, transparent: true }));
+        label.scale.set(150, 28, 1);
+        const elevOf = lvId => ((projectData.levels || []).find(l => l.id === lvId) || {}).elevation || 0;
+        const otherId = (sh.levelIds || [sh.levelId]).find(lvId => lvId !== activeLevelId);
+        const goesDown = otherId !== undefined && elevOf(otherId) < elevOf(activeLevelId);
+        const labelY = goesDown ? 40 : Math.min(230, levelCeilingOf(activeLevelId) - 20);
+        label.position.set(frame.position.x, labelY, frame.position.z);
+        label.renderOrder = 11;
+        threeScene.add(label);
+        wallMeshes3D.push(label);
+        // point de dérivation : chaque niveau relié prend ses circuits à ce point de la gaine (hauteur 1,50 m)
+        // boîte : 10 cm d'épaisseur (perpendiculaire au mur) et 14 cm de long, orientée comme le mur
+        const derivation = new THREE.Mesh(new THREE.BoxGeometry(10, DERIV_BOX_H, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        // même remède que pour les appareils : la boîte est posée à 1,5 cm de la face du mur (pas sur l'axe de la paroi
+        // transparente) et son ordre de dessin est fixe, sinon le tri des transparents la fait scintiller
+        // la boîte est collée à la face du mur, côté pièce de la trémie (jamais dans le mur)
+        const dp = derivFacePos2D(sh, derivDistOf(sh, activeLevelId)) || { x: w.x1, y: w.y1, angle: 0 };
+        derivation.position.set(dp.x - cx, derivHeightOf(sh, activeLevelId), dp.y - cy);
+        derivation.rotation.y = -dp.angle + Math.PI / 2;
+        derivation.renderOrder = 6;
+        derivation.userData = { type: 'derivation', id: sh.id, derivation: true };
+        interactiveObjects3D.push(derivation);
+        threeScene.add(derivation);
+        wallMeshes3D.push(derivation);
+        // montée verticale : trait jaune de la cote de ce niveau à celle de chaque niveau relié par la trémie
+        const elevHere = (projectData.levels || []).find(l => l.id === activeLevelId);
+        (sh.levelIds || [sh.levelId]).filter(lv => lv !== activeLevelId).forEach(lv => {
+            const other = (projectData.levels || []).find(l => l.id === lv);
+            if (!other || !elevHere) return;
+            const dy = (Number(other.elevation) || 0) - (Number(elevHere.elevation) || 0);
+            // câble de la boîte de ce niveau jusqu'à la boîte de l'autre niveau (même trémie)
+            const y0 = derivation.position.y;
+            const y1 = dy + derivHeightOf(sh, lv);
+            const riser = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(derivation.position.x, y0, derivation.position.z), new THREE.Vector3(derivation.position.x, y1, derivation.position.z)]),
+                new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+            threeScene.add(riser);
+            wallMeshes3D.push(riser);
+        });
+    });
+
+    // Escaliers : marches pleines de la marche basse à la marche haute, emprise au sol, zone cliquable
+    stairsOn().forEach(st => addStair3D(st, cx, cy));
+
+    wallsOn().forEach(w => {
         const x1 = w.x1 - cx;
         const z1 = w.y1 - cy;
         const x2 = w.x2 - cx;
@@ -963,6 +1530,9 @@ function build3DScene() {
             side: THREE.DoubleSide
         });
         const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+        // Ordre fixe : les murs transparents sont dessinés après les autres transparents, quel que soit l'angle de vue
+        // (sinon le tri par distance de Three.js change d'ordre pendant la rotation et fait scintiller les appareils)
+        wallMesh.renderOrder = 5;
 
         const midX = (x1 + x2) / 2;
         const midZ = (z1 + z2) / 2;
@@ -977,8 +1547,8 @@ function build3DScene() {
         clickableWalls3D.push(wallMesh);
     });
 
-    projectData.openings.forEach(op => {
-        const wall = projectData.walls.find(w => w.id === op.wallId);
+    openingsOn().forEach(op => {
+        const wall = wallsOn().find(w => w.id === op.wallId);
         if (!wall) return;
         const mesh = createOpeningMesh3D(op, wall, cx, cy);
         if (mesh) {
@@ -988,7 +1558,7 @@ function build3DScene() {
         }
     });
 
-    projectData.electrical.forEach(el => {
+    electricalOn().forEach(el => {
         const mesh = createElementMesh3D(el, cx, cy);
         if (mesh) {
             threeScene.add(mesh);
@@ -998,6 +1568,7 @@ function build3DScene() {
     });
 
     addCircuitElementHighlights();
+    addWallSelectionHighlights();
     addCollisionHighlights();
     renderCableNetwork(cx, cy);
 
@@ -1147,6 +1718,8 @@ function applianceModel(el) {
         cylZ(0.62, 0.62, 0.5, dark, 1.0, -0.2, 1.3);
         cylZ(0.4, 0.4, 1.8, metal, 0, 2.5, 1.6);                              // broche de terre
         box(5.5, 1.1, 0.5, accentMat, 0, el.type === 'outlet_20a' ? 4.7 : -4.8, 0.4);   // repère de calibre
+        // prise simple : plaque de 7,2 cm (un module), pour que deux prises aimantées (7,5 cm) ne se touchent pas
+        g.scale.setScalar(0.6);
     } else if (el.type === 'outlet_32a') {
         // sortie de cuisson 32 A : grand disque, bague colorée, trois bornes
         cylZ(7.4, 7.6, 1.3, white, 0, 0, -0.35);
@@ -1188,6 +1761,11 @@ function applianceModel(el) {
         const dome = new THREE.Mesh(mGeo('sph', 12.4, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat(0xfffbeb, { rough: 0.2, emissive: 0xfde68a, emissiveIntensity: 0.55, opacity: 0.93, double: true }));
         dome.position.set(0, 3.9, 0);
         g.add(dome);
+    } else if (el.type === 'junction_box') {
+        // boîte de dérivation posée : petit coffret blanc, couvercle et quatre vis
+        box(10, 10, 4, white, 0, 0, 2);
+        box(8.4, 8.4, 0.4, ivory, 0, 0, 4.2);
+        [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]].forEach(p => cylZ(0.5, 0.5, 0.3, metal, p[0], p[1], 4.4));
     } else if (el.type === 'panel') {
         // tableau : coffret, porte fumée, trois rangées de modules (différentiel + disjoncteurs)
         const W = 42, H = 56;
@@ -1245,7 +1823,9 @@ function createElementMesh3D(el, cx, cy) {
 
         const side = el.side !== undefined ? el.side : 1;
         const wallThickness = wall.thickness || 10;
-        const offsetDist = (wallThickness / 2) + 1;
+        // Visuel seulement : 0,5 cm de plus que le calcul, pour que le socle de l'appareil ne soit pas
+        // exactement sur la face du mur (sinon scintillement à travers la paroi transparente)
+        const offsetDist = (wallThickness / 2) + 1.5;
 
         const perpX = Math.sin(angle);
         const perpZ = -Math.cos(angle);
@@ -1262,6 +1842,118 @@ function createElementMesh3D(el, cx, cy) {
     return group;
 }
 
+let drag3DMoved = false;
+let wallDrag3D = null;        // glissement d'un mur en 3D : { wallId, mode, startWall, origin, down, moved }
+let wallCentreLock3D = null;  // centre figé pendant le glissement : la scène ne se recentre pas à chaque pas
+let wallDragFrame3D = false;
+let drag3DDown = null;
+
+// Tracé de mur en 3D : même logique que la 2D (points au sol, aimantation, clic droit pour terminer)
+let wallDraft3D = null;     // point de départ du tracé courant, en cm (coordonnées du plan)
+let wallCursor3D = null;    // point courant, aimanté
+let wallPreview3D = null;   // trait de prévisualisation dans la scène
+
+// Centre de la scène 3D : même repère que celui des murs, escaliers et trémies
+function scene3DCentre() {
+    if (wallCentreLock3D) return wallCentreLock3D;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    wallsOn().forEach(w => {
+        minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
+        maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
+    });
+    if (!isFinite(minX)) return { cx: 0, cy: 0 };
+    return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+}
+
+// Aimantation identique à la 2D : extrémités des murs (25 cm), grille de 25 cm, angles droits
+function snapTracePoint3D(p, start) {
+    let x = p.x, y = p.y;
+    if (gridSnap) {
+        let best = null, bestD = 25;
+        wallsOn().forEach(w => {
+            [[w.x1, w.y1], [w.x2, w.y2]].forEach(([px, py]) => {
+                const d = Math.hypot(px - x, py - y);
+                if (d < bestD) { bestD = d; best = { x: px, y: py }; }
+            });
+        });
+        if (best) { x = best.x; y = best.y; }
+        else { x = Math.round(x / 25) * 25; y = Math.round(y / 25) * 25; }
+    }
+    if (angleSnap && start) {
+        if (Math.abs(x - start.x) > Math.abs(y - start.y)) y = start.y;
+        else x = start.x;
+    }
+    return { x, y };
+}
+
+// Point du sol sous le pointeur, en coordonnées du plan (cm)
+function floorPlanPointFrom3D(e) {
+    const container = document.getElementById('three-container');
+    const rect = container.getBoundingClientRect();
+    mouse3D.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+    mouse3D.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse3D, threeCamera);
+    const floorPt = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), floorPt)) return null;
+    const { cx, cy } = scene3DCentre();
+    return { x: floorPt.x + cx, y: floorPt.z + cy };
+}
+
+function traceBannerText3D() {
+    if (!wallDraft3D || !wallCursor3D) {
+        return 'Pose : Mur ; cliquez le premier point au sol (Échap pour arrêter)';
+    }
+    const len = Math.hypot(wallCursor3D.x - wallDraft3D.x, wallCursor3D.y - wallDraft3D.y) / 100;
+    return 'Pose : Mur ; longueur ' + len.toFixed(2).replace('.', ',') + ' m ; clic pour valider, clic droit pour terminer (Échap pour arrêter)';
+}
+
+function updateWallPreview3D() {
+    if (wallPreview3D && wallPreview3D.parent) wallPreview3D.parent.remove(wallPreview3D);
+    wallPreview3D = null;
+    if (activePlacementType === 'wall') refreshToolHint();
+    if (!threeScene || activePlacementType !== 'wall' || !wallDraft3D || !wallCursor3D) return;
+    const { cx, cy } = scene3DCentre();
+    const pts = [
+        new THREE.Vector3(wallDraft3D.x - cx, 5, wallDraft3D.y - cy),
+        new THREE.Vector3(wallCursor3D.x - cx, 5, wallCursor3D.y - cy)
+    ];
+    wallPreview3D = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+    wallPreview3D.renderOrder = 10;
+    threeScene.add(wallPreview3D);
+}
+
+// Un clic au sol : premier point, ou fin d'un segment qui devient le point de départ du suivant
+function commitTracePoint3D(rawPoint) {
+    const p = snapTracePoint3D(rawPoint, wallDraft3D);
+    if (!wallDraft3D) {
+        wallDraft3D = p;
+        wallCursor3D = p;
+        updateWallPreview3D();
+        return;
+    }
+    const len = Math.hypot(p.x - wallDraft3D.x, p.y - wallDraft3D.y);
+    if (len > 10) {
+        saveStateToUndo();
+        projectData.walls.push({ levelId: activeLevelId, id: 'w_' + Date.now(),
+            x1: wallDraft3D.x, y1: wallDraft3D.y, x2: p.x, y2: p.y,
+            thickness: activeWallThickness, height: activeWallHeight });
+        updateStats();
+        showNotification('Mur tracé', 'success');
+        wallDraft3D = p;
+        wallCursor3D = p;
+        build3DScene();
+    }
+    updateWallPreview3D();
+}
+
+// Clic droit ou Échap pendant un tracé : arrête la chaîne, le mode « Tracer mur » reste actif
+function endWallTrace3D() {
+    wallDraft3D = null;
+    wallCursor3D = null;
+    updateWallPreview3D();
+    showNotification('Tracé de mur arrêté', 'info');
+}
+
 function on3DPointerDown(e) {
     if (e.button !== 0) return;
     const container = document.getElementById('three-container');
@@ -1271,13 +1963,41 @@ function on3DPointerDown(e) {
 
     raycaster.setFromCamera(mouse3D, threeCamera);
 
+    if (activePlacementType === 'wall') {
+        const floorPt = floorPlanPointFrom3D(e);
+        if (floorPt) commitTracePoint3D(floorPt);
+        return;
+    }
     if (activePlacementType) {
+        if (activePlacementType === 'stair') {
+            // escalier posé au sol : son emprise est centrée sur le point cliqué
+            const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const floorPt = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(floorPlane, floorPt)) {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                wallsOn().forEach(w => {
+                    minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
+                    maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
+                });
+                const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+                const links = askShaftLevels();
+                saveStateToUndo();
+                if (!projectData.stairs) projectData.stairs = [];
+                projectData.stairs.push({ id: 'st_' + Date.now(), levelId: activeLevelId, levelIds: links,
+                    x: Math.round(floorPt.x + cx), y: Math.round(floorPt.z + cy), angleDeg: 0, width: 90, length: 300 });
+                snapStairToWalls(projectData.stairs[projectData.stairs.length - 1]);
+                showNotification('Escalier posé', 'success');
+                build3DScene();
+                setPlacementType(null);
+            }
+            return;
+        }
         if (activePlacementType === 'light_ceiling') {
             if (ceilingMesh3D) {
                 const ceilingIntersect = raycaster.intersectObject(ceilingMesh3D);
                 if (ceilingIntersect.length > 0) {
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                    projectData.walls.forEach(w => {
+                    wallsOn().forEach(w => {
                         minX = Math.min(minX, w.x1, w.x2);
                         minY = Math.min(minY, w.y1, w.y2);
                         maxX = Math.max(maxX, w.x1, w.x2);
@@ -1288,7 +2008,7 @@ function on3DPointerDown(e) {
                     const pt = ceilingIntersect[0].point;
 
                     saveStateToUndo();
-                    projectData.electrical.push({
+                    projectData.electrical.push({ levelId: activeLevelId,
                         id: 'el_' + Date.now(),
                         type: 'light_ceiling',
                         x: pt.x + cx,
@@ -1314,7 +2034,7 @@ function on3DPointerDown(e) {
 
                 if (wall) {
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                    projectData.walls.forEach(w => {
+                    wallsOn().forEach(w => {
                         minX = Math.min(minX, w.x1, w.x2);
                         minY = Math.min(minY, w.y1, w.y2);
                         maxX = Math.max(maxX, w.x1, w.x2);
@@ -1337,6 +2057,16 @@ function on3DPointerDown(e) {
                     const side = localHit.x >= 0 ? 1 : -1;
 
                     saveStateToUndo();
+                    if (activePlacementType === 'shaft') {
+                        // trémie posée en 3D : même réglage de liaison que la 2D (liste « Relier à »)
+                        const links = askShaftLevels();
+                        projectData.shafts.push({ id: 'sh_' + Date.now(), levelId: activeLevelId, levelIds: links, wallId: wall.id, distanceFromStart: distanceCm, side, size: 40 });
+                        renderLevelSelector();
+                        showNotification('Trémie placée sur le mur', 'success');
+                        build3DScene();
+                        setPlacementType(null);
+                        return;
+                    }
                     if (activePlacementType === 'door_single' || activePlacementType === 'window_std') {
                         const opening = {
                             id: 'op_' + Date.now(),
@@ -1351,16 +2081,16 @@ function on3DPointerDown(e) {
                             opening.hingeSide = doorHingeForPlacement();
                             opening.side = side;
                         }
-                        projectData.openings.push(opening);
+                        projectData.openings.push(Object.assign(opening, { levelId: activeLevelId }));
                         showNotification("Ouverture placée sur le mur avec succès", "success");
                     } else {
                         let defaultH = 110;
-                        if (activePlacementType === 'panel') defaultH = 150;
+                        if (activePlacementType === 'panel' || activePlacementType === 'junction_box') defaultH = 150;
                         if (activePlacementType === 'wall_light') defaultH = 180;
                         if (activePlacementType.startsWith('outlet')) defaultH = 30;
                         if (activePlacementType === 'outlet_32a') defaultH = 20;
 
-                        projectData.electrical.push({
+                        projectData.electrical.push({ levelId: activeLevelId,
                             id: 'el_' + Date.now(),
                             type: activePlacementType,
                             wallId: wall.id,
@@ -1378,6 +2108,12 @@ function on3DPointerDown(e) {
         }
     } else {
         const interactiveIntersects = raycaster.intersectObjects(interactiveObjects3D, true);
+        const derivHit = interactiveIntersects.find(i => i.object.userData && i.object.userData.derivation);
+        if (derivHit) {
+            // un clic sur la boîte sélectionne la trémie (sa hauteur se règle dans le panneau)
+            select3DElement(derivHit.object.userData.id, derivHit.object);
+            return;
+        }
         if (interactiveIntersects.length > 0) {
             // on remonte jusqu'à l'objet posé directement dans la scène (appareil ou ouverture)
             let target = interactiveIntersects[0].object;
@@ -1385,13 +2121,17 @@ function on3DPointerDown(e) {
             if (target.userData && target.userData.id) {
                 const targetId = target.userData.id;
                 select3DElement(targetId, target);
+                if ((projectData.shafts || []).some(s => s.id === targetId)) {
+                    build3DScene();   // volume de sélection visible dès le clic
+                    target = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === targetId) || target;
+                }
                 const selectedElectrical = projectData.electrical.find(el => el.id === targetId);
                 if (selectedElectrical && (isLightingControl(selectedElectrical) ||
                     selectedElectrical.type === 'light_ceiling' || selectedElectrical.type === 'wall_light')) {
                     build3DScene();
                     target = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === targetId) || target;
                 }
-                const clickedCircuit = selectedElectrical && isCircuitPoint(selectedElectrical) ? circuitOf(selectedElectrical) : null;
+                const clickedCircuit = highlightCircuitOf(selectedElectrical);
                 if (clickedCircuit && clickedCircuit.id !== selectedCircuitId) {
                     selectedCircuitId = clickedCircuit.id;
                     build3DScene();
@@ -1400,21 +2140,73 @@ function on3DPointerDown(e) {
                 }
 
                 let isCeiling = selectedElectrical && selectedElectrical.type === 'light_ceiling';
+                const dragStair = (projectData.stairs || []).find(s => s.id === targetId);
                 dragging3DElementId = targetId;
-                if (isCeiling) {
+                drag3DMoved = false;   // C1 : l'annulation est enregistrée au premier vrai déplacement
+                drag3DDown = { x: e.clientX, y: e.clientY };
+                if (isCeiling || dragStair) {
                     dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), target.position);
                 } else {
                     dragPlane.setFromNormalAndCoplanarPoint(threeCamera.getWorldDirection(dragPlane.normal).negate(), target.position);
+                }
+                if (dragStair) {
+                    const grabPt = new THREE.Vector3();
+                    stair3DGrab = raycaster.ray.intersectPlane(dragPlane, grabPt) ? { x: grabPt.x - target.position.x, z: grabPt.z - target.position.z } : { x: 0, z: 0 };
                 }
                 if (threeControls) threeControls.enabled = false;
                 return;
             }
         }
+        // rien d'interactif touché : un mur se sélectionne (inspecteur de mur, comme en 2D)
+        const wallHit = raycaster.intersectObjects(clickableWalls3D, true);
+        if (wallHit.length > 0) {
+            let wm = wallHit[0].object;
+            while (wm && !(wm.userData && wm.userData.id) && wm.parent) wm = wm.parent;
+            const wid = wm && wm.userData && wm.userData.id;
+            if (wid && projectData.walls.some(w => w.id === wid)) {
+                const wasSelected = selectedWallIds.includes(wid);
+                if (selected3DId) { selected3DId = null; selectedCircuitId = null; }
+                setSelectedWalls([wid]);
+                syncElementInspectors();
+                if (canEditWalls()) startWallDrag3D(e, wid, wasSelected);
+                build3DScene();
+            }
+        }
     }
 }
 
+// Survol 3D : étiquette de l'objet sous le curseur (même logique que le clic)
+function hover3DTooltip(e) {
+    if (activePlacementType || !threeCamera || !interactiveObjects3D.length) { hidePlanTooltip(); return; }
+    const container = document.getElementById('three-container');
+    const rect = container.getBoundingClientRect();
+    mouse3D.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+    mouse3D.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse3D, threeCamera);
+    let id = null;
+    for (const hit of raycaster.intersectObjects(interactiveObjects3D, true)) {
+        let o = hit.object;
+        while (o && !(o.userData && o.userData.id)) o = o.parent;
+        if (o) { id = o.userData.id; break; }
+    }
+    showPlanTooltip(e.clientX, e.clientY, id);
+}
+
 function on3DPointerMove(e) {
-    if (!dragging3DElementId) return;
+    if (wallDrag3D) {
+        if ((e.buttons & 1) === 0) { endWallDrag3D(); return; }   // bouton relâché hors de la scène
+        updateWallDrag3D(e);
+        return;
+    }
+    if (activePlacementType === 'wall') {
+        const floorPt = floorPlanPointFrom3D(e);
+        if (floorPt && wallDraft3D) { wallCursor3D = snapTracePoint3D(floorPt, wallDraft3D); updateWallPreview3D(); }
+        return;
+    }
+    if (!dragging3DElementId) { hover3DTooltip(e); return; }
+    // un simple clic ne déplace rien : le glissement commence après 5 px de mouvement
+    if (!drag3DMoved && drag3DDown && Math.hypot(e.clientX - drag3DDown.x, e.clientY - drag3DDown.y) < 5) return;
+    if (!drag3DMoved) { saveStateToUndo(); drag3DMoved = true; }   // C1 : comme en 2D (un clic sans mouvement ne crée rien)
 
     const container = document.getElementById('three-container');
     const rect = container.getBoundingClientRect();
@@ -1423,17 +2215,19 @@ function on3DPointerMove(e) {
 
     raycaster.setFromCamera(mouse3D, threeCamera);
     
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    projectData.walls.forEach(w => {
-        minX = Math.min(minX, w.x1, w.x2);
-        minY = Math.min(minY, w.y1, w.y2);
-        maxX = Math.max(maxX, w.x1, w.x2);
-        maxY = Math.max(maxY, w.y1, w.y2);
-    });
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
+    const { cx, cy } = scene3DCentre();
 
     if (raycaster.ray.intersectPlane(dragPlane, planeIntersectPoint)) {
+        const stairDrag = (projectData.stairs || []).find(s => s.id === dragging3DElementId);
+        if (stairDrag) {
+            const g = stair3DGrab || { x: 0, z: 0 };
+            const prevSt = { x: stairDrag.x, y: stairDrag.y };
+            stairDrag.x = Math.round(planeIntersectPoint.x - g.x + cx);
+            stairDrag.y = Math.round(planeIntersectPoint.z - g.z + cy);
+            snapStairToWalls(stairDrag, prevSt);
+            build3DScene();
+            return;
+        }
         let ceilingEl = projectData.electrical.find(el => el.id === dragging3DElementId && el.type === 'light_ceiling');
         if (ceilingEl) {
             ceilingEl.x = planeIntersectPoint.x + cx;
@@ -1442,11 +2236,28 @@ function on3DPointerMove(e) {
             return;
         }
 
+        if (dragging3DElementId.startsWith('deriv|')) {
+            const shId = dragging3DElementId.slice(6);
+            const sh = (projectData.shafts || []).find(x => x.id === shId);
+            const w = sh && projectData.walls.find(x => x.id === sh.wallId);
+            if (w) {
+                const ax = w.x1 - cx, az = w.y1 - cy;
+                const bx = w.x2 - cx, bz = w.y2 - cy;
+                const L = Math.hypot(bx - ax, bz - az) || 1;
+                const t = ((planeIntersectPoint.x - ax) * (bx - ax) + (planeIntersectPoint.z - az) * (bz - az)) / (L * L);
+                const dCm = Math.round(Math.max(10, Math.min(L - 10, t * L)));
+                sh.derivDist = Object.assign({}, sh.derivDist, { [activeLevelId]: clampDerivDist(sh, dCm) });
+                build3DScene();
+            }
+            return;
+        }
+
         let closestWall = null;
         let closestDistCm = 0;
+        let closestSide = 1;
         let minDistance = Infinity;
 
-        projectData.walls.forEach(w => {
+        wallsOn().forEach(w => {
             const wx1 = w.x1 - cx, wz1 = w.y1 - cy;
             const wx2 = w.x2 - cx, wz2 = w.y2 - cy;
             const len = Math.hypot(wx2 - wx1, wz2 - wz1);
@@ -1462,14 +2273,19 @@ function on3DPointerMove(e) {
                 minDistance = dist;
                 closestWall = w;
                 closestDistCm = Math.round(Math.max(10, Math.min(len - 10, clampedT * len)));
+                // côté du mur où se trouve le curseur (même convention que la 2D)
+                closestSide = ((planeIntersectPoint.x - projX) * (wz2 - wz1) / len - (planeIntersectPoint.z - projZ) * (wx2 - wx1) / len) >= 0 ? 1 : -1;
             }
         });
 
         if (closestWall) {
-            let item = projectData.electrical.find(el => el.id === dragging3DElementId) || projectData.openings.find(op => op.id === dragging3DElementId);
+            let item = projectData.electrical.find(el => el.id === dragging3DElementId) || projectData.openings.find(op => op.id === dragging3DElementId) || (projectData.shafts || []).find(sh => sh.id === dragging3DElementId);
             if (item) {
                 item.wallId = closestWall.id;
-                item.distanceFromStart = closestDistCm;
+                // trémie : son côté (pièce) ne change pas pendant un glissement le long du mur
+                item.distanceFromStart = projectData.electrical.includes(item)
+                    ? snapOutletDistance(item.type, closestWall.id, closestDistCm, item.side, item.height || defaultHeightFor(item.type), item.id)
+                    : closestDistCm;
                 
                 const distInput = document.getElementById('inspector-distance-input');
                 const distVal = document.getElementById('inspector-distance-val');
@@ -1482,7 +2298,94 @@ function on3DPointerMove(e) {
     }
 }
 
+// Glissement d'un mur en 3D (mêmes règles qu'en 2D) :
+// - corps du mur : déplacement ; extrémité d'un mur déjà sélectionné (à 30 cm près) : étirement
+// - seuil de 8 px avant le premier mouvement ; annulation enregistrée à ce moment
+// - le centre de la scène est figé pendant le glissement, puis la vue est recalée à la fin
+function startWallDrag3D(e, wid, wasSelected) {
+    const wall = projectData.walls.find(w => w.id === wid);
+    const p = floorPlanPointFrom3D(e);
+    if (!wall || !p) return;
+    const c = scene3DCentre();
+    wallCentreLock3D = { cx: c.cx, cy: c.cy };
+    let mode = 'move';
+    const d1 = Math.hypot(p.x - wall.x1, p.y - wall.y1);
+    const d2 = Math.hypot(p.x - wall.x2, p.y - wall.y2);
+    if (wasSelected && Math.min(d1, d2) < 30) mode = d1 <= d2 ? 'end1' : 'end2';
+    wallDrag3D = { wallId: wid, mode, startWall: { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 },
+        origin: p, down: { x: e.clientX, y: e.clientY }, moved: false };
+    if (threeControls) threeControls.enabled = false;
+}
+
+function updateWallDrag3D(e) {
+    const d = wallDrag3D;
+    if (!d) return;
+    if (!d.moved) {
+        if (Math.hypot(e.clientX - d.down.x, e.clientY - d.down.y) < 8) return;
+        if (!canEditWalls()) { endWallDrag3D(); return; }   // verrouillé ou modification désactivée pendant le geste
+        saveStateToUndo();
+        d.moved = true;
+        d.linksBefore = shaftLinksValid();
+    }
+    const wall = projectData.walls.find(w => w.id === d.wallId);
+    const p = floorPlanPointFrom3D(e);
+    if (!wall || !p) return;
+    const s = d.startWall;
+    const prev = { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
+    if (d.mode === 'move') {
+        const dx = p.x - d.origin.x, dy = p.y - d.origin.y;
+        wall.x1 = s.x1 + dx; wall.y1 = s.y1 + dy;
+        wall.x2 = s.x2 + dx; wall.y2 = s.y2 + dy;
+    } else {
+        const other = d.mode === 'end1' ? { x: s.x2, y: s.y2 } : { x: s.x1, y: s.y1 };
+        const q = snapTracePoint3D(p, other);
+        if (Math.hypot(q.x - other.x, q.y - other.y) < 1) return;   // jamais de mur de longueur nulle
+        if (d.mode === 'end1') { wall.x1 = q.x; wall.y1 = q.y; } else { wall.x2 = q.x; wall.y2 = q.y; }
+    }
+    // sécurité trémie : si ce geste couperait des câbles, on revient à la position précédente
+    const lost = shaftLinksLostSince(d.linksBefore);
+    if (lost.length) {
+        Object.assign(wall, prev);
+        if (!d.refused) { d.refused = true; showNotification(shaftRefusalMessage(lost), 'error'); }
+        return;
+    }
+    d.refused = false;
+    const L = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) / 100;
+    const li = document.getElementById('inspector-length-input');
+    if (li) li.value = L.toFixed(2);
+    const lv = document.getElementById('inspector-length-val');
+    if (lv) lv.textContent = L.toFixed(2) + ' m';
+    scheduleBuild3D();
+}
+
+// Une reconstruction par image au plus pendant le glissement
+function scheduleBuild3D() {
+    if (wallDragFrame3D) return;
+    wallDragFrame3D = true;
+    requestAnimationFrame(() => { wallDragFrame3D = false; build3DScene(); });
+}
+
+function endWallDrag3D() {
+    const d = wallDrag3D;
+    const old = wallCentreLock3D;
+    wallDrag3D = null;
+    wallCentreLock3D = null;
+    if (threeControls) threeControls.enabled = true;
+    if (!d) return;
+    if (d.moved && old) {
+        // le centre se recalcule sur le nouveau mur : la vue suit, le mur reste sous le curseur
+        const now = scene3DCentre();
+        const dx = old.cx - now.cx, dz = old.cy - now.cy;
+        if (threeCamera) { threeCamera.position.x += dx; threeCamera.position.z += dz; }
+        if (threeControls && threeControls.target) { threeControls.target.x += dx; threeControls.target.z += dz; }
+        showUndoBar(wallMoveMessage(d.linksBefore, d.mode === 'move' ? 'déplacé' : 'étiré'));
+        if (threeControls) threeControls.update();
+    }
+    build3DScene();
+}
+
 function on3DPointerUp(e) {
+    if (wallDrag3D) { endWallDrag3D(); return; }
     if (dragging3DElementId) {
         dragging3DElementId = null;
         if (threeControls) {
@@ -1492,8 +2395,148 @@ function on3DPointerUp(e) {
     }
 }
 
+// Noms des niveaux reliés par une trémie, dans l'ordre de la liste
+// Fantôme : copie transparente des matériaux (le modèle réel n'est pas modifié), sans interaction
+function makeGhost3D(obj, opacity) {
+    obj.traverse(c => {
+        if (!c.material) return;
+        const cloneOne = m => { const k = m.clone(); k.transparent = true; k.opacity = Math.min(k.opacity === undefined ? 1 : k.opacity, opacity); k.depthWrite = false; return k; };
+        c.material = Array.isArray(c.material) ? c.material.map(cloneOne) : cloneOne(c.material);
+    });
+    return obj;
+}
+// Ouverture d'un autre niveau : emprise transparente dans son mur (hauteur de l'allège au linteau)
+function addGhostOpening3D(op, dy, cx, cy) {
+    const w = projectData.walls.find(x => x.id === op.wallId);
+    const p = w && openingPos2D(op);
+    if (!p) return;
+    const b = openingBox(op, w);
+    const color = b.isDoor ? 0x10b981 : 0x22d3ee;
+    const geo = new THREE.BoxGeometry(p.th + 1, Math.max(1, b.z1 - b.z0), 2 * b.half);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false }));
+    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 })));
+    mesh.position.set(p.x - cx, dy + (b.z0 + b.z1) / 2, p.y - cy);
+    mesh.rotation.y = -p.angle + Math.PI / 2;
+    mesh.renderOrder = 3;
+    threeScene.add(mesh);
+    wallMeshes3D.push(mesh);
+}
+// Trémie fantôme : même représentation que la trémie réelle (cadre au sol, colonne en arêtes), estompée,
+// avec sa boîte de dérivation à chaque niveau relié (et la montée qui les relie)
+function addGhostShaft3D(sh, cx, cy) {
+    const p = shaftPos2D(sh);
+    if (!p) return;
+    const s = sh.size || 40;
+    const elevOf = lvId => Number(((projectData.levels || []).find(l => l.id === lvId) || {}).elevation) || 0;
+    const levels = sh.levelIds || [sh.levelId];
+    const span = shaftSpan3D(sh);
+    const base = span.base;
+    const add = obj => { threeScene.add(obj); wallMeshes3D.push(obj); return obj; };
+    const colMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.35, depthWrite: false });
+    const frame = add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)), colMat));
+    frame.position.set(p.x - cx, base + 1, p.y - cy);
+    frame.renderOrder = 3;
+    // volume léger + arêtes : la colonne fantôme se voit à distance, même avec les murs transparents
+    const colGeo = new THREE.BoxGeometry(s, span.height, s);
+    const column = add(new THREE.LineSegments(new THREE.EdgesGeometry(colGeo), colMat));
+    column.position.set(p.x - cx, base + span.height / 2, p.y - cy);
+    column.renderOrder = 3;
+    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.05, depthWrite: false })));
+    fill.position.set(p.x - cx, base + span.height / 2, p.y - cy);
+    fill.renderOrder = 2;
+    // boîtes de dérivation de chaque niveau relié, comme en réel (même taille, même position dans la gaine)
+    const boxes = [];
+    levels.forEach(lv => {
+        const dp = derivFacePos2D(sh, derivDistOf(sh, lv));
+        if (!dp) return;
+        const geo = new THREE.BoxGeometry(10, DERIV_BOX_H, 14);
+        const y = elevOf(lv) - elevOf(activeLevelId) + derivHeightOf(sh, lv);
+        const box = add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })));
+        box.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.35 })));
+        box.position.set(dp.x - cx, y, dp.y - cy);
+        box.rotation.y = -dp.angle + Math.PI / 2;
+        box.renderOrder = 4;
+        boxes.push({ x: dp.x - cx, y, z: dp.y - cy });
+    });
+    // montée entre les boîtes des niveaux reliés
+    if (boxes.length > 1) {
+        const ys = boxes.map(bx => bx.y);
+        const riser = add(new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(boxes[0].x, Math.min(...ys), boxes[0].z), new THREE.Vector3(boxes[0].x, Math.max(...ys), boxes[0].z)]),
+            new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4, depthWrite: false })));
+        riser.renderOrder = 4;
+    }
+}
+
+// Étendue verticale d'une trémie, relative au niveau affiché : de la dalle la plus basse au plafond le plus haut
+function shaftSpan3D(sh) {
+    const elevOf = lvId => Number(((projectData.levels || []).find(l => l.id === lvId) || {}).elevation) || 0;
+    const act = elevOf(activeLevelId);
+    const ids = sh.levelIds || [sh.levelId];
+    const bottom = Math.min(...ids.map(elevOf)) - act;
+    const top = Math.max(...ids.map(lv => elevOf(lv) - act + levelCeilingOf(lv)));
+    return { base: bottom, height: Math.max(250, top - bottom) };
+}
+
+// Escalier grabbé en 3D : décalage entre le point saisi et le centre (coordonnées de la scène)
+let stair3DGrab = null;
+function addStair3D(st, cx, cy, ghost = false) {
+    const L = st.length || 300, W = st.width || 90, n = stairStepCount(st);
+    const H = Math.max(stairRiseCm(st), 1);
+    const elevOf = lvId => Number(((projectData.levels || []).find(l => l.id === lvId) || {}).elevation) || 0;
+    const base = Math.min(...(st.levelIds || [st.levelId]).map(elevOf)) - elevOf(activeLevelId);
+    const group = new THREE.Group();
+    group.position.set(st.x - cx, base, st.y - cy);
+    group.rotation.y = -(st.angleDeg || 0) * Math.PI / 180;
+    group.userData = { type: 'stair', id: st.id };
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, roughness: 0.7, metalness: 0, transparent: true, opacity: ghost ? 0.25 : 0.85, depthWrite: !ghost });
+    for (let i = 0; i < n; i++) {
+        const h = (i + 1) * H / n;
+        const step = new THREE.Mesh(new THREE.BoxGeometry(L / n, h, W), stepMat);
+        step.position.set(-L / 2 + (i + 0.5) * L / n, h / 2, 0);
+        group.add(step);
+    }
+    // contour de l'emprise au sol : repère même quand les marches sont cachées
+    const footprint = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(L, 1, W)),
+        new THREE.LineBasicMaterial({ color: 0xc4b5fd }));
+    footprint.position.set(0, 0.5, 0);
+    group.add(footprint);
+    // zone invisible sur toute la montée : permet de cliquer l'escalier et de le glisser
+    const hit = new THREE.Mesh(
+        new THREE.BoxGeometry(L, H + 10, W),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    hit.position.set(0, (H + 10) / 2, 0);
+    hit.userData = { type: 'stair', id: st.id };
+    if (!ghost) {
+        group.add(hit);
+        interactiveObjects3D.push(hit);
+    }
+    threeScene.add(group);
+    wallMeshes3D.push(group);
+}
+
+function shaftLevelNames(sh) {
+    return (sh.levelIds || [sh.levelId]).map(lv => {
+        const l = (projectData.levels || []).find(x => x.id === lv);
+        return l ? l.name : '?';
+    });
+}
+
+// Titre d'une trémie avec les niveaux qu'elle relie (ex. « Trémie : RDC ↔ Sous-sol »)
+function shaftTitle(id) {
+    const sh = (projectData.shafts || []).find(s => s.id === id);
+    if (!sh) return 'Trémie';
+    const names = (sh.levelIds || [sh.levelId]).map(lv => {
+        const l = (projectData.levels || []).find(x => x.id === lv);
+        return l ? l.name : '?';
+    });
+    return 'Trémie : relie ' + names.join(' ↔ ');
+}
+
 function select3DElement(id, meshObj) {
     selected3DId = id;
+    updateCircuitsUI();   // le bouton de désélection de la liaison suit la sélection
     updateSelectionHighlight(meshObj);
     document.getElementById('inspector-3d').classList.remove('hidden');
     syncElementInspectors();
@@ -1509,10 +2552,12 @@ function select3DElement(id, meshObj) {
     const name = foundEl
         ? (ELEMENT_LABELS[foundEl.type] || foundEl.type)
         : foundOp ? (foundOp.type === 'door_single' ? 'Porte' : 'Fenêtre') : 'Élément';
+    const isShaftSel = !foundEl && !foundOp && (projectData.shafts || []).some(s => s.id === id);
+    const isStairSel = !foundEl && !foundOp && !isShaftSel && (projectData.stairs || []).some(s => s.id === id);
     document.getElementById('inspector-3d-element-name').textContent =
-        foundEl ? electricalDisplayName(foundEl) : name;
+        foundEl ? electricalDisplayName(foundEl) : isShaftSel ? shaftTitle(id) : isStairSel ? 'Escalier' : name;
 
-    if (foundEl && foundEl.type === 'light_ceiling') {
+    if ((foundEl && foundEl.type === 'light_ceiling') || isStairSel) {
         distanceContainer.classList.add('hidden');
         heightContainer.classList.add('hidden');
         sideToggleContainer.classList.add('hidden');
@@ -1549,6 +2594,19 @@ function select3DElement(id, meshObj) {
             heightContainer.classList.add('hidden');
         }
     }
+    // une trémie n'a ni distance, ni côté, ni hauteur à régler ici : seulement sa suppression
+    if (isShaftSel) {
+        // la trémie n'a ni distance ni côté ici ; sa hauteur, c'est le point de dérivation de ce niveau
+        const sh = (projectData.shafts || []).find(x => x.id === id);
+        distanceContainer.classList.add('hidden');
+        sideToggleContainer.classList.add('hidden');
+        heightContainer.classList.remove('hidden');
+        const h = derivHeightOf(sh, activeLevelId);
+        const hInput = document.getElementById('inspector-height-3d-input');
+        hInput.max = levelCeilingOf(activeLevelId) - DERIV_BOX_H / 2;
+        hInput.value = h;
+        document.getElementById('inspector-height-3d-val').textContent = (h / 100).toFixed(2) + ' m';
+    }
 }
 
 function toggleSelectedElementSide() {
@@ -1561,7 +2619,7 @@ function toggleSelectedElementSide() {
     saveStateToUndo();
     item.side = item.side === 1 ? -1 : 1;
     document.getElementById('inspector-side-val').textContent = item.side === 1 ? 'Côté A' : 'Côté B';
-    build3DScene();
+    refreshSelectedView();
     redraw2D();
     syncElementInspectors();
     showNotification(`${door ? 'Porte' : 'Appareillage'} basculé(e) (${item.side === 1 ? 'Côté A' : 'Côté B'})`, "success");
@@ -1573,7 +2631,10 @@ function updateSelectionHighlight(obj) {
         selectedHighlightMesh = null;
     }
     if (!obj) return;
-    selectedHighlightMesh = new THREE.BoxHelper(obj, 0xf59e0b);
+    // escalier : le cadre suit le groupe (et non la zone cliquable seule) ; matrices à jour avant calcul
+    const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
+    target.updateWorldMatrix(true, true);
+    selectedHighlightMesh = new THREE.BoxHelper(target, 0xf59e0b);
     threeScene.add(selectedHighlightMesh);
 }
 
@@ -1585,7 +2646,7 @@ function updateSelected3DDistance(val) {
     let item = projectData.electrical.find(e => e.id === selected3DId) || projectData.openings.find(o => o.id === selected3DId);
     if (item) {
         item.distanceFromStart = distCm;
-        build3DScene();
+        refreshSelectedView();
     }
 }
 
@@ -1597,13 +2658,26 @@ function updateSelected3DHeight(val) {
     let el = projectData.electrical.find(e => e.id === selected3DId);
     if (el) {
         el.height = height;
+        refreshSelectedView();
+        return;
+    }
+    // trémie sélectionnée : hauteur de son point de dérivation sur ce niveau
+    const sh = (projectData.shafts || []).find(x => x.id === selected3DId);
+    if (sh) {
+        sh.derivHeight = Object.assign({}, sh.derivHeight, { [activeLevelId]: Math.min(height, levelCeilingOf(activeLevelId) - DERIV_BOX_H / 2) });
         build3DScene();
     }
 }
 
 function deleteSelected3DElement() {
     if (!selected3DId) return;
+    const el = projectData.electrical.find(e => e.id === selected3DId);
+    const op = !el ? projectData.openings.find(o => o.id === selected3DId) : null;
+    const what = el ? electricalDisplayName(el) : op ? (op.type === 'door_single' ? 'la porte' : 'la fenêtre') : 'la trémie ou l’escalier sélectionné';
+    if (!confirmDeletion(what)) return;
     saveStateToUndo();
+    projectData.shafts = (projectData.shafts || []).filter(s => s.id !== selected3DId);
+    projectData.stairs = (projectData.stairs || []).filter(s => s.id !== selected3DId);
     projectData.openings = projectData.openings.filter(o => o.id !== selected3DId);
     projectData.electrical = projectData.electrical.filter(el => el.id !== selected3DId);
     selected3DId = null;
@@ -1620,31 +2694,130 @@ function deleteSelected3DElement() {
 
 // ---------- Surbrillances 3D des circuits et collisions ----------
 function selectCircuit(id) {
+    // Si un seul appareil était surligné (son circuit est alors coché par le clic sur l'appareil),
+    // un clic sur le circuit affiche tout le circuit ; un second clic seulement le désélectionne.
+    const pointFocus = !!selected3DId;
     if (selected3DId) {
         selected3DId = null;
         updateSelectionHighlight(null);
         syncElementInspectors();
     }
     selectedCircuitId = id && projectData.circuits.some(c => c.id === id)
-        ? (selectedCircuitId === id ? null : id)
+        ? (selectedCircuitId === id && !pointFocus ? null : id)
         : null;
     build3DScene();
     updateCircuitsUI();
+    redraw2D();   // la 2D affiche aussi le circuit surligné : sans ce redessin, elle gardait l'ancienne sélection
+}
+
+// Éléments à surligner pour un circuit : par défaut ceux du niveau affiché ; pool = éléments d'un autre niveau si besoin
+function circuitHighlightIds(selectedCircuit, pool) {
+    const shown = pool || electricalOn();
+    const byId = new Map(shown.map(el => [el.id, el]));
+    const panel = shown.find(el => el.type === 'panel');
+    // Un interrupteur appartient au circuit de la lumière qu'il commande (sinon au circuit d'éclairage par défaut)
+    const lightsOf = new Map((getCableNetwork().controlLinks || []).map(l => [l.switchId, l.lightIds || []]));
+        const switchBelongs = (sw) => {
+        // la lumière commandée peut être à un autre niveau : on la cherche dans tout le projet
+        // un interrupteur sans lumière commandée n'appartient à aucun circuit d'éclairage
+        const first = (lightsOf.get(sw.id) || []).map(id => byId.get(id) || projectData.electrical.find(e => e.id === id)).find(Boolean);
+        const c = first ? circuitOf(first) : null;
+        return !!c && c.id === selectedCircuit.id;
+    };
+    return new Set(shown
+        .filter(el => {
+            // un interrupteur suit la lumière qu'il commande, jamais le circuit d'éclairage par défaut
+            if (isLightingControl(el)) return selectedCircuit.type === 'lighting' && switchBelongs(el);
+            const assigned = circuitOf(el);
+            return (assigned && assigned.id === selectedCircuit.id) || (panel && el.id === panel.id);
+        })
+        .map(el => el.id));
+}
+
+// Mur sélectionné : cadre bleu autour du mur en 3D, pour savoir ce qui est sélectionné (comme en 2D)
+function addWallSelectionHighlights() {
+    if (!selectedWallIds.length) return;
+    if (canEditWalls()) {
+        // poignées aux extrémités du mur sélectionné : tirer une poignée étire le mur
+        const { cx, cy } = scene3DCentre();
+        selectedWallIds.forEach(id => {
+            const w = projectData.walls.find(x => x.id === id);
+            if (!w) return;
+            [[w.x1, w.y1], [w.x2, w.y2]].forEach(([px, py]) => {
+                const h = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false }));
+                h.position.set(px - cx, 6, py - cy);
+                h.renderOrder = 13;
+                threeScene.add(h);
+                wallMeshes3D.push(h);
+            });
+        });
+    }
+    clickableWalls3D.forEach(m => {
+        if (!m.userData || !selectedWallIds.includes(m.userData.id)) return;
+        m.updateWorldMatrix(true, true);
+        const helper = new THREE.BoxHelper(m, 0x38bdf8);
+        helper.material.depthTest = false;
+        helper.renderOrder = 12;
+        helper.userData.shared = false;
+        threeScene.add(helper);
+        wallMeshes3D.push(helper);
+    });
+}
+
+// Circuit sélectionné : surbrillance sur TOUS les niveaux (3D), pas seulement sur le niveau affiché.
+// Pour chaque autre niveau : boîte colorée autour de chaque appareil du circuit (à sa vraie hauteur)
+// et tronçons de câble du circuit en pleine couleur, même si les fantômes sont masqués.
+function addCircuitCrossLevelHighlights(cx, cy) {
+    if (!selectedCircuitId) return;
+    const sc = projectData.circuits.find(c => c.id === selectedCircuitId);
+    if (!sc) return;
+    const actLevel = (projectData.levels || []).find(l => l.id === activeLevelId);
+    const actElev = Number(actLevel && actLevel.elevation) || 0;
+    const col = circuitColor(sc);
+    (projectData.levels || []).filter(l => l.id !== activeLevelId).forEach(lv => {
+        const dy = (Number(lv.elevation) || 0) - actElev;
+        const pool = electricalOn(lv.id);
+        const ids = circuitHighlightIds(sc, pool);
+        pool.forEach(el => {
+            if (!ids.has(el.id)) return;
+            const mesh = createElementMesh3D(el, cx, cy);
+            if (!mesh) return;
+            mesh.position.y += dy;
+            // la boîte ne lit que la géométrie : le modèle n'est pas ajouté à la scène
+            mesh.updateWorldMatrix(true, true);
+            const helper = new THREE.BoxHelper(mesh, col);
+            helper.material.transparent = true;
+            helper.material.opacity = 0.95;
+            helper.material.depthTest = false;
+            helper.renderOrder = 10;
+            helper.userData.shared = false;
+            threeScene.add(helper);
+            wallMeshes3D.push(helper);
+        });
+        // câbles du circuit sur cet autre niveau
+        const net = ghostCableNetwork(lv.id);
+        const pts = [];
+        (net && net.segments || []).forEach(sg => {
+            if (!(sg.cids || []).includes(sc.id)) return;
+            pts.push(sg.a.x - cx, sg.a.z + dy, sg.a.y - cy, sg.b.x - cx, sg.b.z + dy, sg.b.y - cy);
+        });
+        if (pts.length) {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: new THREE.Color(col), transparent: true, opacity: 1, depthWrite: false }));
+            line.renderOrder = 6;
+            line.userData.shared = false;
+            threeScene.add(line);
+            wallMeshes3D.push(line);
+        }
+    });
 }
 
 function addCircuitElementHighlights() {
     if (!selectedCircuitId) return;
     const selectedCircuit = projectData.circuits.find(c => c.id === selectedCircuitId);
     if (!selectedCircuit) return;
-    const panel = projectData.electrical.find(el => el.type === 'panel');
-    const highlightedIds = new Set(projectData.electrical
-        .filter(el => {
-            const assigned = circuitOf(el);
-            return (assigned && assigned.id === selectedCircuitId)
-                || (selectedCircuit.type === 'lighting' && isLightingControl(el))
-                || (panel && el.id === panel.id);
-        })
-        .map(el => el.id));
+    const highlightedIds = circuitHighlightIds(selectedCircuit);
     interactiveObjects3D.forEach(obj => {
         if (!obj.userData || !highlightedIds.has(obj.userData.id)) return;
         const helper = new THREE.BoxHelper(obj, circuitColor(selectedCircuit));
@@ -1665,9 +2838,28 @@ function addCollisionHighlights() {
     if (!ids.size) return;
     interactiveObjects3D.forEach(obj => {
         if (!obj.userData || !ids.has(obj.userData.id)) return;
-        const helper = new THREE.BoxHelper(obj, 0xef4444);
+        const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
+        target.updateWorldMatrix(true, true);
+        // Remplissage rouge translucide (aussi visible de loin) + contour : les deux clignotent ensemble
+        const box = new THREE.Box3().setFromObject(target);
+        const size = box.getSize(new THREE.Vector3());
+        const centre = box.getCenter(new THREE.Vector3());
+        const pad = 8;
+        const fill = new THREE.Mesh(
+            new THREE.BoxGeometry(size.x + pad * 2, size.y + pad * 2, size.z + pad * 2),
+            new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false })
+        );
+        fill.position.copy(centre);
+        fill.renderOrder = 11;
+        fill.userData.shared = false;
+        fill.userData.blink = true;
+        fill.visible = blinkOn;
+        threeScene.add(fill);
+        wallMeshes3D.push(fill);
+
+        const helper = new THREE.BoxHelper(target, 0xef4444);
         helper.material.depthTest = false;
-        helper.renderOrder = 11;
+        helper.renderOrder = 12;
         helper.userData.shared = false;
         helper.userData.blink = true;
         helper.visible = blinkOn;
@@ -1681,7 +2873,8 @@ function addCollisionHighlights() {
 let _cableCache = { sig: null, net: null };
 function getCableNetwork() {
     ensureCircuitAssignment();
-    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits]);
+    // Le niveau affiché fait partie de la clé : changer de niveau change le réseau calculé
+    const sig = JSON.stringify([activeLevelId, projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
     if (_cableCache.sig !== sig) _cableCache = { sig, net: computeCableNetwork() };
     cableStats = _cableCache.net;
     return _cableCache.net;

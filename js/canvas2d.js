@@ -14,6 +14,7 @@ function init2DCanvas() {
 
     canvas2D.addEventListener('mousedown', on2DMouseDown);
     canvas2D.addEventListener('mousemove', on2DMouseMove);
+    canvas2D.addEventListener('mouseleave', hidePlanTooltip);
     window.addEventListener('mouseup', on2DMouseUp);
     canvas2D.addEventListener('wheel', on2DWheel);
     
@@ -52,7 +53,7 @@ function resize2DCanvas() {
 
 function recenter2DView() {
     if (!canvas2D) return;
-    if (projectData.walls.length === 0) {
+    if (wallsOn().length === 0) {
         zoom = 1.0;
         panX = 0; panY = 0;
         const o = worldToView(0, 0);
@@ -61,7 +62,7 @@ function recenter2DView() {
         return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    projectData.walls.forEach(w => {
+    wallsOn().forEach(w => {
         minX = Math.min(minX, w.x1, w.x2);
         minY = Math.min(minY, w.y1, w.y2);
         maxX = Math.max(maxX, w.x1, w.x2);
@@ -89,7 +90,7 @@ function redraw2D() {
     ctx2D.rotate(rot2D);
     ctx2D.scale(zoom, zoom);
 
-    if (gridSnap) {
+    if (gridVisible) {
         ctx2D.strokeStyle = currentTheme === 'light' ? '#cbd5e1' : '#1e293b';
         ctx2D.lineWidth = 1 / zoom;
         const gridSize = 50;
@@ -113,7 +114,7 @@ function redraw2D() {
         }
     }
 
-    projectData.walls.forEach(wall => {
+    wallsOn().forEach(wall => {
         const isSelected = !isPrintRendering && selectedWallIds.includes(wall.id);
         
         ctx2D.strokeStyle = isSelected ? (currentTheme === 'light' ? '#047857' : '#34d399') : (currentTheme === 'light' ? '#94a3b8' : '#334155');
@@ -180,7 +181,7 @@ function redraw2D() {
 
     if (!isPrintRendering && currentTool === 'select') {
         selectedWallIds.forEach(id => {
-            const wall = projectData.walls.find(w => w.id === id);
+            const wall = wallsOn().find(w => w.id === id);
             if (!wall) return;
             [ [wall.x1, wall.y1], [wall.x2, wall.y2] ].forEach(([x, y]) => {
                 ctx2D.beginPath();
@@ -245,7 +246,15 @@ function rotateView2D(rad) {
     redraw2D();
 }
 
-function setPlanRotation(deg) { rotateView2D((parseFloat(deg) || 0) * Math.PI / 180); }
+function setPlanRotation(deg) {
+    const v = parseFloat(deg) || 0;
+    rotateView2D(v * Math.PI / 180);
+    // 360 affiché tel quel (même orientation que 0°)
+    const slider = document.getElementById('rot2d-slider');
+    const label = document.getElementById('rot2d-val');
+    if (slider) slider.value = v;
+    if (label) label.textContent = v + '°';
+}
 function rotatePlan(deltaDeg) { rotateView2D(rot2D + deltaDeg * Math.PI / 180); }
 
 function on2DMouseDown(e) {
@@ -279,7 +288,7 @@ function on2DMouseDown(e) {
             let bestSnapY = snapY;
             let minSnapDist = 25 / zoom;
 
-            projectData.walls.forEach(w => {
+            wallsOn().forEach(w => {
                 const d1 = Math.hypot(w.x1 - snapX, w.y1 - snapY);
                 if (d1 < minSnapDist) {
                     minSnapDist = d1;
@@ -327,7 +336,7 @@ function on2DMouseDown(e) {
             const len = Math.hypot(endX - drawingStartPoint.x, endY - drawingStartPoint.y);
             if (len > 10) {
                 saveStateToUndo();
-                projectData.walls.push({
+                projectData.walls.push({ levelId: activeLevelId,
                     id: 'w_' + Date.now(),
                     x1: drawingStartPoint.x,
                     y1: drawingStartPoint.y,
@@ -353,26 +362,27 @@ function on2DMouseDown(e) {
             setSelectedWalls([]);
             draggingWall = null;
             selected3DId = hit.id;
-            draggingEl2D = { id: hit.id, moved: false };
+            draggingEl2D = { id: hit.id, moved: false, grab: stairGrab(hit.id, coords) };
             // comme en 3D : cliquer un point de circuit sélectionne son câblage
-            const hitEl = projectData.electrical.find(x => x.id === hit.id);
-            const hitCircuit = hitEl && isCircuitPoint(hitEl) ? circuitOf(hitEl) : null;
+            const hitEl = electricalOn().find(x => x.id === hit.id);
+            const hitCircuit = highlightCircuitOf(hitEl);
             selectedCircuitId = hitCircuit ? hitCircuit.id : null;
             syncElementInspectors();
             updateCircuitsUI();
             redraw2D();
             return;
         }
-        if (selected3DId || selectedCircuitId) {
+        if (selected3DId || selectedCircuitId || selectedDeviceIds.length || selectedOpeningIds.length) {
             selected3DId = null;
             selectedCircuitId = null;
+            if (!(e.ctrlKey || e.metaKey || e.shiftKey)) { selectedDeviceIds = []; selectedOpeningIds = []; }
             syncElementInspectors();
             updateCircuitsUI();
         }
         const additiveSelection = e.ctrlKey || e.metaKey || e.shiftKey;
         let endpointHit = null;
         let endpointDistance = 14 / zoom;
-        projectData.walls.forEach(w => {
+        wallsOn().forEach(w => {
             [['start', w.x1, w.y1], ['end', w.x2, w.y2]].forEach(([endpoint, x, y]) => {
                 const distance = Math.hypot(coords.x - x, coords.y - y);
                 if (distance < endpointDistance) {
@@ -388,14 +398,11 @@ function on2DMouseDown(e) {
                     : [...selectedWallIds, endpointHit.wall.id];
                 setSelectedWalls(nextIds);
                 draggingWall = null;
+            } else if (canEditWalls() && selectedWallIds.includes(endpointHit.wall.id)) {
+                // poignée : seulement sur un mur déjà sélectionné, en mode Modifier les murs
+                draggingWall = { wall: endpointHit.wall, mode: endpointHit.endpoint, last: coords, origin: coords, moved: false };
             } else {
                 setSelectedWalls([endpointHit.wall.id]);
-                draggingWall = {
-                    wall: endpointHit.wall,
-                    mode: endpointHit.endpoint,
-                    last: coords,
-                    moved: false
-                };
             }
             selectionBoxStart = null;
             selectionBoxEnd = null;
@@ -403,7 +410,7 @@ function on2DMouseDown(e) {
             return;
         }
         let foundId = null;
-        projectData.walls.forEach(w => {
+        wallsOn().forEach(w => {
             const dist = distToSegment(coords, {x: w.x1, y: w.y1}, {x: w.x2, y: w.y2});
             if (dist < w.thickness / 2 + 12) {
                 foundId = w.id;
@@ -418,10 +425,10 @@ function on2DMouseDown(e) {
             selectionBoxStart = null;
             selectionBoxEnd = null;
         } else {
-            const wall = projectData.walls.find(w => w.id === foundId);
+            const wall = wallsOn().find(w => w.id === foundId);
             if (wall) {
                 setSelectedWalls([wall.id]);
-                draggingWall = { wall, mode: 'move', last: coords, moved: false };
+                draggingWall = canEditWalls() ? { wall, mode: 'move', last: coords, origin: coords, moved: false } : null;
                 selectionBoxStart = null;
                 selectionBoxEnd = null;
             } else {
@@ -438,6 +445,14 @@ function on2DMouseDown(e) {
 function on2DMouseMove(e) {
     const coords = worldToCanvasCoords(e.clientX, e.clientY);
     document.getElementById('cursor-coords').textContent = `X: ${(coords.x/100).toFixed(2)}m, Y: ${(coords.y/100).toFixed(2)}m`;
+
+    // survol : étiquette de l'élément visé (hors placement, glissement et tracé)
+    if (!isPanning && !draggingEl2D && !selectionBoxStart && !draggingWall && currentTool !== 'place' && currentTool !== 'wall') {
+        const hovered = pickElement2D(coords);
+        showPlanTooltip(e.clientX, e.clientY, hovered ? hovered.id : null);
+    } else {
+        hidePlanTooltip();
+    }
 
     if (isPanning) {
         panX = e.clientX - startPanX;
@@ -459,13 +474,18 @@ function on2DMouseMove(e) {
 
     if (currentTool === 'select' && draggingWall) {
         const drag = draggingWall;
-        const dx = coords.x - drag.last.x;
-        const dy = coords.y - drag.last.y;
-        if (!drag.moved && Math.hypot(dx, dy) > 1) {
+        if (!drag.moved) {
+            // seuil : rien ne bouge avant 8 px à l'écran (évite les modifications involontaires)
+            if (Math.hypot(coords.x - drag.origin.x, coords.y - drag.origin.y) * zoom < 8) return;
             saveStateToUndo();
             drag.moved = true;
+            drag.linksBefore = shaftLinksValid();
+            drag.last = drag.origin;
         }
+        const dx = coords.x - drag.last.x;
+        const dy = coords.y - drag.last.y;
         if (drag.moved) {
+            const prevWall = { x1: drag.wall.x1, y1: drag.wall.y1, x2: drag.wall.x2, y2: drag.wall.y2 };
             if (drag.mode === 'start') {
                 if (Math.hypot(drag.wall.x2 - coords.x, drag.wall.y2 - coords.y) > 1) {
                     drag.wall.x1 = coords.x;
@@ -482,10 +502,22 @@ function on2DMouseMove(e) {
                 drag.wall.x2 += dx;
                 drag.wall.y2 += dy;
             }
+            // sécurité trémie : geste refusé s'il couperait des câbles (position précédente conservée)
+            const lostLinks = shaftLinksLostSince(drag.linksBefore);
+            if (lostLinks.length) {
+                Object.assign(drag.wall, prevWall);
+                if (!drag.refused) { drag.refused = true; showNotification(shaftRefusalMessage(lostLinks), 'error'); }
+                drag.last = coords;
+                redraw2D();
+                return;
+            }
+            drag.refused = false;
             drag.last = coords;
             const lengthM = Math.hypot(drag.wall.x2 - drag.wall.x1, drag.wall.y2 - drag.wall.y1) / 100;
             document.getElementById('inspector-length-input').value = lengthM.toFixed(2);
             document.getElementById('inspector-length-val').textContent = lengthM.toFixed(2) + ' m';
+            // longueur pendant l'étirement : visible sous le plan, comme dans l'inspecteur
+            document.getElementById('drawing-instruction-hint').textContent = (drag.mode === 'move' ? 'Mur déplacé' : 'Longueur du mur : ' + lengthM.toFixed(2).replace('.', ',') + ' m') + ' (Ctrl+Z pour annuler)';
             redraw2D();
         }
         return;
@@ -538,24 +570,40 @@ function on2DMouseUp(e) {
             return true;
         };
         const matched = Math.hypot(end.x - start.x, end.y - start.y) > 4 / zoom
-            ? projectData.walls.filter(w => {
+            ? wallsOn().filter(w => {
                 const a = { x: w.x1, y: w.y1 }, b = { x: w.x2, y: w.y2 };
                 return isEnclosing
                     ? inRect(a) && inRect(b)
                     : segmentIntersectsRect(a, b);
             }).map(w => w.id)
             : null;
-        if (matched) {
-            const ids = e.ctrlKey || e.metaKey || e.shiftKey
-                ? [...new Set([...selectedWallIds, ...matched])]
-                : matched;
-            setSelectedWalls(ids);
-        } else if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        // C2 : le rectangle prend aussi les appareils et les ouvertures (suppression groupée)
+        const addMode = e.ctrlKey || e.metaKey || e.shiftKey;
+        const rectBig = Math.hypot(end.x - start.x, end.y - start.y) > 4 / zoom;
+        const devMatch = rectBig ? electricalOn().filter(el => inRect(getElCoords(el))).map(el => el.id) : [];
+        const opMatch = rectBig ? openingsOn().filter(op => {
+            const w = wallsOn().find(x => x.id === op.wallId);
+            if (!w) return false;
+            const b = openingBox(op, w);
+            const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) || 1;
+            const t = b.d / len;
+            return inRect({ x: w.x1 + t * (w.x2 - w.x1), y: w.y1 + t * (w.y2 - w.y1) });
+        }).map(op => op.id) : [];
+        if (matched || devMatch.length || opMatch.length) {
+            setSelectedWalls(addMode ? [...new Set([...selectedWallIds, ...(matched || [])])] : (matched || []));
+            selectedDeviceIds = addMode ? [...new Set([...selectedDeviceIds, ...devMatch])] : devMatch;
+            selectedOpeningIds = addMode ? [...new Set([...selectedOpeningIds, ...opMatch])] : opMatch;
+            selected3DId = null;
+            syncElementInspectors();
+        } else if (!addMode) {
             setSelectedWalls([]);
+            selectedDeviceIds = [];
+            selectedOpeningIds = [];
         }
         selectionBoxStart = null;
         selectionBoxEnd = null;
     }
+    if (draggingWall && draggingWall.moved) showUndoBar(wallMoveMessage(draggingWall.linksBefore, draggingWall.mode === 'move' ? 'déplacé' : 'étiré'));
     if (draggingWall) draggingWall = null;
     if (draggingEl2D) draggingEl2D = null;
     redraw2D();
@@ -583,13 +631,9 @@ function resetZoomPan() {
 
 // ---------- Appareils, ouvertures, câbles ----------
 function toggleCables2D() {
-    showCables2D = !showCables2D;
-    const btn = document.getElementById('btn-cables-2d');
-    if (btn) {
-        btn.className = showCables2D ? "p-2.5 rounded-lg border border-emerald-500 bg-emerald-500/20 text-emerald-300 font-medium flex items-center justify-center gap-1.5 transition" : "p-2.5 rounded-lg border border-slate-800 bg-slate-800 text-slate-400 font-medium flex items-center justify-center gap-1.5 transition";
-        btn.innerHTML = '<i class="fa-solid fa-bezier-curve"></i> Câbles : ' + (showCables2D ? 'ON' : 'OFF');
-    }
-    redraw2D();
+    showCables2D = !showCables2D;   // réglage commun 2D et 3D
+    paintAideBtn(document.getElementById('btn-cables-2d'), 'fa-bezier-curve', 'Câbles', showCables2D);
+    refreshSelectedView();
 }
 
 function openingPos2D(op) {
@@ -601,6 +645,24 @@ function openingPos2D(op) {
     d = Math.max(10, Math.min(len - 10, d));
     const t = d / len;
     return { x: w.x1 + t * dx, y: w.y1 + t * dy, angle: Math.atan2(dy, dx), th: w.thickness || 10 };
+}
+
+// Trémie : son centre est décalé côté pièce choisi à la pose (la face de la trémie touche le mur, le mur n'est pas percé)
+function shaftPos2D(sh, dist) {
+    const p = openingPos2D({ wallId: sh.wallId, distanceFromStart: dist !== undefined ? dist : sh.distanceFromStart });
+    if (!p) return null;
+    const off = p.th / 2 + (sh.size || 40) / 2;
+    const side = sh.side === -1 ? -1 : 1;
+    return { x: p.x + Math.sin(p.angle) * side * off, y: p.y - Math.cos(p.angle) * side * off, angle: p.angle, th: p.th };
+}
+
+// Point de dérivation d'une trémie pour un niveau : collé à la face du mur, côté pièce (boîte de 10 cm d'épaisseur)
+function derivFacePos2D(sh, dist) {
+    const wp = openingPos2D({ wallId: sh.wallId, distanceFromStart: dist });
+    if (!wp) return null;
+    const side = sh.side === -1 ? -1 : 1;
+    const off = wp.th / 2 + 5;
+    return { x: wp.x + Math.sin(wp.angle) * side * off, y: wp.y - Math.cos(wp.angle) * side * off, angle: wp.angle };
 }
 
 // Angle de la face avant d'un appareil mural (direction opposée au mur) dans le repère du plan
@@ -638,7 +700,7 @@ function drawElementSymbol2D(el) {
     ctx2D.lineCap = 'round';
 
     if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_32a') {
-        const r = t === 'outlet_32a' ? 9.5 : 8;
+        const r = t === 'outlet_32a' ? 9.5 : 4.5;   // prise simple : demi-disque à l'échelle du module
         line(-1, -r - 1.5, -1, r + 1.5, 2.2);                      // trait de mur
         ctx2D.beginPath();                                          // demi-disque
         ctx2D.arc(-1, 0, r, -Math.PI / 2, Math.PI / 2);
@@ -720,6 +782,18 @@ function drawElementSymbol2D(el) {
         line(-6.5, -6.5, 6.5, 6.5, 1.5, ink);
         line(-6.5, 6.5, 6.5, -6.5, 1.5, ink);
         ringX = 0; ringR = 13.5;
+    } else if (t === 'junction_box') {
+        // boîte de dérivation posée : petit carré clair, croix de fermeture
+        ctx2D.beginPath();
+        ctx2D.rect(-6, -6, 12, 12);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        line(-4, 0, 4, 0, 1.2, ink);
+        line(0, -4, 0, 4, 1.2, ink);
+        ringX = 0; ringR = 9;
     } else if (t === 'panel') {
         ctx2D.beginPath();
         ctx2D.rect(-1, -18, 11, 36);
@@ -748,7 +822,7 @@ function drawElementSymbol2D(el) {
         ctx2D.stroke();
         ctx2D.globalAlpha = 1;
     }
-    if (!isPrintRendering && el.id === selected3DId) {
+    if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
         ctx2D.beginPath();
         if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
         else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + 4, 0, Math.PI * 2);
@@ -781,11 +855,11 @@ function drawWallLengthLabels() {
     ctx2D.textBaseline = 'middle';
     const hh = 7;
     const obstacles = [];
-    projectData.electrical.forEach(el => {
+    electricalOn().forEach(el => {
         const p = getElCoords(el);
         obstacles.push({ x: p.x, y: p.y, r: el.type === 'panel' ? 24 : 18 });
     });
-    projectData.openings.forEach(op => {
+    openingsOn().forEach(op => {
         const p = openingPos2D(op);
         if (p) obstacles.push({ x: p.x, y: p.y, r: op.type === 'door_single' ? 50 : 62 });
     });
@@ -807,7 +881,7 @@ function drawWallLengthLabels() {
     };
     const bg = currentTheme === 'light' ? '#ffffff' : '#020617';
 
-    projectData.walls.forEach(wall => {
+    wallsOn().forEach(wall => {
         const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
         const len = Math.hypot(dx, dy);
         if (len < 1) return;
@@ -825,7 +899,7 @@ function drawWallLengthLabels() {
                 const cx = mx + nx * side * d, cy = my + ny * side * d;
                 let score = 0;
                 obstacles.forEach(o => { if (rectHitsCircle(cx, cy, hw, o)) score += 3; });
-                projectData.walls.forEach(w => { if (rectHitsWall(cx, cy, hw, w)) score += 3; });
+                wallsOn().forEach(w => { if (rectHitsWall(cx, cy, hw, w)) score += 3; });
                 placed.forEach(r => { if (Math.abs(r.x - cx) < r.hw + hw && Math.abs(r.y - cy) < hh * 2) score += 3; });
                 score += Math.abs(t - 0.5) * 0.1;
                 if (score < bestScore) { bestScore = score; best = { x: cx, y: cy }; }
@@ -907,7 +981,7 @@ function draw2DEquipment() {
     }
 
     // 2. Ouvertures
-    projectData.openings.forEach(op => {
+    openingsOn().forEach(op => {
         const p = openingPos2D(op);
         if (!p) return;
         const isDoor = op.type === 'door_single';
@@ -918,7 +992,7 @@ function draw2DEquipment() {
         ctx2D.rotate(p.angle);
         ctx2D.fillStyle = '#020617';
         ctx2D.fillRect(-w / 2, -p.th / 2 - 1, w, p.th + 2);
-        ctx2D.strokeStyle = op.id === selected3DId ? '#f59e0b' : (isDoor ? '#38bdf8' : '#22d3ee');
+        ctx2D.strokeStyle = (op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? '#f59e0b' : (isDoor ? '#38bdf8' : '#22d3ee');
         ctx2D.lineWidth = 2;
         ctx2D.beginPath();
         if (isDoor) {
@@ -942,11 +1016,60 @@ function draw2DEquipment() {
         ctx2D.restore();
     });
 
+    // 2 bis. Trémies (D5) : carré en pointillés, aligné sur le mur
+    shaftsOn().forEach(sh => {
+        const p = shaftPos2D(sh);
+        if (!p) return;
+        const s = sh.size || 40, hot = sh.id === selected3DId;
+        ctx2D.save();
+        ctx2D.translate(p.x, p.y);
+        ctx2D.rotate(p.angle);
+        // toujours visible en fort (comme à la sélection) ; sélectionnée : liseré blanc extérieur
+        ctx2D.fillStyle = 'rgba(251,191,36,0.30)';
+        ctx2D.strokeStyle = '#f59e0b';
+        ctx2D.lineWidth = 3 / zoom;
+        ctx2D.fillRect(-s / 2, -s / 2, s, s);
+        ctx2D.strokeRect(-s / 2, -s / 2, s, s);
+        if (hot) {
+            ctx2D.strokeStyle = currentTheme === 'light' ? '#78350f' : '#fef3c7';
+            ctx2D.lineWidth = 2 / zoom;
+            ctx2D.strokeRect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom);
+        }
+        // chevauchement avec une ouverture ou un appareil : contour rouge clignotant, comme les appareils
+        if (!isPrintRendering && blinkOn && collidingElementIds().has(sh.id)) {
+            ctx2D.strokeStyle = '#ef4444';
+            ctx2D.lineWidth = 3 / zoom;
+            ctx2D.strokeRect(-s / 2 - 10 / zoom, -s / 2 - 10 / zoom, s + 20 / zoom, s + 20 / zoom);
+        }
+        ctx2D.restore();
+        // point de dérivation : là où ce niveau prend ses circuits dans la gaine
+        ctx2D.save();
+        const dq = derivFacePos2D(sh, derivDistOf(sh, activeLevelId)) || p;
+        ctx2D.beginPath();
+        ctx2D.arc(dq.x, dq.y, 5 / zoom, 0, Math.PI * 2);
+        ctx2D.fillStyle = '#fbbf24';
+        ctx2D.strokeStyle = '#78350f';
+        ctx2D.lineWidth = 1.5 / zoom;
+        ctx2D.fill();
+        ctx2D.stroke();
+        ctx2D.fillStyle = '#fbbf24';
+        ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
+        ctx2D.textAlign = 'center';
+        ctx2D.fillText(shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - 6 / zoom);
+        ctx2D.restore();
+    });
+
+    // 2 ter. Escaliers : emprise au sol, marches tracées, flèche vers la marche haute
+    if (stairsOn().length) {
+        const stairColliding = collidingElementIds();
+        stairsOn().forEach(st => drawStair2D(st, stairColliding));
+    }
+
     // 3. Appareils électriques (symboles de plan)
-    projectData.electrical.forEach(el => drawElementSymbol2D(el));
+    electricalOn().forEach(el => drawElementSymbol2D(el));
     if (!isPrintRendering && blinkOn) {
         const colliding = collidingElementIds();
-        projectData.electrical.forEach(el => {
+        electricalOn().forEach(el => {
             if (!colliding.has(el.id)) return;
             const p = getElCoords(el);
             ctx2D.beginPath();
@@ -962,25 +1085,90 @@ function draw2DEquipment() {
     ctx2D.textBaseline = 'alphabetic';
 }
 
+// Escalier saisi au clic : décalage entre le curseur et le centre, pour glisser sans saut
+function stairGrab(id, coords) {
+    const st = (projectData.stairs || []).find(s => s.id === id);
+    return st ? { x: coords.x - st.x, y: coords.y - st.y } : null;
+}
+
+// Escalier en 2D : emprise orientée, traits de marches, flèche vers la marche haute, nom des niveaux reliés
+function drawStair2D(st, colliding) {
+    const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId;
+    ctx2D.save();
+    ctx2D.translate(st.x, st.y);
+    ctx2D.rotate((st.angleDeg || 0) * Math.PI / 180);
+    ctx2D.fillStyle = 'rgba(167,139,250,0.28)';
+    ctx2D.strokeStyle = '#8b5cf6';
+    ctx2D.lineWidth = 2.5 / zoom;
+    ctx2D.fillRect(-L / 2, -W / 2, L, W);
+    ctx2D.strokeRect(-L / 2, -W / 2, L, W);
+    ctx2D.beginPath();
+    for (let i = 1; i < n; i++) {
+        const x = -L / 2 + i * L / n;
+        ctx2D.moveTo(x, -W / 2);
+        ctx2D.lineTo(x, W / 2);
+    }
+    ctx2D.lineWidth = 1 / zoom;
+    ctx2D.stroke();
+    // flèche : montée vers la marche haute (sens +x de l'emprise)
+    const tip = L * 0.42, head = 9 / zoom;
+    ctx2D.beginPath();
+    ctx2D.moveTo(-tip, 0); ctx2D.lineTo(tip, 0);
+    ctx2D.moveTo(tip, 0); ctx2D.lineTo(tip - head, -head * 0.6);
+    ctx2D.moveTo(tip, 0); ctx2D.lineTo(tip - head, head * 0.6);
+    ctx2D.strokeStyle = '#c4b5fd';
+    ctx2D.lineWidth = 2 / zoom;
+    ctx2D.stroke();
+    if (hot) {
+        ctx2D.strokeStyle = currentTheme === 'light' ? '#4c1d95' : '#ede9fe';
+        ctx2D.lineWidth = 2 / zoom;
+        ctx2D.strokeRect(-L / 2 - 6 / zoom, -W / 2 - 6 / zoom, L + 12 / zoom, W + 12 / zoom);
+    }
+    if (!isPrintRendering && blinkOn && colliding.has(st.id)) {
+        ctx2D.strokeStyle = '#ef4444';
+        ctx2D.lineWidth = 3 / zoom;
+        ctx2D.strokeRect(-L / 2 - 10 / zoom, -W / 2 - 10 / zoom, L + 20 / zoom, W + 20 / zoom);
+    }
+    ctx2D.restore();
+    ctx2D.save();
+    ctx2D.fillStyle = '#c4b5fd';
+    ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
+    ctx2D.textAlign = 'center';
+    ctx2D.fillText(stairLevelNames(st).join(' ↔ '), st.x, st.y - Math.max(L, W) / 2 - 6 / zoom);
+    ctx2D.restore();
+}
+
 function pickElement2D(coords) {
     let best = null, bd = Infinity;
-    projectData.electrical.forEach(el => {
+    electricalOn().forEach(el => {
         const c = getElCoords(el);
         const d = Math.hypot(c.x - coords.x, c.y - coords.y);
         if (d < (el.type === 'panel' ? 20 : 14) && d < bd) { bd = d; best = { id: el.id }; }
     });
-    projectData.openings.forEach(op => {
+    openingsOn().forEach(op => {
         const p = openingPos2D(op);
         if (!p) return;
         const d = Math.hypot(p.x - coords.x, p.y - coords.y);
         if (d < 40 && d < bd) { bd = d; best = { id: op.id }; }
+    });
+    // Trémies (D5) : cliquables dans leur carré
+    shaftsOn().forEach(sh => {
+        const p = shaftPos2D(sh);
+        if (!p) return;
+        const d = Math.hypot(p.x - coords.x, p.y - coords.y);
+        if (d < (sh.size || 40) / 2 + 6 && d < bd) { bd = d; best = { id: sh.id }; }
+    });
+    if (!best) stairsOn().forEach(st => {
+        const R = stairRect(st);
+        const dx = coords.x - R.cx, dy = coords.y - R.cy;
+        if (!best && Math.abs(dx * R.ux + dy * R.uy) <= R.hl + 6 && Math.abs(dx * R.vx + dy * R.vy) <= R.hw + 6) best = { id: st.id };
     });
     return best;
 }
 
 function nearestWallInfo(coords) {
     let best = null;
-    projectData.walls.forEach(w => {
+    wallsOn().forEach(w => {
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
         if (len < 1) return;
         const ux = dx / len, uy = dy / len;
@@ -995,24 +1183,49 @@ function nearestWallInfo(coords) {
 }
 
 function defaultHeightFor(type) {
-    if (type === 'panel') return 150;
+    if (type === 'panel' || type === 'junction_box') return 150;
     if (type === 'wall_light') return 180;
     if (type === 'outlet_32a') return 20;
     if (type.startsWith('outlet')) return 30;
     return 110;
 }
 
+// Trémie : niveau relié choisi dans la liste de la barre de droite (le plus proche par défaut).
+function askShaftLevels() {
+    const others = otherLevelsByDistance();
+    if (!others.length) return [activeLevelId];
+    const linkSel = document.getElementById(currentMode === '3d' ? 'shaft-link-level-3d' : 'shaft-link-level');
+    const chosen = linkSel && others.some(l => l.id === linkSel.value) ? linkSel.value : others[0].id;
+    return [activeLevelId, chosen];
+}
+
 function place2DAt(coords) {
     const type = document.getElementById('place-type').value;
     const uid = Date.now() + '_' + Math.floor(Math.random() * 1000);
+    if (type === 'stair') {
+        const links = askShaftLevels();
+        if (!links) return;
+        saveStateToUndo();
+        if (!projectData.stairs) projectData.stairs = [];
+        projectData.stairs.push({ id: 'st_' + uid, levelId: activeLevelId, levelIds: links, x: Math.round(coords.x), y: Math.round(coords.y), angleDeg: 0, width: 90, length: 300 });
+        snapStairToWalls(projectData.stairs[projectData.stairs.length - 1]);
+        redraw2D();
+        showNotification('Escalier posé', 'success');
+        return;
+    }
     if (type === 'light_ceiling') {
         saveStateToUndo();
-        projectData.electrical.push({ id: 'el_' + uid, type, x: coords.x, y: 245, z: coords.y });
+        projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, x: coords.x, y: 245, z: coords.y });
     } else {
         const info = nearestWallInfo(coords);
         if (!info || info.d > (info.wall.thickness || 10) / 2 + 60) {
             showNotification("Cliquez près d'un mur pour placer cet élément", 'error');
             return;
+        }
+        let shaftLinks = null;
+        if (type === 'shaft') {
+            shaftLinks = askShaftLevels();
+            if (!shaftLinks) return;
         }
         saveStateToUndo();
         if (type === 'door_single' || type === 'window_std') {
@@ -1022,20 +1235,40 @@ function place2DAt(coords) {
                 opening.hingeSide = doorHingeForPlacement();
                 opening.side = info.side;
             }
-            projectData.openings.push(opening);
+            projectData.openings.push(Object.assign(opening, { levelId: activeLevelId }));
+        } else if (type === 'shaft') {
+            projectData.shafts.push({ id: 'sh_' + uid, levelId: activeLevelId, levelIds: shaftLinks, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), side: info.side, size: 40 });
         } else {
-            projectData.electrical.push({ id: 'el_' + uid, type, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: defaultHeightFor(type), side: info.side });
+            const height = defaultHeightFor(type);
+        projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, wallId: info.wall.id, distanceFromStart: snapOutletDistance(type, info.wall.id, Math.round(info.dist), info.side, height, null), height, side: info.side });
         }
     }
     redraw2D();
-    showNotification('Élément placé', 'success');
+    const lastShaft = type === 'shaft' ? projectData.shafts[projectData.shafts.length - 1] : null;
+    if (lastShaft) {
+        const other = projectData.levels.find(l => l.id === (lastShaft.levelIds || []).find(id => id !== activeLevelId));
+        showNotification(other ? 'Trémie reliée à : ' + other.name : 'Trémie placée (un seul niveau)', 'success');
+    } else {
+        showNotification('Élément placé', 'success');
+    }
 }
 
 function dragElement2D(coords) {
     if (!draggingEl2D) return;
     const el = projectData.electrical.find(e => e.id === draggingEl2D.id);
     const op = !el ? projectData.openings.find(o => o.id === draggingEl2D.id) : null;
-    const item = el || op;
+    const sh = !el && !op ? (projectData.shafts || []).find(s => s.id === draggingEl2D.id) : null;
+    const st = !el && !op && !sh ? (projectData.stairs || []).find(s => s.id === draggingEl2D.id) : null;
+    if (st) {
+        if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
+        const prevSt = { x: st.x, y: st.y };
+        st.x = Math.round(coords.x - (draggingEl2D.grab ? draggingEl2D.grab.x : 0));
+        st.y = Math.round(coords.y - (draggingEl2D.grab ? draggingEl2D.grab.y : 0));
+        snapStairToWalls(st, prevSt);
+        redraw2D();
+        return;
+    }
+    const item = el || op || sh;
     if (!item) return;
     if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
     if (el && el.type === 'light_ceiling') {
@@ -1045,8 +1278,8 @@ function dragElement2D(coords) {
         const info = nearestWallInfo(coords);
         if (!info) return;
         item.wallId = info.wall.id;
-        item.distanceFromStart = Math.round(info.dist);
-        if (el || (op && op.type === 'door_single')) item.side = info.side;
+        item.distanceFromStart = el ? snapOutletDistance(el.type, info.wall.id, Math.round(info.dist), info.side, el.height || defaultHeightFor(el.type), el.id) : Math.round(info.dist);
+        if (el || sh || (op && op.type === 'door_single')) item.side = info.side;
     }
     redraw2D();
 }
