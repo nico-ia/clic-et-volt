@@ -1243,11 +1243,7 @@ const AUTO_ASSIGN = { map: new Map(), sig: null };
 
 function ensureCircuitAssignment() {
     const circuits = projectData.circuits;
-    // une suite automatique suit le calibre et la section de son circuit d'origine ; sa capacité lui est propre
-    circuits.forEach(c => {
-        const base = c.auto && circuits.find(b => b.id === c.baseId);
-        if (base) { c.breakerRating = base.breakerRating; c.wireSection = base.wireSection; }
-    });
+    // chaque suite automatique garde son propre calibre, sa section et sa capacité (aucune recopie depuis le circuit d'origine)
     const pts = projectData.electrical.filter(isCircuitPoint);
     const sigOf = () => JSON.stringify([
         circuits.map(c => [c.id, c.name, c.maxPoints, c.breakerRating, c.wireSection, c.baseId || 0, c.wiringMode || 'chain']),
