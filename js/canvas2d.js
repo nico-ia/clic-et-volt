@@ -77,13 +77,21 @@ function recenter2DView() {
     panY = canvas2D.height / 2 - c.y;
 }
 
+// Résolution de l'image d'impression / PNG : plus de pixels que l'écran pour rester nets sur papier
+const PRINT_RENDER_SCALE = 3;
+
 function redraw2D() {
     if (!ctx2D || !canvas2D) return;
+    if (typeof refreshToolHint === 'function') refreshToolHint();   // le mode affiché suit l'action en cours
+    ctx2D.setTransform(1, 0, 0, 1, 0, 0);
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
     if (isPrintRendering) {
         ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
         ctx2D.fillRect(0, 0, canvas2D.width, canvas2D.height);
     }
+    // rendu d'impression : les pixels sont multipliés, les coordonnées restent celles de l'écran
+    const k = isPrintRendering ? PRINT_RENDER_SCALE : 1;
+    ctx2D.setTransform(k, 0, 0, k, 0, 0);
 
     ctx2D.save();
     ctx2D.translate(panX, panY);
@@ -142,6 +150,9 @@ function redraw2D() {
     });
 
     draw2DEquipment();
+
+    // fantôme de pose : l'élément qu'on va poser, translucide, sous le curseur
+    if (!isPrintRendering && currentTool === 'place' && placeGhost2D) drawPlaceGhost2D(placeGhost2D);
 
     if (!isPrintRendering && wallSnap && (draggingWall || drawingStartPoint)) {
         const sn = wallSnap;
@@ -478,9 +489,76 @@ function on2DMouseDown(e) {
     redraw2D();
 }
 
+// ---------- Fantôme de pose (2D) ----------
+// Montre l'élément qui serait posé à la position du curseur, sans le créer.
+// Rouge : il y en a déjà un identique à cet endroit (la pose serait refusée).
+let placeGhost2D = null;
+
+function updatePlaceGhost2D(coords) {
+    const type = document.getElementById('place-type').value;
+    let ghost = null;
+    if (type === 'light_ceiling') {
+        ghost = { id: '__ghost', levelId: activeLevelId, type, x: coords.x, y: 245, z: coords.y };
+        ghost.blocked = !!ceilingSpotBlocker(coords.x, coords.y, activeLevelId);
+    } else if (type !== 'stair') {
+        const info = nearestWallInfo(coords);
+        if (info && info.d <= (info.wall.thickness || 10) / 2 + 60) {
+            const dist = Math.round(info.dist);
+            ghost = { id: '__ghost', levelId: activeLevelId, type, wallId: info.wall.id, distanceFromStart: dist, height: defaultHeightFor(type), side: info.side };
+            if (type === 'shaft') { ghost.size = 40; ghost.levelIds = [activeLevelId]; }
+            if (type === 'door_single' || type === 'window_std') {
+                ghost.width = type === 'door_single' ? 96 : 120;
+                ghost.hingeSide = type === 'door_single' ? doorHingeForPlacement() : undefined;
+                if (type === 'window_std') ghost.sillHeight = 90;
+            }
+            ghost.blocked = !!sameSpotBlocker(type, activeLevelId, info.wall.id, dist);
+        }
+    }
+    placeGhost2D = ghost;
+}
+
+function drawShaftGhost2D(g, color, blocked) {
+    const p = shaftPos2D(g);
+    if (!p) return;
+    const s = g.size || 40;
+    ctx2D.save();
+    ctx2D.globalAlpha = 0.7;
+    ctx2D.translate(p.x, p.y);
+    ctx2D.rotate(p.angle);
+    ctx2D.fillStyle = blocked ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)';
+    ctx2D.strokeStyle = color;
+    ctx2D.lineWidth = 3 / zoom;
+    ctx2D.fillRect(-s / 2, -s / 2, s, s);
+    ctx2D.strokeRect(-s / 2, -s / 2, s, s);
+    ctx2D.restore();
+}
+
+function drawPlaceGhost2D(g) {
+    const color = g.blocked ? '#ef4444' : '#38bdf8';
+    if (g.type === 'door_single' || g.type === 'window_std') { drawOpening2D(g, color); return; }
+    if (g.type === 'shaft') { drawShaftGhost2D(g, color, g.blocked); return; }
+    const p = getElCoords(g);
+    if (!p) return;
+    if (EL_COLORS[g.type]) {
+        ctx2D.save();
+        ctx2D.globalAlpha = 0.7;
+        drawElementSymbol2D(g);
+        ctx2D.restore();
+    }
+    ctx2D.save();
+    ctx2D.strokeStyle = g.blocked ? '#ef4444' : '#38bdf8';
+    ctx2D.lineWidth = 2 / zoom;
+    ctx2D.setLineDash([4 / zoom, 3 / zoom]);
+    ctx2D.beginPath();
+    ctx2D.arc(p.x, p.y, 12 / zoom, 0, Math.PI * 2);
+    ctx2D.stroke();
+    ctx2D.restore();
+}
+
 function on2DMouseMove(e) {
     const coords = worldToCanvasCoords(e.clientX, e.clientY);
     document.getElementById('cursor-coords').textContent = `X: ${(coords.x/100).toFixed(2)}m, Y: ${(coords.y/100).toFixed(2)}m`;
+    if (currentTool === 'place' && !isPanning) { updatePlaceGhost2D(coords); redraw2D(); }
 
     // survol : étiquette de l'élément visé (hors placement, glissement et tracé)
     if (!isPanning && !draggingEl2D && !selectionBoxStart && !draggingWall && currentTool !== 'place' && currentTool !== 'wall') {
@@ -989,15 +1067,22 @@ function drawElementSymbol2D(el) {
     }
     // élément sélectionné depuis son circuit : repère qui clignote (visible un temps sur deux)
     const blinkSel = el.id === selected3DId && !!circ && circ.id === selectedCircuitId;
-    if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id)) && (!blinkSel || blinkOn)) {
-        ctx2D.beginPath();
-        if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
-        else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + 4, 0, Math.PI * 2);
-        ctx2D.lineWidth = 2;
-        ctx2D.strokeStyle = currentTheme === 'light' || isPrintRendering ? '#047857' : '#ffffff';
-        ctx2D.setLineDash([4, 3]);
-        ctx2D.stroke();
-        ctx2D.setLineDash([]);
+    if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
+        const ringPath = () => {
+            if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
+            else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + (blinkSel ? 6 : 4), 0, Math.PI * 2);
+        };
+        if (blinkSel) {
+            blinkHalo2D(ringPath, 1.6);
+        } else {
+            ctx2D.beginPath();
+            ringPath();
+            ctx2D.lineWidth = 2;
+            ctx2D.strokeStyle = currentTheme === 'light' || isPrintRendering ? '#047857' : '#ffffff';
+            ctx2D.setLineDash([4, 3]);
+            ctx2D.stroke();
+            ctx2D.setLineDash([]);
+        }
     }
     ctx2D.restore();
 
@@ -1090,6 +1175,55 @@ function drawWallLengthLabels() {
 // Tailles des groupes de prises (double, triple…), calculées une fois par dessin du plan
 let _gangSizes2D = null;
 
+// Halo clignotant, quelle que soit la couleur du circuit ou du fond : deux traits (sombre et clair) qui
+// s'inversent à chaque phase. Le tracé est fourni par draw() et repris pour chaque trait.
+function blinkHalo2D(draw, w) {
+    const outer = blinkOn ? '#0f172a' : '#ffffff';
+    const inner = blinkOn ? '#ffffff' : '#0f172a';
+    ctx2D.beginPath(); draw(); ctx2D.lineWidth = w * 2; ctx2D.strokeStyle = outer; ctx2D.stroke();
+    ctx2D.beginPath(); draw(); ctx2D.lineWidth = w; ctx2D.strokeStyle = inner; ctx2D.stroke();
+}
+
+// Dessin d'une porte ou d'une fenêtre sur le mur. ghostColor : fantôme de pose (translucide, couleur donnée)
+function drawOpening2D(op, ghostColor) {
+        const p = openingPos2D(op);
+        if (!p) return;
+        const isDoor = op.type === 'door_single';
+        const opWall = projectData.walls.find(x => x.id === op.wallId);
+        const w = opWall ? openingBox(op, opWall).half * 2 : (isDoor ? 96 : 120);
+        ctx2D.save();
+        if (ghostColor) ctx2D.globalAlpha = 0.7;
+        ctx2D.translate(p.x, p.y);
+        ctx2D.rotate(p.angle);
+        ctx2D.fillStyle = '#020617';
+        ctx2D.fillRect(-w / 2, -p.th / 2 - 1, w, p.th + 2);
+        ctx2D.strokeStyle = ghostColor || ((op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? '#f59e0b' : (isDoor ? '#38bdf8' : '#22d3ee'));
+        ctx2D.lineWidth = 2;
+        ctx2D.beginPath();
+        if (isDoor) {
+            const hx = doorHingeSign(op);
+            const hingeX = hx * w / 2;
+            const swing = op.side === -1 ? 1 : -1;
+            const start = hx > 0 ? Math.PI : 0;
+            const end = hx > 0
+                ? (swing > 0 ? Math.PI / 2 : 3 * Math.PI / 2)
+                : (swing > 0 ? Math.PI / 2 : -Math.PI / 2);
+            const anticlockwise = hx > 0 ? swing > 0 : swing < 0;
+            ctx2D.moveTo(hingeX, p.th / 2);
+            ctx2D.lineTo(hingeX + (hx > 0 ? -1 : 1) * w * Math.cos(end), p.th / 2 + w * Math.sin(end));
+            ctx2D.arc(hingeX, p.th / 2, w, start, end, anticlockwise);
+        } else {
+            ctx2D.rect(-w / 2, -p.th / 2 + 3, w, p.th - 6);
+            ctx2D.moveTo(-w / 2, 0);
+            ctx2D.lineTo(w / 2, 0);
+        }
+        ctx2D.stroke();
+        if (!ghostColor && !isPrintRendering && (op.id === selected3DId || selectedOpeningIds.includes(op.id))) {
+            blinkHalo2D(() => ctx2D.rect(-w / 2 - 6 / zoom, -p.th / 2 - 6 / zoom, w + 12 / zoom, p.th + 12 / zoom), 1.5 / zoom);
+        }
+        ctx2D.restore();
+}
+
 function draw2DEquipment() {
     _gangSizes2D = computeOutletGangs().sizeOf;
     ensureCircuitAssignment();
@@ -1152,40 +1286,7 @@ function draw2DEquipment() {
     }
 
     // 2. Ouvertures
-    openingsOn().forEach(op => {
-        const p = openingPos2D(op);
-        if (!p) return;
-        const isDoor = op.type === 'door_single';
-        const opWall = projectData.walls.find(x => x.id === op.wallId);
-        const w = opWall ? openingBox(op, opWall).half * 2 : (isDoor ? 96 : 120);
-        ctx2D.save();
-        ctx2D.translate(p.x, p.y);
-        ctx2D.rotate(p.angle);
-        ctx2D.fillStyle = '#020617';
-        ctx2D.fillRect(-w / 2, -p.th / 2 - 1, w, p.th + 2);
-        ctx2D.strokeStyle = (op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? '#f59e0b' : (isDoor ? '#38bdf8' : '#22d3ee');
-        ctx2D.lineWidth = 2;
-        ctx2D.beginPath();
-        if (isDoor) {
-            const hx = doorHingeSign(op);
-            const hingeX = hx * w / 2;
-            const swing = op.side === -1 ? 1 : -1;
-            const start = hx > 0 ? Math.PI : 0;
-            const end = hx > 0
-                ? (swing > 0 ? Math.PI / 2 : 3 * Math.PI / 2)
-                : (swing > 0 ? Math.PI / 2 : -Math.PI / 2);
-            const anticlockwise = hx > 0 ? swing > 0 : swing < 0;
-            ctx2D.moveTo(hingeX, p.th / 2);
-            ctx2D.lineTo(hingeX + (hx > 0 ? -1 : 1) * w * Math.cos(end), p.th / 2 + w * Math.sin(end));
-            ctx2D.arc(hingeX, p.th / 2, w, start, end, anticlockwise);
-        } else {
-            ctx2D.rect(-w / 2, -p.th / 2 + 3, w, p.th - 6);
-            ctx2D.moveTo(-w / 2, 0);
-            ctx2D.lineTo(w / 2, 0);
-        }
-        ctx2D.stroke();
-        ctx2D.restore();
-    });
+    openingsOn().forEach(op => drawOpening2D(op));
 
     // 2 bis. Trémies (D5) : carré en pointillés, aligné sur le mur
     shaftsOn().forEach(sh => {
@@ -1201,11 +1302,7 @@ function draw2DEquipment() {
         ctx2D.lineWidth = 3 / zoom;
         ctx2D.fillRect(-s / 2, -s / 2, s, s);
         ctx2D.strokeRect(-s / 2, -s / 2, s, s);
-        if (hot) {
-            ctx2D.strokeStyle = currentTheme === 'light' ? '#78350f' : '#fef3c7';
-            ctx2D.lineWidth = 2 / zoom;
-            ctx2D.strokeRect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom);
-        }
+        if (hot) blinkHalo2D(() => ctx2D.rect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom), 1.5 / zoom);
         // chevauchement avec une ouverture ou un appareil : contour rouge clignotant, comme les appareils
         if (!isPrintRendering && blinkOn && collidingElementIds().has(sh.id)) {
             ctx2D.strokeStyle = '#ef4444';
@@ -1290,11 +1387,7 @@ function drawStair2D(st, colliding) {
     ctx2D.strokeStyle = '#c4b5fd';
     ctx2D.lineWidth = 2 / zoom;
     ctx2D.stroke();
-    if (hot) {
-        ctx2D.strokeStyle = currentTheme === 'light' ? '#4c1d95' : '#ede9fe';
-        ctx2D.lineWidth = 2 / zoom;
-        ctx2D.strokeRect(-L / 2 - 6 / zoom, -W / 2 - 6 / zoom, L + 12 / zoom, W + 12 / zoom);
-    }
+    if (hot) blinkHalo2D(() => ctx2D.rect(-L / 2 - 6 / zoom, -W / 2 - 6 / zoom, L + 12 / zoom, W + 12 / zoom), 1.5 / zoom);
     if (!isPrintRendering && blinkOn && colliding.has(st.id)) {
         ctx2D.strokeStyle = '#ef4444';
         ctx2D.lineWidth = 3 / zoom;
@@ -1302,7 +1395,7 @@ function drawStair2D(st, colliding) {
     }
     ctx2D.restore();
     ctx2D.save();
-    ctx2D.fillStyle = '#c4b5fd';
+    ctx2D.fillStyle = currentTheme === 'light' ? '#6d28d9' : '#c4b5fd';
     ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
     ctx2D.textAlign = 'center';
     ctx2D.fillText(stairLevelNames(st).join(' ↔ '), st.x, st.y - Math.max(L, W) / 2 - 6 / zoom);
@@ -1453,6 +1546,11 @@ function dragElement2D(coords) {
     } else {
         const info = nearestWallInfo(coords);
         if (!info) return;
+        if (openingMoveBlocked(op, info.wall.id, Math.round(info.dist))) {
+            if (!draggingEl2D.refusedOp) { draggingEl2D.refusedOp = true; showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); }
+            return;   // reste à sa dernière position valide
+        }
+        draggingEl2D.refusedOp = false;
         item.wallId = info.wall.id;
         item.distanceFromStart = el ? snapOutletDistance(el.type, info.wall.id, Math.round(info.dist), info.side, el.height || defaultHeightFor(el.type), el.id) : Math.round(info.dist);
         if (el || sh || (op && op.type === 'door_single')) item.side = info.side;

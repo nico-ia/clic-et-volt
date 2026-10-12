@@ -66,3 +66,30 @@ body.sb-dragging canvas { pointer-events: none; }
 @media print {
     html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
 }
+
+/* ---- Mode clair : textes et boutons colorés lisibles (rouge, bleu, violet, ambre, boutons pleins) ---- */
+body.theme-light .text-sky-200 { color: #0c4a6e !important; }
+body.theme-light .text-rose-300,
+body.theme-light .text-rose-400 { color: #be123c !important; }
+body.theme-light .text-amber-200,
+body.theme-light .text-amber-200\/90 { color: #92400e !important; }
+body.theme-light .text-violet-400 { color: #6d28d9 !important; }
+body.theme-light .text-cyan-400 { color: #0e7490 !important; }
+body.theme-light .hover\:text-emerald-300:hover { color: #047857 !important; }
+body.theme-light .tool-active-yellow { color: #854d0e !important; }
+body.theme-light .text-red-300,
+body.theme-light .text-red-400 { color: #b91c1c !important; }
+body.theme-light .text-blue-300,
+body.theme-light .text-blue-400 { color: #1d4ed8 !important; }
+/* boutons pleins : texte blanc, même en mode clair (règle placée après « .text-white » pour l'emporter) */
+body.theme-light .bg-emerald-600,
+body.theme-light .bg-rose-600,
+body.theme-light .bg-sky-600,
+body.theme-light .bg-blue-600,
+body.theme-light .bg-red-600,
+body.theme-light .bg-violet-600 { color: #ffffff !important; }
+body.theme-light .hover\:bg-rose-500:hover,
+body.theme-light .hover\:bg-emerald-500:hover,
+body.theme-light .hover\:bg-sky-500:hover,
+body.theme-light .hover\:bg-blue-500:hover,
+body.theme-light .hover\:bg-red-500:hover { color: #ffffff !important; }

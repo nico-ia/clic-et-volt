@@ -98,7 +98,124 @@ function frame3DOnProject() {
     threeControls.update();
 }
 
+// ---------- Fantôme de pose (3D) ----------
+// Le vrai modèle de l'élément (prise, porte, plafonnier…), translucide, à l'endroit visé.
+// Rouge : il y a déjà un élément identique à moins de 30 cm, la pose serait refusée.
+let placeGhost3D = null;
+let placeGhostKey3D = null;
+
+function removePlaceGhost3D() {
+    if (placeGhost3D) {
+        if (threeScene) threeScene.remove(placeGhost3D);
+        placeGhost3D.traverse(o => { if (o.isMesh && o.material) o.material.dispose(); });   // matériaux clonés seulement
+    }
+    placeGhost3D = null;
+    placeGhostKey3D = null;
+}
+
+function makeGhostGroup3D(group, blocked) {
+    group.traverse(o => {
+        if (!o.isMesh || !o.material) return;
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.opacity = 0.7;
+        o.material.depthWrite = false;
+        if (blocked && o.material.color) o.material.color.set(0xef4444);
+    });
+    group.userData = {};
+    return group;
+}
+
+// Couleur qui se détache de celle donnée (noir sur couleur claire, blanc sur couleur sombre)
+function contrastHex3D(css) {
+    const c = new THREE.Color(css);
+    return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) > 0.6 ? 0x0f172a : 0xffffff;
+}
+
+// Trémie fantôme : colonne translucide (même emprise et même hauteur que la vraie trémie)
+function createShaftGhost3D(sh, cx, cy) {
+    const sp = shaftPos2D(sh);
+    if (!sp) return null;
+    const span = shaftSpan3D(sh);
+    const s = sh.size || 40;
+    const group = new THREE.Group();
+    const pos = new THREE.Vector3(sp.x - cx, span.base + span.height / 2, sp.y - cy);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: 0xfbbf24 }));
+    box.position.copy(pos);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0xfbbf24 }));
+    edges.position.copy(pos);
+    group.add(box, edges);
+    return group;
+}
+
+function updatePlaceGhost3D(e) {
+    const container = document.getElementById('three-container');
+    const rect = container.getBoundingClientRect();
+    mouse3D.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+    mouse3D.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse3D, threeCamera);
+    const type = activePlacementType;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    wallsOn().forEach(w => {
+        minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
+        maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
+    });
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+    let ghost = null, blocked = false, wall = null;
+    if (type === 'light_ceiling') {
+        const hit = ceilingMesh3D ? raycaster.intersectObject(ceilingMesh3D) : [];
+        if (hit.length) {
+            const pt = hit[0].point;
+            ghost = { id: '__ghost', levelId: activeLevelId, type, x: pt.x + cx, y: 245, z: pt.z + cy };
+            blocked = !!ceilingSpotBlocker(ghost.x, ghost.z, activeLevelId);
+        }
+    } else if (type !== 'stair') {
+        const wallIntersects = raycaster.intersectObjects(clickableWalls3D, true);
+        if (wallIntersects.length) {
+            let m = wallIntersects[0].object;
+            while (m && (!m.userData || !m.userData.id) && m.parent) m = m.parent;
+            wall = m && m.userData && m.userData.id ? projectData.walls.find(w => w.id === m.userData.id) : null;
+            if (wall) {
+                const hitPt = wallIntersects[0].point;
+                const wallLen = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+                const distToPt = Math.hypot(hitPt.x - (wall.x1 - cx), hitPt.z - (wall.y1 - cy));
+                const distanceCm = Math.round(Math.max(10, Math.min(wallLen - 10, distToPt)));
+                const localHit = m.worldToLocal(hitPt.clone());
+                const side = localHit.x >= 0 ? 1 : -1;
+                ghost = { id: '__ghost', levelId: activeLevelId, type, wallId: wall.id, distanceFromStart: distanceCm, side,
+                    height: defaultHeightFor(type) };
+                if (type === 'shaft') { ghost.size = 40; ghost.levelIds = [activeLevelId]; }
+                if (type === 'door_single' || type === 'window_std') {
+                    ghost.width = type === 'door_single' ? 96 : 120;
+                    ghost.height = type === 'door_single' ? 210 : 120;
+                    if (type === 'window_std') ghost.sillHeight = 90;
+                    if (type === 'door_single') ghost.hingeSide = doorHingeForPlacement();
+                }
+                blocked = !!sameSpotBlocker(type, activeLevelId, wall.id, distanceCm);
+            }
+        }
+    }
+    if (!ghost) { removePlaceGhost3D(); return; }
+
+    // reconstruction seulement si quelque chose a changé (pas à chaque mouvement de souris)
+    const key = JSON.stringify([ghost, blocked]);
+    if (key === placeGhostKey3D && placeGhost3D && placeGhost3D.parent === threeScene) return;   // encore présent dans la scène
+    removePlaceGhost3D();
+    const isOpening = type === 'door_single' || type === 'window_std';
+    const mesh = type === 'shaft'
+        ? createShaftGhost3D(ghost, cx, cy)
+        : isOpening
+            ? createOpeningMesh3D(ghost, wall, cx, cy)
+            : createElementMesh3D(ghost, cx, cy);
+    if (!mesh) return;
+    placeGhost3D = makeGhostGroup3D(mesh, blocked);
+    placeGhostKey3D = key;
+    threeScene.add(placeGhost3D);
+}
+
 function setPlacementType(type) {
+    removePlaceGhost3D();
     activePlacementType = activePlacementType === type ? null : type;
     wallDraft3D = null;
     wallCursor3D = null;
@@ -1450,6 +1567,7 @@ function build3DScene() {
             new THREE.LineBasicMaterial({ color: 0xfbbf24 }));
         const sp = shaftPos2D(sh) || { x: w.x1 + (w.x2 - w.x1) * d / len, y: w.y1 + (w.y2 - w.y1) * d / len };
         frame.position.set(sp.x - cx, 1, sp.y - cy);
+        frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
         threeScene.add(frame);
         wallMeshes3D.push(frame);
         // colonne visible en permanence (même aspect qu'à la sélection) : repère la trémie en 3D
@@ -1458,6 +1576,7 @@ function build3DScene() {
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
             new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.85 }));
         column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+        column.userData.shaftId = sh.id;
         threeScene.add(column);
         wallMeshes3D.push(column);
         // zone invisible de la trémie (hauteur de la pièce) : permet de la sélectionner au clic en 3D
@@ -1870,6 +1989,7 @@ function createElementMesh3D(el, cx, cy) {
 }
 
 let drag3DMoved = false;
+let drag3DRefusedOp = false;   // déplacement de porte/fenêtre refusé (une seule notification par geste)
 let wallDrag3D = null;        // glissement d'un mur en 3D : { wallId, mode, startWall, origin, down, moved }
 let wallCentreLock3D = null;  // centre figé pendant le glissement : la scène ne se recentre pas à chaque pas
 let wallDragFrame3D = false;
@@ -2232,6 +2352,7 @@ function on3DPointerMove(e) {
         if (floorPt && wallDraft3D) { wallCursor3D = snapTracePoint3D(floorPt, wallDraft3D); updateWallPreview3D(); }
         return;
     }
+    if (activePlacementType && activePlacementType !== 'stair' && !dragging3DElementId) { updatePlaceGhost3D(e); return; }
     if (!dragging3DElementId) { hover3DTooltip(e); return; }
     // un simple clic ne déplace rien : le glissement commence après 5 px de mouvement
     if (!drag3DMoved && drag3DDown && Math.hypot(e.clientX - drag3DDown.x, e.clientY - drag3DDown.y) < 5) return;
@@ -2309,6 +2430,10 @@ function on3DPointerMove(e) {
 
         if (closestWall) {
             let item = projectData.electrical.find(el => el.id === dragging3DElementId) || projectData.openings.find(op => op.id === dragging3DElementId) || (projectData.shafts || []).find(sh => sh.id === dragging3DElementId);
+            if (item && openingMoveBlocked(item, closestWall.id, closestDistCm)) {
+                if (!drag3DRefusedOp) { drag3DRefusedOp = true; showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); }
+                item = null;   // reste à sa dernière position valide
+            } else if (item) drag3DRefusedOp = false;
             if (item) {
                 item.wallId = closestWall.id;
                 // trémie : son côté (pièce) ne change pas pendant un glissement le long du mur
@@ -2674,6 +2799,7 @@ function updateSelected3DDistance(val) {
     document.getElementById('inspector-distance-val').textContent = distCm + ' cm';
 
     let item = projectData.electrical.find(e => e.id === selected3DId) || projectData.openings.find(o => o.id === selected3DId);
+    if (item && openingMoveBlocked(item, item.wallId, distCm)) { showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); return; }
     if (item) {
         item.distanceFromStart = distCm;
         refreshSelectedView();
@@ -2727,11 +2853,13 @@ function selectCircuit(id) {
     // Si un seul appareil était surligné (son circuit est alors coché par le clic sur l'appareil),
     // un clic sur le circuit affiche tout le circuit ; un second clic seulement le désélectionne.
     const pointFocus = !!selected3DId;
-    if (selected3DId) {
-        selected3DId = null;
-        updateSelectionHighlight(null);
-        syncElementInspectors();
-    }
+    // une seule sélection à la fois : l'élément, les murs et les ouvertures précédents sont retirés
+    setSelectedWalls([]);
+    selectedDeviceIds = [];
+    selectedOpeningIds = [];
+    selected3DId = null;
+    updateSelectionHighlight(null);
+    syncElementInspectors();
     selectedCircuitId = id && projectData.circuits.some(c => c.id === id)
         ? (selectedCircuitId === id && !pointFocus ? null : id)
         : null;
@@ -2859,8 +2987,10 @@ function addCircuitElementHighlights() {
         helper.userData.circuitHL = true;
         // élément sélectionné depuis le circuit : son cadre clignote avec le même rythme que les alertes
         if (obj.userData.id === selected3DId) {
-            helper.userData.blink = true;
-            helper.visible = blinkOn;
+            // alterne entre la couleur du circuit et le blanc (le cadre ne disparaît plus)
+            const cc = circuitColor(selectedCircuit);
+            helper.userData.blinkPalette = [cc, contrastHex3D(cc)];
+            helper.material.color.set(blinkOn ? contrastHex3D(cc) : cc);
         }
         threeScene.add(helper);
         wallMeshes3D.push(helper);

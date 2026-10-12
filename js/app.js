@@ -406,10 +406,39 @@ function placementLabel(type) {
 
 // Garde-fou : pas deux appareils identiques au même endroit (même mur, même niveau, à moins de 30 cm)
 const SAME_SPOT_CM = 30;
-function sameSpotBlocker(type, levelId, wallId, distCm) {
-    const pool = [...(projectData.electrical || []), ...(projectData.openings || []), ...(projectData.shafts || [])];
+// Prises : seul un emplacement quasi identique est refusé, car les prises se posent côte à côte (double, triple…)
+const OUTLET_SAME_SPOT_CM = 2;
+// Portes et fenêtres : refusées si leurs emprises se chevauchent sur le même mur (largeur prise en compte)
+const OPENING_TYPES = ['door_single', 'window_std'];
+function openingWidthOf(o) { return o.width || (o.type === 'door_single' ? 96 : 120); }
+// Autre ouverture (≠ op) dont l'emprise chevaucherait op placée en wallId à distCm ; null sinon
+function openingOverlapWith(op, wallId, distCm) {
+    const w = openingWidthOf(op);
+    return (projectData.openings || []).find(o => o.id !== op.id && o.levelId === op.levelId && o.wallId === wallId
+        && Math.abs((o.distanceFromStart || 0) - distCm) < (openingWidthOf(o) + w) / 2) || null;
+}
+// Déplacement d'une porte ou fenêtre refusé s'il chevaucherait une autre ouverture (les autres objets : inchangé)
+function openingMoveBlocked(item, wallId, distCm) {
+    return !!(item && OPENING_TYPES.includes(item.type) && openingOverlapWith(item, wallId, distCm));
+}
+// Paires de portes/fenêtres qui se chevauchent sur un même mur (fichiers anciens compris)
+function computeOpeningOverlaps() {
+    const list = [], ops = openingsOn();
+    ops.forEach((a, i) => ops.slice(i + 1).forEach(b => {
+        if (a.wallId === b.wallId && Math.abs((a.distanceFromStart || 0) - (b.distanceFromStart || 0)) < (openingWidthOf(a) + openingWidthOf(b)) / 2) list.push({ a, b });
+    }));
+    return list;
+}
+function sameSpotBlocker(type, levelId, wallId, distCm, width) {
+    if (OPENING_TYPES.includes(type)) {
+        const w = width || openingWidthOf({ type });
+        return (projectData.openings || []).find(o => o.levelId === levelId && o.wallId === wallId
+            && Math.abs((o.distanceFromStart || 0) - distCm) < (openingWidthOf(o) + w) / 2) || null;
+    }
+    const pool = [...(projectData.electrical || []), ...(projectData.shafts || [])];
+    const tol = GANGABLE_OUTLETS.includes(type) ? OUTLET_SAME_SPOT_CM : SAME_SPOT_CM;
     return pool.find(e => e.levelId === levelId && (e.type || 'shaft') === type && e.wallId === wallId
-        && Math.abs((e.distanceFromStart || 0) - distCm) < SAME_SPOT_CM) || null;
+        && Math.abs((e.distanceFromStart || 0) - distCm) < tol) || null;
 }
 // Idem pour un plafonnier : à moins de 30 cm (en plan) d'un autre plafonnier du niveau
 function ceilingSpotBlocker(x, z, levelId) {
@@ -461,10 +490,42 @@ function refreshToolHint() {
         else if (activePlacementType) t = { badge: 'Placer appareil', hint: placementHintText(activePlacementType) };
         else t = toolTexts2D('select');
     } else {
-        t = toolTexts2D(currentTool, document.getElementById('place-type').value);
+        t = interactionStatus2D();
     }
-    document.getElementById('active-tool-badge').textContent = t.badge;
-    document.getElementById('drawing-instruction-hint').textContent = t.hint;
+    const badge = document.getElementById('active-tool-badge');
+    const hint = document.getElementById('drawing-instruction-hint');
+    if (badge.textContent !== t.badge) badge.textContent = t.badge;
+    if (hint.textContent !== t.hint) hint.textContent = t.hint;
+}
+
+// Mode d'interaction en 2D, selon ce qui se passe réellement (glissement, tracé, pose, sélection…)
+function interactionStatus2D() {
+    if (draggingWall) {
+        if (draggingWall.mode === 'move') return { badge: 'Déplacer le mur', hint: 'Glissez pour déplacer le mur ; relâchez pour valider (Ctrl+Z pour annuler)' };
+        const L = (Math.hypot(draggingWall.wall.x2 - draggingWall.wall.x1, draggingWall.wall.y2 - draggingWall.wall.y1) / 100).toFixed(2).replace('.', ',');
+        return { badge: 'Étirer le mur', hint: 'Longueur : ' + L + ' m ; l’accroche orange montre le point visé (Ctrl+Z pour annuler)' };
+    }
+    if (draggingEl2D) return { badge: 'Déplacer', hint: 'Glissez le long du mur ; relâchez pour valider (Ctrl+Z pour annuler)' };
+    if (selectionBoxStart) return { badge: 'Sélection par rectangle', hint: 'Relâchez pour sélectionner ce qui est encadré (Ctrl ou Maj pour ajouter)' };
+    if (currentTool === 'wall') {
+        return drawingStartPoint
+            ? { badge: 'Tracer mur', hint: 'Cliquez pour poser le point suivant (Clic droit ou Échap pour arrêter)' }
+            : { badge: 'Tracer mur', hint: 'Cliquez pour placer le premier point du mur' };
+    }
+    if (currentTool === 'place') {
+        const type = document.getElementById('place-type').value;
+        return { badge: 'Pose : ' + placementLabel(type), hint: placementHintText(type) };
+    }
+    if (currentTool === 'pan') return toolTexts2D('pan');
+    const n = selectedWallIds.length + selectedDeviceIds.length + selectedOpeningIds.length;
+    const count = n || (selected3DId ? 1 : 0);
+    if (count) {
+        const hint = count === 1 && selected3DId
+            ? 'Glissez pour déplacer ; flèches ← → pour ajuster ; Suppr pour effacer ; Échap pour désélectionner'
+            : 'Glissez pour déplacer la sélection ; Suppr pour effacer ; Échap pour désélectionner';
+        return { badge: 'Sélection (' + count + ')', hint };
+    }
+    return toolTexts2D('select');
 }
 
 // L'indication se place dans le coin haut-gauche du plan, en 2D comme en 3D
@@ -479,6 +540,7 @@ function placeToolHint() {
 
 function setTool(tool) {
     currentTool = tool;
+    placeGhost2D = null;
     drawingStartPoint = null;
     mouseCurrentPos = null;
     draggingWall = null;
@@ -1135,7 +1197,11 @@ function circuitOf(el) {
 // Clignotement des appareils en collision (plan 2D et vue 3D)
 // Élément sélectionné depuis un circuit : son repère clignote pour qu'on sache qu'il est sélectionné
 function selectionBlinkNeeded() {
-    return !!(selectedCircuitId && selected3DId);
+    if (selectedCircuitId && selected3DId) return true;
+    // porte, fenêtre, trémie ou escalier sélectionné : son cadre clignote comme celui des appareils
+    return !!selected3DId && (projectData.openings.some(o => o.id === selected3DId)
+        || (projectData.shafts || []).some(s => s.id === selected3DId)
+        || (projectData.stairs || []).some(s => s.id === selected3DId));
 }
 
 function startCollisionBlink() {
@@ -1143,6 +1209,15 @@ function startCollisionBlink() {
         blinkOn = !blinkOn;
         if (currentMode === '3d') {
             wallMeshes3D.forEach(m => { if (m.userData && m.userData.blink) m.visible = blinkOn; });
+            // cadres de sélection : alternent de couleur (blanc / couleur d'origine), toujours visibles
+            wallMeshes3D.forEach(m => {
+                if (m.userData && m.userData.blinkPalette && m.material) m.material.color.set(blinkOn ? m.userData.blinkPalette[1] : m.userData.blinkPalette[0]);
+            });
+            if (selectedHighlightMesh && selectedHighlightMesh.material) selectedHighlightMesh.material.color.set(blinkOn ? contrastHex3D('#f59e0b') : '#f59e0b');
+            // trémie sélectionnée : sa colonne et son cadre alternent avec un contraste (la couleur jaune seule se voyait mal)
+            if (selected3DId) wallMeshes3D.forEach(m => {
+                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(0xfbbf24) : 0xfbbf24);
+            });
         } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded())) {
             redraw2D();
         }
@@ -1739,6 +1814,10 @@ function computeCircuitReport() {
     computeOpeningCollisions().forEach(({ el, isDoor }) => {
         addAlert(levelPrefix(el.levelId) + electricalDisplayName(el) + ' placé(e) dans ' + (isDoor ? 'une porte' : 'une fenêtre') + ' : à déplacer', { tab: 'appareillage', elId: el.id, hint: 'Sélectionnez-le et déplacez-le hors de la porte ou fenêtre (glisser, ou flèches ← →).' });
     });
+    computeOpeningOverlaps().forEach(({ a, b }) => {
+        const nm = o => o.type === 'door_single' ? 'porte' : 'fenêtre';
+        addAlert(levelPrefix(a.levelId) + nm(a)[0].toUpperCase() + nm(a).slice(1) + ' chevauche une ' + nm(b) + ' sur le même mur : à déplacer', { tab: 'ouvertures', elId: a.id, hint: 'Sélectionnez l’une des deux et déplacez-la le long du mur, ou réduisez sa largeur.' });
+    });
     computeDeviceOverlaps().forEach(({ a, b }) => {
         addAlert(levelPrefix(a.levelId) + electricalDisplayName(a) + ' chevauche ' + electricalDisplayName(b) + ' : à déplacer', { tab: 'appareillage', elId: a.id, hint: 'Sélectionnez-le et déplacez-le pour qu’il ne chevauche plus ' + electricalDisplayName(b) + '.' });
     });
@@ -2023,7 +2102,8 @@ function reportTablesHtml(rep) {
 }
 
 function printReport() {
-    const win = window.open('', '_blank');
+    // Fenêtre de la taille d'une feuille A4 (ratio 210 x 297 mm), pour que l'aperçu corresponde à l'impression
+    const win = window.open('', '_blank', 'width=820,height=1100,scrollbars=yes,resizable=yes');
     if (!win) {
         showNotification('Autorisez les fenêtres contextuelles pour imprimer le métré.', 'error');
         return;
@@ -2034,14 +2114,28 @@ function printReport() {
         ? '<h3 class="rt-title">Alertes</h3><ul class="rt-alerts">' + rep.alerts.map(a => '<li>' + esc(a) + '</li>').join('') + '</ul>'
         : '';
     const css = '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;padding:16px;background:#fff;color:#0f172a;font:13px Arial,sans-serif}' +
+        '.page{max-width:186mm;margin:0 auto}' +
         '.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}.toolbar h1{font-size:18px;margin:0 auto 0 0}.toolbar button{font:inherit;padding:6px 12px;cursor:pointer}' +
         '.rt-title{font-size:14px;margin:18px 0 6px}.rt{width:100%;border-collapse:collapse;margin-bottom:6px}.rt th,.rt td{border:1px solid #94a3b8;padding:5px 8px;text-align:left;vertical-align:top}' +
         '.rt th{background:#e2e8f0}.rt .num{text-align:right;white-space:nowrap}.rt tr{break-inside:avoid}.rt-warn td{background:#fee2e2}.rt tr.rt-gap td{border:0;background:#fff;padding:0;height:14px}.rt-note,.rt-empty{font-size:11px;color:#475569}.rt-alerts{margin:0;padding-left:18px}.rt-alerts li{margin-bottom:3px}' +
-        '@media print{.toolbar{display:none}body{padding:0}}';
+        '@media print{' +
+        'html,body{margin:0 !important;padding:0 !important;background:#fff !important;width:auto !important;overflow:visible !important}' +
+        '.page{max-width:186mm;margin:0 auto;padding:0}' +
+        '.toolbar{margin-bottom:6px}.toolbar h1{font-size:15px}.toolbar button,.toolbar label{display:none}' +
+        'body{font-size:11px}.rt{font-size:10px}.rt th,.rt td{padding:3px 6px}.rt thead{display:table-header-group}' +
+        '.rt-title{font-size:12px;margin:10px 0 4px}.rt-note,.rt-empty{font-size:9px}.rt-alerts li{margin-bottom:1px}' +
+        '}';
     win.document.open();
-    win.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Métré — Clic & Volt</title><style>' + css + '</style></head><body>' +
-        '<div class="toolbar"><h1>Clic & Volt — Métré & contrôles <small style="font-weight:normal;color:#64748b">(' + date + ')</small></h1><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button></div>' +
-        reportTablesHtml(rep) + alerts + '</body></html>');
+    win.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Métré — Clic & Volt</title><style>' + css + '</style></head><body><div class="page">' +
+        '<div class="toolbar"><h1>Clic & Volt — Métré & contrôles <small style="font-weight:normal;color:#64748b">(' + date + ')</small></h1>' +
+        '<label style="font-size:12px">Échelle <select onchange="fitRpt(this.value)" style="font:inherit;padding:4px">' +
+        '<option value="1">100 %</option><option value="0.9">90 %</option><option value="0.85">85 %</option><option value="0.8">80 %</option><option value="0.75">75 %</option>' +
+        '<option value="auto">Ajuster à une page</option></select></label>' +
+        '<button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button></div>' +
+        reportTablesHtml(rep) + alerts + '</div>' +
+        // Réduit le contenu (zoom) pour qu'il tienne sur une page A4 : 273 mm utiles = 1032 px à 96 dpi
+        '<script>function fitRpt(v){var p=document.querySelector(".page");p.style.zoom="1";if(v==="auto"){var h=p.getBoundingClientRect().height;p.style.zoom=String(h>1032?Math.floor(1032/h*100)/100:1);}else{p.style.zoom=v;}}<\/script>' +
+        '</body></html>');
     win.document.close();
     win.focus();
 }
@@ -2067,7 +2161,7 @@ function goToAlert(i) {
         return;
     }
     if (t.elId) {
-        const item = [...projectData.electrical, ...(projectData.shafts || []), ...(projectData.stairs || [])].find(e => e.id === t.elId);
+        const item = [...projectData.electrical, ...(projectData.openings || []), ...(projectData.shafts || []), ...(projectData.stairs || [])].find(e => e.id === t.elId);
         if (item && item.levelId && item.levelId !== activeLevelId) setActiveLevel(item.levelId);
         setRightTab(t.tab);
         focusAssociatedElement(t.elId);
@@ -2640,6 +2734,11 @@ function showPlanTooltip(clientX, clientY, id) {
 function hidePlanTooltip() { if (planTooltipEl) planTooltipEl.classList.add('hidden'); }
 
 function focusAssociatedElement(id) {
+    // ouverture depuis une alerte ou une liste : seul cet élément reste sélectionné (ni circuit, ni autres)
+    setSelectedWalls([]);
+    selectedDeviceIds = [];
+    selectedOpeningIds = [];
+    selectedCircuitId = null;
     selected3DId = id;
     if (currentMode === '3d') {
         build3DScene();
@@ -3062,6 +3161,7 @@ function nudgeSelectedAlongWall(dir, stepCm) {
     const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
     const next = Math.max(5, Math.min(len - 5, Math.round(item.distanceFromStart + dir * stepCm)));
     if (next === item.distanceFromStart) return true;
+    if (openingMoveBlocked(item, item.wallId, next)) { showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); return true; }
     saveStateToUndo();
     item.distanceFromStart = next;
     refreshSelectedView();
@@ -3333,21 +3433,32 @@ function triggerSaveProject() {
 
 function capturePlanImage(mode) {
     if (mode === '3d') {
-        on3DWindowResize();
-        threeRenderer.render(threeScene, threeCamera);
-        return threeRenderer.domElement.toDataURL('image/png');
+        // capture 3D en haute résolution, puis retour à la résolution d'écran
+        const previousRatio = threeRenderer.getPixelRatio();
+        try {
+            threeRenderer.setPixelRatio(PRINT_RENDER_SCALE);
+            on3DWindowResize();
+            threeRenderer.render(threeScene, threeCamera);
+            return threeRenderer.domElement.toDataURL('image/png');
+        } finally {
+            threeRenderer.setPixelRatio(previousRatio);
+            on3DWindowResize();
+        }
     }
     resize2DCanvas();
     const previouslySelectedId = selected3DId;
     selected3DId = null;
     isPrintRendering = true;
     try {
+        // capture en haute résolution (le PNG reste net sur papier)
+        canvas2D.width = canvas2D.parentElement.clientWidth * PRINT_RENDER_SCALE;
+        canvas2D.height = canvas2D.parentElement.clientHeight * PRINT_RENDER_SCALE;
         redraw2D();
         return canvas2D.toDataURL('image/png');
     } finally {
         isPrintRendering = false;
         selected3DId = previouslySelectedId;
-        redraw2D();
+        resize2DCanvas();
     }
 }
 
@@ -3392,9 +3503,21 @@ function printPlan(mode) {
         const title = mode === '3d' ? 'Plan 3D' : 'Plan 2D';
         printWindow.document.open();
         printWindow.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>' + title +
-            ' — Clic & Volt</title><style id="print-style">@page{size:landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;align-items:center;gap:10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}</style></head><body><div class="toolbar"><h1>Clic & Volt — ' +
-            title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select><button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><img class="plan" id="plan" alt="' +
-            title + '"></body></html>');
+            ' — Clic & Volt</title><style id="print-style">@page{size:landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}</style></head><body><div class="toolbar"><h1>Clic & Volt — ' +
+            title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select>' + '<span style="font-weight:600">Recadrage (%) :</span> <label>Haut <input id="crop-t" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Bas <input id="crop-b" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Gauche <input id="crop-l" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Droite <input id="crop-r" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <button id="crop-reset" type="button">Réinitialiser le cadrage</button>' + '<button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><div id="stage"><img class="plan" id="plan" alt="' +
+            title + '"><div id="crop-box"><i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i></div></div><img id="plan-print" alt="' + title + '">' +
+            '<style>' +
+            '#stage{position:relative;margin:0 auto;background:#fff;overflow:hidden;user-select:none;box-shadow:0 0 0 1px #94a3b8,0 4px 12px rgba(0,0,0,.2);aspect-ratio:297/210;width:min(100%,calc((100vh - 38mm) * 297 / 210));height:auto}' +
+            '#stage.portrait{aspect-ratio:210/297;width:min(100%,calc((100vh - 38mm) * 210 / 297))}#stage .plan{height:100%;width:100%}' +
+            '#crop-box{position:absolute;box-sizing:border-box;border:2px dashed #facc15;box-shadow:0 0 0 9999px rgba(15,23,42,.55);cursor:move;touch-action:none}' +
+            '#crop-box i{position:absolute;width:12px;height:12px;box-sizing:border-box;background:#facc15;border:1px solid #0f172a;touch-action:none}' +
+            '#crop-box i[data-h=nw]{left:-6px;top:-6px;cursor:nwse-resize}#crop-box i[data-h=se]{right:-6px;bottom:-6px;cursor:nwse-resize}' +
+            '#crop-box i[data-h=ne]{right:-6px;top:-6px;cursor:nesw-resize}#crop-box i[data-h=sw]{left:-6px;bottom:-6px;cursor:nesw-resize}' +
+            '#crop-box i[data-h=n]{left:50%;top:-6px;margin-left:-6px;cursor:ns-resize}#crop-box i[data-h=s]{left:50%;bottom:-6px;margin-left:-6px;cursor:ns-resize}' +
+            '#crop-box i[data-h=e]{right:-6px;top:50%;margin-top:-6px;cursor:ew-resize}#crop-box i[data-h=w]{left:-6px;top:50%;margin-top:-6px;cursor:ew-resize}' +
+            '#plan-print{display:none;width:100%;height:calc(100vh - 38mm);object-fit:contain}' +
+            '@media print{#stage{display:none!important}#plan-print{display:block!important;height:calc(100vh - 20mm)}}' +
+            '</style></body></html>');
         printWindow.document.close();
         const image = printWindow.document.getElementById('plan');
         image.onload = () => {
@@ -3407,13 +3530,107 @@ function printPlan(mode) {
         };
         const orientation = printWindow.document.getElementById('orientation');
         orientation.addEventListener('change', () => {
+            // La feuille affichée suit l'orientation choisie (A4 portrait ou paysage)
+            printWindow.document.getElementById('stage').classList.toggle('portrait', orientation.value === 'portrait');
+            // Changer d'orientation remet le cadrage à zéro
+            printWindow.document.getElementById('crop-reset').click();
             printWindow.document.getElementById('print-style').textContent =
-                '@page{size:' + orientation.value + ';margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;align-items:center;gap:10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}';
+                '@page{size:' + orientation.value + ';margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}';
         });
         printWindow.document.getElementById('print-button').addEventListener('click', () => {
             printWindow.focus();
-            printWindow.print();
+            const url = printCropped();
+            const planPrint = printWindow.document.getElementById('plan-print');
+            if (planPrint.src === url) {
+                printWindow.print();
+            } else {
+                planPrint.onload = () => printWindow.print();
+                planPrint.src = url;
+            }
         });
+        // Recadrage à la souris : cadre sur l'image d'origine (fractions t, b, l, r), découpe au moment d'imprimer
+        const doc = printWindow.document;
+        const stage = doc.getElementById('stage');
+        const box = doc.getElementById('crop-box');
+        const planPrint = doc.getElementById('plan-print');
+        const cropInputs = ['crop-t', 'crop-b', 'crop-l', 'crop-r'].map(id => doc.getElementById(id));
+        const MIN_SIZE = 0.05, MAX_CROP = 0.95;
+        const crop = { t: 0, b: 0, l: 0, r: 0 };
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+        const rendered = () => {
+            // zone réellement occupée par l'image (object-fit: contain)
+            const sw = stage.clientWidth, sh = stage.clientHeight;
+            const nw = image.naturalWidth || sw, nh = image.naturalHeight || sh;
+            const s = Math.min(sw / nw, sh / nh);
+            const rw = nw * s, rh = nh * s;
+            return { x: (sw - rw) / 2, y: (sh - rh) / 2, w: rw, h: rh };
+        };
+        const drawBox = () => {
+            const R = rendered();
+            box.style.left = (R.x + crop.l * R.w) + 'px';
+            box.style.top = (R.y + crop.t * R.h) + 'px';
+            box.style.width = ((1 - crop.l - crop.r) * R.w) + 'px';
+            box.style.height = ((1 - crop.t - crop.b) * R.h) + 'px';
+            [crop.t, crop.b, crop.l, crop.r].forEach((v, i) => { cropInputs[i].value = Math.round(v * 100); });
+        };
+        const setCrop = (t, b, l, r) => {
+            crop.l = clamp(l, 0, MAX_CROP);
+            crop.r = clamp(r, 0, Math.min(MAX_CROP, 1 - MIN_SIZE - crop.l));
+            crop.t = clamp(t, 0, MAX_CROP);
+            crop.b = clamp(b, 0, Math.min(MAX_CROP, 1 - MIN_SIZE - crop.t));
+            drawBox();
+        };
+        cropInputs.forEach(input => input.addEventListener('change', () => {
+            const v = i => (parseFloat(cropInputs[i].value) || 0) / 100;
+            setCrop(v(0), v(1), v(2), v(3));
+        }));
+        doc.getElementById('crop-reset').addEventListener('click', () => setCrop(0, 0, 0, 0));
+        let drag = null;
+        const startDrag = (e, mode) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            drag = { mode, x: e.clientX, y: e.clientY, R: rendered(), start: { ...crop } };
+        };
+        const onMove = (e) => {
+            if (!drag) return;
+            const dx = (e.clientX - drag.x) / drag.R.w, dy = (e.clientY - drag.y) / drag.R.h;
+            const s = drag.start;
+            let L = s.l, Rt = 1 - s.r, T = s.t, B = 1 - s.b;
+            if (drag.mode === 'move') {
+                const w = Rt - L, h = B - T;
+                L = clamp(L + dx, 0, 1 - w);
+                T = clamp(T + dy, 0, 1 - h);
+                Rt = L + w;
+                B = T + h;
+            } else {
+                if (drag.mode.includes('w')) L = clamp(L + dx, 0, Rt - MIN_SIZE);
+                if (drag.mode.includes('e')) Rt = clamp(Rt + dx, L + MIN_SIZE, 1);
+                if (drag.mode.includes('n')) T = clamp(T + dy, 0, B - MIN_SIZE);
+                if (drag.mode.includes('s')) B = clamp(B + dy, T + MIN_SIZE, 1);
+            }
+            crop.l = L; crop.r = 1 - Rt; crop.t = T; crop.b = 1 - B;
+            drawBox();
+        };
+        const endDrag = () => { drag = null; };
+        box.addEventListener('pointerdown', e => startDrag(e, 'move'));
+        box.addEventListener('pointermove', onMove);
+        box.addEventListener('pointerup', endDrag);
+        box.addEventListener('pointercancel', endDrag);
+        box.querySelectorAll('i').forEach(h => h.addEventListener('pointerdown', e => startDrag(e, h.dataset.h)));
+        window.addEventListener('resize', drawBox);
+        image.addEventListener('load', drawBox);
+        // Découpe la zone choisie : ce sont ces pixels qui partent à l'impression
+        const printCropped = () => {
+            const nw = image.naturalWidth, nh = image.naturalHeight;
+            const sx = Math.round(nw * crop.l), sy = Math.round(nh * crop.t);
+            const cw = Math.round(nw * (1 - crop.l - crop.r)), ch = Math.round(nh * (1 - crop.t - crop.b));
+            const out = doc.createElement('canvas');
+            out.width = cw;
+            out.height = ch;
+            out.getContext('2d').drawImage(image, sx, sy, cw, ch, 0, 0, cw, ch);
+            return out.toDataURL('image/png');
+        };
         image.src = imageUrl;
         showNotification('Choisissez l’orientation dans la fenêtre ouverte, puis imprimez ou enregistrez en PDF.', 'info');
     } catch (error) {
