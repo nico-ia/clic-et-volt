@@ -143,6 +143,24 @@ function redraw2D() {
 
     draw2DEquipment();
 
+    if (!isPrintRendering && wallSnap && (draggingWall || drawingStartPoint)) {
+        const sn = wallSnap;
+        ctx2D.save();
+        ctx2D.strokeStyle = '#f59e0b';
+        ctx2D.fillStyle = '#f59e0b';
+        ctx2D.lineWidth = 2 / zoom;
+        ctx2D.beginPath();
+        ctx2D.arc(sn.pt.x, sn.pt.y, 6 / zoom, 0, Math.PI * 2);
+        ctx2D.stroke();
+        ctx2D.font = 'bold ' + (12 / zoom) + 'px Inter, sans-serif';
+        ctx2D.textAlign = 'left';
+        ctx2D.textBaseline = 'middle';
+        ctx2D.translate(sn.pt.x, sn.pt.y);
+        ctx2D.rotate(-rot2D);
+        ctx2D.fillText(SNAP_LABEL[sn.kind], 10 / zoom, -10 / zoom);
+        ctx2D.restore();
+    }
+
     if (!isPrintRendering && drawingStartPoint && mouseCurrentPos) {
         ctx2D.strokeStyle = '#34d399';
         ctx2D.lineWidth = activeWallThickness;
@@ -268,6 +286,9 @@ function on2DMouseDown(e) {
             document.getElementById('drawing-instruction-hint').textContent = "Tracé arrêté. Cliquez pour placer un nouveau point de mur.";
             redraw2D();
             showNotification("Tracé de mur arrêté", "info");
+        } else if (currentTool === 'place') {
+            // clic droit : on arrête la pose (comme Échap)
+            setTool('select');
         }
         return;
     }
@@ -320,6 +341,10 @@ function on2DMouseDown(e) {
         }
 
         if (!drawingStartPoint) {
+            // départ : accroché à un bout ou à l'axe d'un mur existant (murs bien jointifs)
+            const ms = magnetWallEnd({ x: snapX, y: snapY }, null, null, null);
+            snapX = ms.x;
+            snapY = ms.y;
             drawingStartPoint = { x: snapX, y: snapY };
             mouseCurrentPos = { x: snapX, y: snapY };
             document.getElementById('drawing-instruction-hint').textContent = "Cliquez pour terminer le mur (Clic droit pour fermer/arrêter)";
@@ -333,6 +358,10 @@ function on2DMouseDown(e) {
                 else endX = drawingStartPoint.x;
             }
 
+            // fin : accroche sur un bout / un axe voisin, ou angle droit avec le mur qui arrive au point de départ
+            const me = magnetWallEnd({ x: endX, y: endY }, drawingStartPoint, null, null);
+            endX = me.x;
+            endY = me.y;
             const len = Math.hypot(endX - drawingStartPoint.x, endY - drawingStartPoint.y);
             if (len > 10) {
                 saveStateToUndo();
@@ -381,12 +410,16 @@ function on2DMouseDown(e) {
         }
         const additiveSelection = e.ctrlKey || e.metaKey || e.shiftKey;
         let endpointHit = null;
-        let endpointDistance = 14 / zoom;
+        const endpointRadius = 14 / zoom;
+        let endpointScore = Infinity;
         wallsOn().forEach(w => {
             [['start', w.x1, w.y1], ['end', w.x2, w.y2]].forEach(([endpoint, x, y]) => {
                 const distance = Math.hypot(coords.x - x, coords.y - y);
-                if (distance < endpointDistance) {
-                    endpointDistance = distance;
+                if (distance >= endpointRadius) return;
+                // deux murs se rejoignant au même coin : le mur déjà sélectionné garde la poignée
+                const score = distance - (selectedWallIds.includes(w.id) ? endpointRadius : 0);
+                if (score < endpointScore) {
+                    endpointScore = score;
                     endpointHit = { wall: w, endpoint };
                 }
             });
@@ -398,8 +431,11 @@ function on2DMouseDown(e) {
                     : [...selectedWallIds, endpointHit.wall.id];
                 setSelectedWalls(nextIds);
                 draggingWall = null;
-            } else if (canEditWalls() && selectedWallIds.includes(endpointHit.wall.id)) {
-                // poignée : seulement sur un mur déjà sélectionné, en mode Modifier les murs
+            } else if (canEditWalls()) {
+                // poignée : on tire le bout de n'importe quel mur en mode Modifier les murs
+                // (le seuil de 8 px évite les déplacements involontaires : un simple clic ne fait que sélectionner)
+                if (!selectedWallIds.includes(endpointHit.wall.id)) setSelectedWalls([endpointHit.wall.id]);
+                resetWallSnap();
                 draggingWall = { wall: endpointHit.wall, mode: endpointHit.endpoint, last: coords, origin: coords, moved: false };
             } else {
                 setSelectedWalls([endpointHit.wall.id]);
@@ -412,7 +448,7 @@ function on2DMouseDown(e) {
         let foundId = null;
         wallsOn().forEach(w => {
             const dist = distToSegment(coords, {x: w.x1, y: w.y1}, {x: w.x2, y: w.y2});
-            if (dist < w.thickness / 2 + 12) {
+            if (dist < w.thickness / 2 + 12 / zoom) {
                 foundId = w.id;
             }
         });
@@ -480,21 +516,31 @@ function on2DMouseMove(e) {
             saveStateToUndo();
             drag.moved = true;
             drag.linksBefore = shaftLinksValid();
+            // direction du mur avant étirement : le bout qu'on tire la suit (prolongement jusqu'au mur suivant)
+            const wl = Math.hypot(drag.wall.x2 - drag.wall.x1, drag.wall.y2 - drag.wall.y1) || 1;
+            drag.dir0 = { ux: (drag.wall.x2 - drag.wall.x1) / wl, uy: (drag.wall.y2 - drag.wall.y1) / wl };
             drag.last = drag.origin;
         }
         const dx = coords.x - drag.last.x;
         const dy = coords.y - drag.last.y;
         if (drag.moved) {
             const prevWall = { x1: drag.wall.x1, y1: drag.wall.y1, x2: drag.wall.x2, y2: drag.wall.y2 };
+            // bout étiré : aimanté (mur suivant sur l'axe, bout voisin, angle droit)
+            let pEnd = coords;
+            if (drag.mode === 'start' || drag.mode === 'end') {
+                const fixed = drag.mode === 'start' ? { x: drag.wall.x2, y: drag.wall.y2 } : { x: drag.wall.x1, y: drag.wall.y1 };
+                const sg = drag.mode === 'end' ? 1 : -1;
+                pEnd = magnetWallEnd(coords, fixed, { x: sg * drag.dir0.ux, y: sg * drag.dir0.uy }, drag.wall.id);
+            }
             if (drag.mode === 'start') {
-                if (Math.hypot(drag.wall.x2 - coords.x, drag.wall.y2 - coords.y) > 1) {
-                    drag.wall.x1 = coords.x;
-                    drag.wall.y1 = coords.y;
+                if (Math.hypot(drag.wall.x2 - pEnd.x, drag.wall.y2 - pEnd.y) > 1) {
+                    drag.wall.x1 = pEnd.x;
+                    drag.wall.y1 = pEnd.y;
                 }
             } else if (drag.mode === 'end') {
-                if (Math.hypot(drag.wall.x1 - coords.x, drag.wall.y1 - coords.y) > 1) {
-                    drag.wall.x2 = coords.x;
-                    drag.wall.y2 = coords.y;
+                if (Math.hypot(drag.wall.x1 - pEnd.x, drag.wall.y1 - pEnd.y) > 1) {
+                    drag.wall.x2 = pEnd.x;
+                    drag.wall.y2 = pEnd.y;
                 }
             } else {
                 drag.wall.x1 += dx;
@@ -536,6 +582,9 @@ function on2DMouseMove(e) {
             if (Math.abs(dx) > Math.abs(dy)) snapY = drawingStartPoint.y;
             else snapX = drawingStartPoint.x;
         }
+        const mp = magnetWallEnd({ x: snapX, y: snapY }, drawingStartPoint, null, null);
+        snapX = mp.x;
+        snapY = mp.y;
         mouseCurrentPos = { x: snapX, y: snapY };
         redraw2D();
     }
@@ -605,6 +654,7 @@ function on2DMouseUp(e) {
     }
     if (draggingWall && draggingWall.moved) showUndoBar(wallMoveMessage(draggingWall.linksBefore, draggingWall.mode === 'move' ? 'déplacé' : 'étiré'));
     if (draggingWall) draggingWall = null;
+    resetWallSnap();
     if (draggingEl2D) draggingEl2D = null;
     redraw2D();
 }
@@ -618,6 +668,118 @@ function distToSegment(p, p1, p2) {
 }
 
 // ---------- Zoom / recentrage ----------
+// =====================================================================
+//  AIMANTATION DES MURS : un seul modèle pour tous les gestes
+//  (tracer un mur, étirer un bout, prolonger, faire un T).
+//  À chaque mouvement on liste les accroches possibles autour du curseur :
+//    - bout d'un autre mur ........................ « bout de mur »
+//    - mur suivant sur la droite du tracé ......... « mur suivant »
+//    - axe d'un autre mur (jonction en T) ......... « mur en T »
+//    - angle droit avec un mur posé au point fixe . « angle droit »
+//    - alignement sur un mur posé ou sur le tracé . « alignement »
+//  La distance se mesure à l'écran (pixels) : le même ressenti à tous les zooms.
+//  Une accroche « colle » tant que le curseur reste dans un rayon de sortie plus
+//  large que le rayon d'entrée (hystérésis) : pas de saut, pas de collage.
+//  L'accroche active est affichée (repère + nom) : on sait où le bout va tomber.
+// =====================================================================
+const SNAP_RADIUS_PX = 12;     // rayon d'entrée d'une accroche (pixels à l'écran)
+const SNAP_RELEASE = 1.8;      // on quitte une accroche au-delà de RADIUS × 1,8
+const SNAP_RANK = { end: 0, wall: 0, axis: 1, right: 2, align: 3 };   // départage : les bouts d'abord
+const SNAP_LABEL = { end: 'bout de mur', wall: 'mur suivant', axis: 'mur en T', right: 'angle droit', align: 'alignement' };
+
+let wallSnap = null;           // accroche active : { ctx, key, kind, pt }
+
+function resetWallSnap() { wallSnap = null; }
+
+// Toutes les accroches possibles pour le curseur p.
+// anchor : point fixe du mur (null pour un premier point) ; dirU : direction du mur étiré (ou null)
+function wallSnapCandidates(p, anchor, dirU, excludeId) {
+    const list = [];
+    const others = wallsOn().filter(w => w.id !== excludeId);
+
+    others.forEach(w => {
+        list.push({ key: 'end:' + w.id + ':1', kind: 'end', pt: { x: w.x1, y: w.y1 } });
+        list.push({ key: 'end:' + w.id + ':2', kind: 'end', pt: { x: w.x2, y: w.y2 } });
+        const dx = w.x2 - w.x1, dy = w.y2 - w.y1, l2 = dx * dx + dy * dy;
+        if (l2) {
+            const t = ((p.x - w.x1) * dx + (p.y - w.y1) * dy) / l2;
+            if (t > 0.02 && t < 0.98) {
+                list.push({ key: 'axis:' + w.id, kind: 'axis', pt: { x: w.x1 + dx * t, y: w.y1 + dy * t } });
+            }
+        }
+    });
+
+    if (!anchor) return list;
+
+    // droites issues du point fixe : alignement et angle droit avec les murs qui y arrivent
+    const rays = [];
+    others.forEach(w => {
+        let o = null;
+        if (Math.hypot(w.x1 - anchor.x, w.y1 - anchor.y) < 1) o = { x: w.x2, y: w.y2 };
+        else if (Math.hypot(w.x2 - anchor.x, w.y2 - anchor.y) < 1) o = { x: w.x1, y: w.y1 };
+        if (!o) return;
+        const a = Math.atan2(o.y - anchor.y, o.x - anchor.x);
+        rays.push({ key: 'align:' + w.id, kind: 'align', ang: a });
+        rays.push({ key: 'right:' + w.id + ':+', kind: 'right', ang: a + Math.PI / 2 });
+        rays.push({ key: 'right:' + w.id + ':-', kind: 'right', ang: a - Math.PI / 2 });
+    });
+    if (dirU) rays.push({ key: 'own', kind: 'align', ang: Math.atan2(dirU.y, dirU.x) });
+    rays.forEach(r => {
+        const ux = Math.cos(r.ang), uy = Math.sin(r.ang);
+        const s = (p.x - anchor.x) * ux + (p.y - anchor.y) * uy;   // projection : seulement vers l'avant
+        if (s > 0) list.push({ key: r.key, kind: r.kind, pt: { x: anchor.x + ux * s, y: anchor.y + uy * s } });
+    });
+
+    // prolongement : point où le tracé rencontre un mur suivant
+    if (dirU) {
+        others.forEach(w => {
+            const vx = w.x2 - w.x1, vy = w.y2 - w.y1, L = Math.hypot(vx, vy);
+            if (!L) return;
+            const hx = vx / L, hy = vy / L;
+            const den = dirU.x * hy - dirU.y * hx;          // nul si parallèles
+            if (Math.abs(den) < 1e-6) return;
+            const ax = w.x1 - anchor.x, ay = w.y1 - anchor.y;
+            const s = (ax * hy - ay * hx) / den;              // distance le long du tracé
+            const r = (ax * dirU.y - ay * dirU.x) / den;    // position sur le mur suivant
+            if (s <= 1 || r < -2 || r > L + 2) return;
+            list.push({ key: 'wall:' + w.id, kind: 'wall', pt: { x: anchor.x + dirU.x * s, y: anchor.y + dirU.y * s } });
+        });
+    }
+    return list;
+}
+
+// Point accroché pour un bout de mur (ou p si rien n'est proche).
+// F : point fixe (null pour un premier point), u : direction du tracé (ou null), excludeId : mur édité.
+function magnetWallEnd(p, F, u, excludeId) {
+    const ctx = String(excludeId) + '|' + (F ? F.x.toFixed(1) + ',' + F.y.toFixed(1) : '-');
+    const rPx = SNAP_RADIUS_PX / zoom;
+    const cands = wallSnapCandidates(p, F, u, excludeId);
+    const dist = c => Math.hypot(p.x - c.pt.x, p.y - c.pt.y);
+
+    // meilleure accroche dans le rayon d'entrée (les bouts et le mur suivant d'abord)
+    let best = null, bestScore = Infinity;
+    cands.forEach(c => {
+        const d = dist(c);
+        if (!(d <= rPx)) return;   // NaN exclu
+        const score = d + SNAP_RANK[c.kind] * rPx * 0.3;
+        if (score < bestScore) { bestScore = score; best = c; }
+    });
+
+    // accroche en cours : elle tient tant que le curseur reste dans le rayon de sortie,
+    // sauf si une accroche plus prioritaire entre dans le rayon d'entrée
+    let sticky = null;
+    if (wallSnap && wallSnap.ctx === ctx) {
+        const same = cands.find(c => c.key === wallSnap.key);
+        if (same && dist(same) <= rPx * SNAP_RELEASE) sticky = same;
+    }
+    let pick = null;
+    if (sticky && (!best || SNAP_RANK[best.kind] >= SNAP_RANK[sticky.kind])) pick = sticky;
+    else pick = best;
+
+    wallSnap = pick ? { ctx, key: pick.key, kind: pick.kind, pt: pick.pt } : null;
+    return pick ? pick.pt : p;
+}
+
 function zoomCanvas(factor) {
     zoom = Math.max(0.2, Math.min(5.0, zoom * factor));
     document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(zoom * 100)}%`;
@@ -700,7 +862,10 @@ function drawElementSymbol2D(el) {
     ctx2D.lineCap = 'round';
 
     if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_32a') {
-        const r = t === 'outlet_32a' ? 9.5 : 4.5;   // prise simple : demi-disque à l'échelle du module
+        // prise simple : demi-disque à l'échelle du module ; dans une double / triple, le demi-disque est un peu plus petit
+    // pour que les prises voisines (7,5 cm d'entraxe) ne se chevauchent pas
+    const inGang = (_gangSizes2D || computeOutletGangs().sizeOf).get(el.id) > 1;
+    const r = t === 'outlet_32a' ? 9.5 : (inGang ? 3.4 : 4.5);
         line(-1, -r - 1.5, -1, r + 1.5, 2.2);                      // trait de mur
         ctx2D.beginPath();                                          // demi-disque
         ctx2D.arc(-1, 0, r, -Math.PI / 2, Math.PI / 2);
@@ -822,7 +987,9 @@ function drawElementSymbol2D(el) {
         ctx2D.stroke();
         ctx2D.globalAlpha = 1;
     }
-    if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
+    // élément sélectionné depuis son circuit : repère qui clignote (visible un temps sur deux)
+    const blinkSel = el.id === selected3DId && !!circ && circ.id === selectedCircuitId;
+    if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id)) && (!blinkSel || blinkOn)) {
         ctx2D.beginPath();
         if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
         else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + 4, 0, Math.PI * 2);
@@ -920,7 +1087,11 @@ function drawWallLengthLabels() {
     ctx2D.textBaseline = 'alphabetic';
 }
 
+// Tailles des groupes de prises (double, triple…), calculées une fois par dessin du plan
+let _gangSizes2D = null;
+
 function draw2DEquipment() {
+    _gangSizes2D = computeOutletGangs().sizeOf;
     ensureCircuitAssignment();
     // 1. Câbles (trait plein = plafond, pointillé = plinthe)
     if (showCables2D && projectData.electrical.length) {
@@ -1193,7 +1364,10 @@ function defaultHeightFor(type) {
 // Trémie : niveau relié choisi dans la liste de la barre de droite (le plus proche par défaut).
 function askShaftLevels() {
     const others = otherLevelsByDistance();
-    if (!others.length) return [activeLevelId];
+    if (!others.length) {
+        showNotification('Aucun autre niveau : rien à relier pour l’instant. Ajoutez un étage pour le relier.', 'info');
+        return [activeLevelId];
+    }
     const linkSel = document.getElementById(currentMode === '3d' ? 'shaft-link-level-3d' : 'shaft-link-level');
     const chosen = linkSel && others.some(l => l.id === linkSel.value) ? linkSel.value : others[0].id;
     return [activeLevelId, chosen];
@@ -1214,6 +1388,7 @@ function place2DAt(coords) {
         return;
     }
     if (type === 'light_ceiling') {
+        if (ceilingSpotBlocker(coords.x, coords.y, activeLevelId)) { refuseSameSpot(); return; }
         saveStateToUndo();
         projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, x: coords.x, y: 245, z: coords.y });
     } else {
@@ -1222,6 +1397,7 @@ function place2DAt(coords) {
             showNotification("Cliquez près d'un mur pour placer cet élément", 'error');
             return;
         }
+        if (sameSpotBlocker(type, activeLevelId, info.wall.id, Math.round(info.dist))) { refuseSameSpot(); return; }
         let shaftLinks = null;
         if (type === 'shaft') {
             shaftLinks = askShaftLevels();

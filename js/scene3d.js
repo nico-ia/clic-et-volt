@@ -19,7 +19,7 @@ function init3DScene() {
     threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
     threeControls.enableDamping = true;
     threeControls.dampingFactor = 0.05;
-    threeControls.minDistance = 100;
+    threeControls.minDistance = 3;   // zoom avant très proche de l'élément
     threeControls.maxDistance = 3000;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
@@ -482,6 +482,8 @@ function computeCableNetwork() {
     ensureCircuitAssignment();
     const C = CABLE_CFG;
     const walls = wallsOn().filter(w => Math.hypot(w.x2 - w.x1, w.y2 - w.y1) > 1);
+    // faces extérieures : les gaines et les fils restent à l'intérieur du logement
+    const outFaces = outsideFacesOf();
     const els = electricalOn();
     const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {} };
     let panel = els.find(e => e.type === 'panel') || null;
@@ -521,13 +523,18 @@ function computeCableNetwork() {
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
         const ux = dx / len, uy = dy / len, nx = uy, ny = -ux, th = w.thickness || 10;
         const ext = th + 10;   // prolongement pour retrouver les angles
+        const outs = outFaces.faces.get(w.id) || [];
         [1, -1].forEach(side => {
+            if (outs.length === 1 && outs[0] === side) return;   // mur extérieur : pas de piste sur la face extérieure
             const off = side * (th / 2 + C.trackOffset);
-            tracks.push({ wall: w, side, len, ux, uy, ox: w.x1 + nx * off, oy: w.y1 + ny * off, t0: -ext, t1: len + ext, st: [-ext, 0, len, len + ext] });
+            // stations seulement sur le mur : aucun tronçon ne dépasse un angle vers l'extérieur
+            tracks.push({ wall: w, side, len, ux, uy, ox: w.x1 + nx * off, oy: w.y1 + ny * off, t0: -ext, t1: len + ext, st: [0, len] });
         });
     });
     const P = (t, s) => ({ x: t.ox + t.ux * s, y: t.oy + t.uy * s });
-    const trackOf = (w, side) => tracks.find(t => t.wall === w && t.side === side);
+    // mur extérieur : la face extérieure n'a pas de piste, on prend la piste intérieure
+    const trackOf = (w, side) => tracks.find(t => t.wall === w && t.side === side) || tracks.find(t => t.wall === w);
+    const twoFaces = w => tracks.filter(t => t.wall === w).length === 2;
 
     // 2. Intersections entre pistes (angles, T, croisements)
     const junctions = [];
@@ -607,6 +614,7 @@ function computeCableNetwork() {
 
     // 6. Stations de passage de cloison : les deux faces d'un mur partagent les mêmes stations
     walls.forEach(w => {
+        if (!twoFaces(w)) return;
         const tA = trackOf(w, 1), tB = trackOf(w, -1);
         const S = new Set();
         [tA, tB].forEach(t => t.st.forEach(s => S.add(Math.round(s * 100) / 100)));
@@ -700,6 +708,7 @@ function computeCableNetwork() {
 
     // Passages de cloison : un par station et par niveau, là où le mur est plein
     walls.forEach(w => {
+        if (!twoFaces(w)) return;
         const tA = trackOf(w, 1), tB = trackOf(w, -1);
         const ss = tA.st.slice().sort((p, q) => p - q).filter((s, i, arr) => i === 0 || s - arr[i - 1] > 0.3);
         ss.forEach(s => {
@@ -713,6 +722,24 @@ function computeCableNetwork() {
             });
         });
     });
+
+    // Bouts de murs voisins non jointifs (angle pas tout à fait fermé) : un petit raccord les relie, au lieu
+    // de faire faire le tour complet du logement au câble. Pas de raccord si un mur sépare les deux points.
+    const bridgeMax = 40;   // cm
+    const ends = [];
+    tracks.forEach(t => [0, t.len].forEach(s => ends.push({ t, p: P(t, s) })));
+    for (let i = 0; i < ends.length; i++) {
+        for (let j = i + 1; j < ends.length; j++) {
+            const a = ends[i], b = ends[j];
+            if (a.t.wall === b.t.wall) continue;
+            const d = Math.hypot(b.p.x - a.p.x, b.p.y - a.p.y);
+            if (d < 0.5 || d > bridgeMax) continue;
+            if (insideBody(a.p.x, a.p.y) || insideBody(b.p.x, b.p.y)) continue;
+            if (segmentHitsWall(a.p.x, a.p.y, b.p.x, b.p.y)) continue;
+            levels.forEach(L => addEdge(node(a.p.x, a.p.y, L.z), node(b.p.x, b.p.y, L.z), L.kind));
+            [a, b].forEach(q => addEdge(node(q.p.x, q.p.y, C.lowZ), node(q.p.x, q.p.y, ceilZ), 'riser'));
+        }
+    }
 
     // Colonnes verticales dans les angles / jonctions (sauf devant une ouverture)
     junctions.forEach(j => {
@@ -1988,7 +2015,7 @@ function on3DPointerDown(e) {
                 snapStairToWalls(projectData.stairs[projectData.stairs.length - 1]);
                 showNotification('Escalier posé', 'success');
                 build3DScene();
-                setPlacementType(null);
+                // le mode de pose reste actif : on enchaîne les poses (Échap ou second clic pour arrêter)
             }
             return;
         }
@@ -2007,6 +2034,7 @@ function on3DPointerDown(e) {
                     const cy = (minY + maxY) / 2;
                     const pt = ceilingIntersect[0].point;
 
+                    if (ceilingSpotBlocker(pt.x + cx, pt.z + cy, activeLevelId)) { refuseSameSpot(); return; }
                     saveStateToUndo();
                     projectData.electrical.push({ levelId: activeLevelId,
                         id: 'el_' + Date.now(),
@@ -2017,7 +2045,7 @@ function on3DPointerDown(e) {
                     });
                     build3DScene();
                     showNotification("Plafonnier ajouté au plafond", "success");
-                    setPlacementType(null);
+                    // le mode de pose reste actif : on enchaîne les poses (Échap ou second clic pour arrêter)
                     return;
                 }
             }
@@ -2056,6 +2084,7 @@ function on3DPointerDown(e) {
                     const localHit = hitWallMesh.worldToLocal(hitPt.clone());
                     const side = localHit.x >= 0 ? 1 : -1;
 
+                    if (sameSpotBlocker(activePlacementType, activeLevelId, wall.id, distanceCm)) { refuseSameSpot(); return; }
                     saveStateToUndo();
                     if (activePlacementType === 'shaft') {
                         // trémie posée en 3D : même réglage de liaison que la 2D (liste « Relier à »)
@@ -2064,7 +2093,7 @@ function on3DPointerDown(e) {
                         renderLevelSelector();
                         showNotification('Trémie placée sur le mur', 'success');
                         build3DScene();
-                        setPlacementType(null);
+                        // le mode de pose reste actif : on enchaîne les poses (Échap ou second clic pour arrêter)
                         return;
                     }
                     if (activePlacementType === 'door_single' || activePlacementType === 'window_std') {
@@ -2101,7 +2130,7 @@ function on3DPointerDown(e) {
                         showNotification(`Appareillage fixé (${activePlacementType.toUpperCase()}, Côté ${side === 1 ? 'A' : 'B'})`, "success");
                     }
                     build3DScene();
-                    setPlacementType(null);
+                    // le mode de pose reste actif : on enchaîne les poses (Échap ou second clic pour arrêter)
                     return;
                 }
             }
@@ -2536,6 +2565,7 @@ function shaftTitle(id) {
 
 function select3DElement(id, meshObj) {
     selected3DId = id;
+    refreshCircuitHighlights3D();
     updateCircuitsUI();   // le bouton de désélection de la liaison suit la sélection
     updateSelectionHighlight(meshObj);
     document.getElementById('inspector-3d').classList.remove('hidden');
@@ -2826,9 +2856,28 @@ function addCircuitElementHighlights() {
         helper.material.depthTest = false;
         helper.renderOrder = 10;
         helper.userData.shared = false;
+        helper.userData.circuitHL = true;
+        // élément sélectionné depuis le circuit : son cadre clignote avec le même rythme que les alertes
+        if (obj.userData.id === selected3DId) {
+            helper.userData.blink = true;
+            helper.visible = blinkOn;
+        }
         threeScene.add(helper);
         wallMeshes3D.push(helper);
     });
+}
+
+// Surbrillance du circuit reconstruite à chaque changement de sélection : le nouvel élément sélectionné
+// clignote aussitôt, et l'ancien ne clignote plus
+function refreshCircuitHighlights3D() {
+    for (let i = wallMeshes3D.length - 1; i >= 0; i--) {
+        const m = wallMeshes3D[i];
+        if (m.userData && m.userData.circuitHL) {
+            threeScene.remove(m);
+            wallMeshes3D.splice(i, 1);
+        }
+    }
+    addCircuitElementHighlights();
 }
 
 let blinkOn = true;

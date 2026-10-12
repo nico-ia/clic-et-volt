@@ -144,12 +144,6 @@ window.addEventListener('DOMContentLoaded', () => {
             if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); return; }
             if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redoAction(); return; }
         }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
-            e.preventDefault();
-            duplicateSelectedElement();
-            return;
-        }
         // Flèches : déplacement de l'élément sélectionné (2D et 3D), Maj : pas fin de 1 cm
         if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey &&
             !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
@@ -166,20 +160,20 @@ window.addEventListener('DOMContentLoaded', () => {
 // =====================================================================
 //  SIDEBARS : repli au clic + redimensionnement à la souris
 // =====================================================================
-const SIDEBAR_MIN = 180, SIDEBAR_DEFAULT = 240;
+const SIDEBAR_MIN = 180, SIDEBAR_DEFAULT = 300;
 const SIDEBARS = [];
 
 function sidebarMax() { return Math.max(SIDEBAR_MIN + 40, Math.min(640, Math.round(window.innerWidth * 0.45))); }
 
 function readSidebarPrefs() {
-    try { return JSON.parse(localStorage.getItem('clic_and_volt_sidebars_v2') || '{}') || {}; } catch (e) { return {}; }
+    try { return JSON.parse(localStorage.getItem('clic_and_volt_sidebars_v3') || '{}') || {}; } catch (e) { return {}; }
 }
 
 function saveSidebarPrefs() {
     try {
         const prefs = {};
         SIDEBARS.forEach(sb => { prefs[sb.key] = { width: sb.width, collapsed: sb.collapsed }; });
-        localStorage.setItem('clic_and_volt_sidebars_v2', JSON.stringify(prefs));
+        localStorage.setItem('clic_and_volt_sidebars_v3', JSON.stringify(prefs));
     } catch (e) { /* stockage indisponible : on ignore */ }
 }
 
@@ -408,6 +402,22 @@ function switchMode(mode) {
 function placementLabel(type) {
     const names = { door_single: 'Porte', window_std: 'Fenêtre', shaft: 'Trémie', stair: 'Escalier', light_ceiling: 'Plafonnier', wall: 'Mur' };
     return names[type] || ELEMENT_LABELS[type] || type;
+}
+
+// Garde-fou : pas deux appareils identiques au même endroit (même mur, même niveau, à moins de 30 cm)
+const SAME_SPOT_CM = 30;
+function sameSpotBlocker(type, levelId, wallId, distCm) {
+    const pool = [...(projectData.electrical || []), ...(projectData.openings || []), ...(projectData.shafts || [])];
+    return pool.find(e => e.levelId === levelId && (e.type || 'shaft') === type && e.wallId === wallId
+        && Math.abs((e.distanceFromStart || 0) - distCm) < SAME_SPOT_CM) || null;
+}
+// Idem pour un plafonnier : à moins de 30 cm (en plan) d'un autre plafonnier du niveau
+function ceilingSpotBlocker(x, z, levelId) {
+    return (projectData.electrical || []).find(e => e.levelId === levelId && e.type === 'light_ceiling'
+        && Math.hypot(e.x - x, e.z - z) < SAME_SPOT_CM) || null;
+}
+function refuseSameSpot() {
+    showNotification('Un élément identique est déjà à cet endroit (moins de 30 cm) : pose annulée', 'error');
 }
 
 // Ligne d'aide du mode « poser » en 2D
@@ -687,7 +697,9 @@ function renderLevelSelector() {
         if (!linkSel) return;
         const others = otherLevelsByDistance();
         const prev = linkSel.value;
-        linkSel.innerHTML = others.map(l => '<option value="' + esc(l.id) + '">' + esc(l.name) + ' (' + (l.elevation / 100).toFixed(2) + ' m)</option>').join('');
+        linkSel.innerHTML = others.length
+            ? others.map(l => '<option value="' + esc(l.id) + '">' + esc(l.name) + ' (' + (l.elevation / 100).toFixed(2) + ' m)</option>').join('')
+            : '<option value="" disabled selected>Aucun autre niveau : ajoutez un étage</option>';
         linkSel.value = others.some(l => l.id === prev) ? prev : (others[0] ? others[0].id : '');
     });
 }
@@ -720,9 +732,12 @@ function setActiveLevel(id) {
 
 // Murs extérieurs d'un niveau : un mur est extérieur si l'un de ses deux côtés touche l'extérieur du bâtiment.
 // On trace les murs sur une grille de 2 cm, on remplit l'extérieur depuis le bord, puis on regarde chaque côté.
-function exteriorWallsOf(levelId) {
+// Faces extérieures des murs d'un niveau : pour chaque mur, les côtés (+1 / -1, comme les pistes du câblage)
+// qui donnent sur l'extérieur du logement. isOutside(x, y) dit si un point du plan est dehors.
+function outsideFacesOf(levelId) {
     const walls = wallsOn(levelId);
-    if (!walls.length) return [];
+    const faces = new Map();
+    if (!walls.length) return { faces, isOutside: () => false };
     const margin = 100, cell = 2;
     const minX = Math.min(...walls.map(w => Math.min(w.x1, w.x2))) - margin;
     const minY = Math.min(...walls.map(w => Math.min(w.y1, w.y2))) - margin;
@@ -759,16 +774,29 @@ function exteriorWallsOf(levelId) {
             queue.push(n);
         });
     }
-    return walls.filter(w => {
+    const isOutside = (x, y) => {
+        const [cx, cy] = toC(x, y);
+        if (cx < 0 || cy < 0 || cx >= W || cy >= H) return true;
+        return outside[cy * W + cx] === 1;
+    };
+    walls.forEach(w => {
         const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) || 1;
-        const nx = -(w.y2 - w.y1) / len, ny = (w.x2 - w.x1) / len;
+        // même normale que les pistes du câblage : (dy, -dx) / longueur
+        const nx = (w.y2 - w.y1) / len, ny = -(w.x2 - w.x1) / len;
         const off = (w.thickness || 10) / 2 + 3;
         const mx = (w.x1 + w.x2) / 2, my = (w.y1 + w.y2) / 2;
-        return [1, -1].some(s => {
+        const sides = [1, -1].filter(s => {
             const [cx, cy] = toC(mx + s * off * nx, my + s * off * ny);
             return cx >= 0 && cy >= 0 && cx < W && cy < H && outside[cy * W + cx] === 1;
         });
+        faces.set(w.id, sides);
     });
+    return { faces, isOutside };
+}
+
+function exteriorWallsOf(levelId) {
+    const { faces } = outsideFacesOf(levelId);
+    return wallsOn(levelId).filter(w => (faces.get(w.id) || []).length > 0);
 }
 
 // Création : nom et cote demandés. Par défaut : sous-sol à −2,60 m ; étage à la cote la plus haute + 2,70 m.
@@ -1105,12 +1133,17 @@ function circuitOf(el) {
 }
 
 // Clignotement des appareils en collision (plan 2D et vue 3D)
+// Élément sélectionné depuis un circuit : son repère clignote pour qu'on sache qu'il est sélectionné
+function selectionBlinkNeeded() {
+    return !!(selectedCircuitId && selected3DId);
+}
+
 function startCollisionBlink() {
     setInterval(() => {
         blinkOn = !blinkOn;
         if (currentMode === '3d') {
             wallMeshes3D.forEach(m => { if (m.userData && m.userData.blink) m.visible = blinkOn; });
-        } else if (currentMode === '2d' && collidingElementIds().size) {
+        } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded())) {
             redraw2D();
         }
         // Onglet Alertes et cartes de circuits en alerte : même clignotement rouge, dans les deux vues
@@ -1135,6 +1168,11 @@ const AUTO_ASSIGN = { map: new Map(), sig: null };
 
 function ensureCircuitAssignment() {
     const circuits = projectData.circuits;
+    // une suite automatique suit le calibre et la section de son circuit d'origine ; sa capacité lui est propre
+    circuits.forEach(c => {
+        const base = c.auto && circuits.find(b => b.id === c.baseId);
+        if (base) { c.breakerRating = base.breakerRating; c.wireSection = base.wireSection; }
+    });
     const pts = projectData.electrical.filter(isCircuitPoint);
     const sigOf = () => JSON.stringify([
         circuits.map(c => [c.id, c.name, c.maxPoints, c.breakerRating, c.wireSection, c.baseId || 0, c.wiringMode || 'chain']),
@@ -1211,7 +1249,7 @@ function ensureCircuitAssignment() {
             if (!c) {
                 let n = 2;
                 while (byId(F.id + '_x' + n)) n++;
-                c = { id: F.id + '_x' + n, name: F.name, type: F.type, maxPoints: F.maxPoints, breakerRating: F.breakerRating, wireSection: F.wireSection, color: nextCircuitColor(), auto: true, baseId: F.id };
+                c = { id: F.id + '_x' + n, name: F.name, type: F.type, maxPoints: CIRCUIT_POINT_LIMITS[F.id] !== undefined ? CIRCUIT_POINT_LIMITS[F.id] : F.maxPoints, breakerRating: F.breakerRating, wireSection: F.wireSection, color: nextCircuitColor(), auto: true, baseId: F.id };
                 circuits.splice(circuits.indexOf(chain[chain.length - 1]) + 1, 0, c);
                 chain.push(c);
                 count.set(c.id, 0);
@@ -1325,7 +1363,6 @@ function ensureProjectDefaults() {
     }
     projectData.circuits.forEach(c => {
         if (c.id === 'c_lighting') {
-            if (c.maxPoints === 5) c.maxPoints = 8;
             if (c.name === 'Circuit Éclairage') c.name = 'Éclairage 10A';
         }
         const limit = CIRCUIT_POINT_LIMITS[c.id];
@@ -1339,6 +1376,8 @@ function ensureProjectDefaults() {
     });
     projectData.circuits.forEach(c => { if (!c.color) c.color = nextCircuitColor(); });
     delete projectData.wires;
+    // répartition recalculée dès le chargement : pas d'affichage « tout sur le premier circuit » avant le premier calcul
+    ensureCircuitAssignment();
 }
 
 // ---------- Contrôles par circuit + métré ----------
@@ -2012,7 +2051,7 @@ function circuitWarningHint(w) {
     const t = String(w);
     if (t.includes('points')) return 'Réglages du circuit (⚙) : retirez des points, ou répartissez-les sur un circuit de plus.';
     if (t.includes('section')) return 'Réglages du circuit (⚙) : choisissez une section de câble adaptée au calibre.';
-    if (t.includes('chute')) return 'Réglages du circuit (⚙) : passez à une section supérieure, ou rapprochez l’appareil le plus éloigné du tableau.';
+    if (t.includes('chute')) return 'Réglages du circuit (⚙) : passez à une section supérieure, ou scindez le circuit en deux en retirant des éléments vers un second circuit (moins d’appareils sur le trajet le plus long).';
     return 'Réglages du circuit (⚙) : ajustez le calibre ou la section.';
 }
 
@@ -2059,7 +2098,7 @@ function solutionForWarning(message) {
         return 'Augmentez la section des conducteurs pour qu’elle soit adaptée au calibre de la protection et au mode de pose.';
     }
     if (text.includes('chute de tension')) {
-        return 'Vérifiez le parcours et le dimensionnement ; réduisez la longueur si possible ou augmentez la section des conducteurs.';
+        return 'Vérifiez le dimensionnement : augmentez la section des conducteurs, ou scindez le circuit en deux en diminuant le nombre d’éléments (répartissez-les sur un second circuit).';
     }
     if (text.includes('sans chemin') || text.includes('pas pu être reliés')) {
         return 'Le câble ne trouve pas de passage : vérifiez que les murs se rejoignent bien, rapprochez l’appareil du parcours des autres câbles ou ajoutez une trémie à proximité.';
@@ -2765,7 +2804,10 @@ function updateLightingAssociations(el) {
     }
 
     boxes.forEach(box => {
+        // les volets « Modifier les associations » gardent leur état ouvert / fermé après la mise à jour
+        const openStates = [...box.querySelectorAll('details')].map(d => d.open);
         box.innerHTML = content;
+        box.querySelectorAll('details').forEach((d, i) => { if (openStates[i]) d.open = true; });
         box.classList.remove('hidden');
         box.querySelectorAll('[data-related-id]').forEach(button => {
             button.addEventListener('click', () => focusAssociatedElement(button.dataset.relatedId));
@@ -2842,10 +2884,8 @@ function syncElementInspectors() {
     // une boîte posée a son propre choix de circuit
     const circ = !!(el && (isCircuitPoint(el) || el.type === 'junction_box'));
     const c3 = document.getElementById('circuit-select-container');
-    const d3 = document.getElementById('duplicate-btn-3d');
     if (c3) c3.classList.toggle('hidden', !circ);
     setCircuitInspectorText(el);
-    if (d3) d3.classList.toggle('hidden', !el);
     const box = document.getElementById('el-inspector-2d');
     if (box) {
         // l'inspecteur 2D couvre aussi l'escalier, comme l'inspecteur 3D
@@ -2853,7 +2893,6 @@ function syncElementInspectors() {
         if (el || op || stairSel) {
             document.getElementById('el2d-name').textContent = el ? electricalDisplayName(el) : op ? (op.type === 'door_single' ? 'Porte' : 'Fenêtre') : 'Escalier';
             document.getElementById('el2d-circuit-wrap').classList.toggle('hidden', !circ);
-            document.getElementById('el2d-dup').classList.toggle('hidden', !el);
         }
     }
     // Trémie sélectionnée (D5) : inspecteur de taille
@@ -3200,30 +3239,6 @@ function syncSelectionSliders() {
 function updateNudgePads() {
     const can = !!selectedMovable();
     document.querySelectorAll('.nudge-pad').forEach(p => p.classList.toggle('hidden', !can));
-}
-
-function duplicateSelectedElement() {
-    const el = projectData.electrical.find(e => e.id === selected3DId);
-    if (!el) { showNotification('Sélectionnez un appareil à dupliquer', 'info'); return; }
-    saveStateToUndo();
-    const copy = JSON.parse(JSON.stringify(el));
-    copy.id = 'el_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-    if (el.type === 'light_ceiling') {
-        copy.x = el.x + 40;
-    } else {
-        const w = projectData.walls.find(x => x.id === el.wallId);
-        if (w) {
-            const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
-            const d = el.distanceFromStart !== undefined ? el.distanceFromStart : len / 2;
-            copy.distanceFromStart = Math.round(d + 35 > len - 10 ? Math.max(10, d - 35) : d + 35);
-        }
-    }
-    projectData.electrical.push(Object.assign(copy, { levelId: activeLevelId }));
-    selected3DId = copy.id;
-    if (currentMode === '3d') build3DScene();
-    redraw2D();
-    syncElementInspectors();
-    showNotification('Appareil dupliqué', 'success');
 }
 
 // ---------- Plan 2D : appareils, ouvertures, câbles ----------
