@@ -100,20 +100,23 @@ window.addEventListener('DOMContentLoaded', () => {
     init2DCanvas();
     init3DScene();
     ensureProjectDefaults();
-    restoreAutosave();
-    ensureShaftLinkControl();
-    renderLevelSelector();
-    updateCircuitsUI();
-    updateStats();
-    startAutosave();
-    startCollisionBlink();
-    startLiveReport();
-    ensureNudgePads();
-    bindHelpButton();
-    // outil par défaut : Sélectionner (surligne le bon bouton et affiche son aide)
-    setTool('select');
-    placeSharedInspectors();
-    updateWallEditButtons();
+    // la reprise du projet retrouvé passe avant la suite : sinon l'enregistrement automatique écraserait le projet
+    restoreAutosave().then(() => {
+        ensureShaftLinkControl();
+        renderLevelSelector();
+        updateCircuitsUI();
+        updateStats();
+        startAutosave();
+        startCollisionBlink();
+        startLiveReport();
+        ensureNudgePads();
+        bindHelpButton();
+        // outil par défaut : Sélectionner (surligne le bon bouton et affiche son aide)
+        setTool('select');
+        placeSharedInspectors();
+        setToolHintOpen(localStorage.getItem(TOOL_HINT_KEY) !== 'fermee');
+        updateWallEditButtons();
+    });
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && document.getElementById('help-panel')) { toggleHelpPanel(false); return; }
@@ -529,13 +532,24 @@ function interactionStatus2D() {
 
 // L'indication se place dans le coin haut-gauche du plan, en 2D comme en 3D
 function placeToolHint() {
-    const span = document.getElementById('drawing-instruction-hint');
+    const wrap = document.getElementById('tool-hint');
     const slot = document.getElementById('tool-hint-slot-3d');
-    if (!span || !slot) return;
-    const mark = sharedHomeMark(span);
-    if (currentMode === '3d') slot.appendChild(span);
-    else mark.parentNode.insertBefore(span, mark);
+    if (!wrap || !slot) return;
+    const mark = sharedHomeMark(wrap);
+    if (currentMode === '3d') slot.appendChild(wrap);
+    else mark.parentNode.insertBefore(wrap, mark);
 }
+
+// Bulle d'aide du plan : fermable (croix) et rouvrable (pastille « ? »). Le choix est gardé d'une visite à l'autre.
+const TOOL_HINT_KEY = 'cv_aide_plan_v1';
+function setToolHintOpen(open) {
+    if (!document.getElementById('tool-hint')) return;
+    document.getElementById('drawing-instruction-hint').classList.toggle('hidden', !open);
+    document.getElementById('tool-hint-close').classList.toggle('hidden', !open);
+    document.getElementById('tool-hint-open').classList.toggle('hidden', open);
+    localStorage.setItem(TOOL_HINT_KEY, open ? 'ouverte' : 'fermee');
+}
+
 
 function setTool(tool) {
     currentTool = tool;
@@ -701,7 +715,7 @@ function refuseIfWallsLocked() {
     return true;
 }
 
-function deleteMultiSelection() {
+async function deleteMultiSelection() {
     const wallIds = new Set(selectedWallIds);
     if (wallIds.size && refuseIfWallsLocked()) wallIds.clear();   // les autres éléments sélectionnés restent supprimables
     const devIds = new Set(selectedDeviceIds);
@@ -714,7 +728,7 @@ function deleteMultiSelection() {
     if (devIds.size) parts.push(devIds.size > 1 ? devIds.size + ' appareils' : 'l’appareil sélectionné');
     if (opIds.size) parts.push(opIds.size > 1 ? opIds.size + ' ouvertures' : 'l’ouverture sélectionnée');
     if (shIds.size) parts.push('la trémie ou l’escalier sélectionné');
-    if (!confirmDeletion(parts.join(' et '))) return;
+    if (!(await confirmDeletion(parts.join(' et ')))) return;
     saveStateToUndo();
     projectData.walls = projectData.walls.filter(w => !wallIds.has(w.id));
     projectData.openings = projectData.openings.filter(o => !wallIds.has(o.wallId) && !opIds.has(o.id));
@@ -944,16 +958,16 @@ function confirmLevelDialog() {
 }
 
 // Renommage du niveau affiché (sous-sols compris)
-function renameActiveLevel() {
+async function renameActiveLevel() {
     const lvl = projectData.levels.find(l => l.id === activeLevelId);
     if (!lvl) return;
-    const input = prompt('Nouveau nom du niveau :', lvl.name);
-    if (input === null) return;
-    const name = input.trim();
-    if (!name) { showNotification('Le nom ne peut pas être vide', 'error'); return; }
-    if (projectData.levels.some(l => l.id !== lvl.id && l.name.trim().toLowerCase() === name.toLowerCase())) {
-        showNotification('Ce nom existe déjà', 'error'); return;
-    }
+    const values = await askFields('Renommer le niveau', [{ id: 'name', label: 'Nouveau nom du niveau', value: lvl.name }], 'Renommer', v => {
+        if (!v.name) return 'Le nom ne peut pas être vide.';
+        if (projectData.levels.some(l => l.id !== lvl.id && l.name.trim().toLowerCase() === v.name.toLowerCase())) return 'Ce nom existe déjà.';
+        return null;
+    });
+    if (values === null) return;
+    const name = values.name;
     if (name === lvl.name) return;
     saveStateToUndo();
     lvl.name = name;
@@ -964,23 +978,25 @@ function renameActiveLevel() {
 }
 
 // Cote (altitude) et hauteur sous plafond du niveau affiché, modifiables après création
-function editActiveLevelHeights() {
+async function editActiveLevelHeights() {
     const lvl = projectData.levels.find(l => l.id === activeLevelId);
     if (!lvl) return;
-    const elevInput = prompt('Cote du niveau « ' + lvl.name + ' » en mètres (ex. 2,70 ou -2,50) :', String(lvl.elevation / 100).replace('.', ','));
-    if (elevInput === null) return;
-    const m = parseFloat(String(elevInput).replace('−', '-').replace(',', '.').trim());
-    if (!isFinite(m)) { showNotification('Cote invalide : indiquez des mètres, par exemple 2,70.', 'error'); return; }
-    const elevation = Math.round(m * 100);
-    if (projectData.levels.some(l => l.id !== lvl.id && l.elevation === elevation)) {
-        showNotification('Un autre niveau existe déjà à cette cote.', 'error'); return;
-    }
-    const ceilInput = prompt('Hauteur sous plafond du niveau en centimètres (150 à 500) :', String(lvl.ceilingHeight || 250));
-    if (ceilInput === null) return;
-    const ceilingHeight = Math.round(parseFloat(String(ceilInput).replace(',', '.').trim()));
-    if (!isFinite(ceilingHeight) || ceilingHeight < 150 || ceilingHeight > 500) {
-        showNotification('Hauteur sous plafond invalide : entre 150 et 500 cm.', 'error'); return;
-    }
+    const parseMeters = v => parseFloat(String(v).replace('−', '-').replace(',', '.').trim());
+    const parseCm = v => Math.round(parseFloat(String(v).replace(',', '.').trim()));
+    const values = await askFields('Cote et plafond du niveau « ' + lvl.name + ' »', [
+        { id: 'elev', label: 'Cote en mètres (ex. 2,70 ou -2,50)', value: String(lvl.elevation / 100).replace('.', ','), inputmode: 'decimal' },
+        { id: 'ceil', label: 'Hauteur sous plafond en centimètres (150 à 500)', value: String(lvl.ceilingHeight || 250), inputmode: 'numeric' }
+    ], 'Enregistrer', v => {
+        const m = parseMeters(v.elev);
+        if (!isFinite(m)) return 'Cote invalide : indiquez des mètres, par exemple 2,70.';
+        if (projectData.levels.some(l => l.id !== lvl.id && l.elevation === Math.round(m * 100))) return 'Un autre niveau existe déjà à cette cote.';
+        const ch = parseCm(v.ceil);
+        if (!isFinite(ch) || ch < 150 || ch > 500) return 'Hauteur sous plafond invalide : entre 150 et 500 cm.';
+        return null;
+    });
+    if (values === null) return;
+    const elevation = Math.round(parseMeters(values.elev) * 100);
+    const ceilingHeight = parseCm(values.ceil);
     if (elevation === lvl.elevation && ceilingHeight === (lvl.ceilingHeight || 250)) return;
     saveStateToUndo();
     lvl.elevation = elevation;
@@ -1001,13 +1017,13 @@ function refreshPlacementHints() {
 }
 
 // Suppression du niveau affiché, après confirmation. Passe par l'annulation.
-function deleteActiveLevel() {
+async function deleteActiveLevel() {
     const levels = projectData.levels;
     if (levels.length <= 1) { showNotification('Il faut garder au moins un niveau', 'error'); return; }
     const lvl = levels.find(l => l.id === activeLevelId);
     if (!lvl) return;
     const nW = wallsOn().length, nO = openingsOn().length, nE = electricalOn().length;
-    if (!confirm('Supprimer le niveau « ' + lvl.name + ' » avec ses ' + nW + ' murs, ' + nO + ' ouvertures et ' + nE + ' appareils ? Vous pourrez annuler.')) return;
+    if (!await askConfirm('Supprimer le niveau', 'Supprimer le niveau « ' + lvl.name + ' » avec ses ' + nW + ' murs, ' + nO + ' ouvertures et ' + nE + ' appareils ? Vous pourrez annuler.', 'Supprimer le niveau', { danger: true })) return;
     saveStateToUndo();
     const id = lvl.id;
     projectData.walls = projectData.walls.filter(w => w.levelId !== id);
@@ -1068,14 +1084,14 @@ function setStairProp(prop, v) {
 
 // Avertissement avant toute suppression (2D comme 3D). L'annulation reste possible.
 function confirmDeletion(what) {
-    return confirm('Supprimer ' + what + ' ?\n\nVous pourrez revenir en arrière avec Annuler (Ctrl+Z).');
+    return askConfirm('Supprimer', 'Supprimer ' + what + ' ?\n\nVous pourrez revenir en arrière avec Annuler (Ctrl+Z).', 'Supprimer', { danger: true });
 }
 
-function deleteSelectedWall() {
+async function deleteSelectedWall() {
     if (!selectedWallIds.length) return;
     if (refuseIfWallsLocked()) return;
     const ids = new Set(selectedWallIds);
-    if (!confirmDeletion(ids.size > 1 ? ids.size + ' murs' : 'le mur sélectionné')) return;
+    if (!(await confirmDeletion(ids.size > 1 ? ids.size + ' murs' : 'le mur sélectionné'))) return;
     saveStateToUndo();
     projectData.walls = projectData.walls.filter(w => !ids.has(w.id));
     projectData.openings = projectData.openings.filter(o => !ids.has(o.wallId));
@@ -1118,10 +1134,10 @@ function toggleAngleSnap() {
     paintAideBtn(document.getElementById('btn-angle-snap'), 'fa-compass', 'Ortho', angleSnap);
 }
 
-function clearCanvas() {
+async function clearCanvas() {
     if (projectData.walls.length === 0) return;
     if (refuseIfWallsLocked()) return;
-    if (confirm("Voulez-vous vraiment tout effacer ?")) {
+    if (await askConfirm('Tout effacer', 'Voulez-vous vraiment tout effacer ?', 'Tout effacer', { danger: true })) {
         saveStateToUndo();
         projectData.walls = [];
         projectData.openings = [];
@@ -2282,18 +2298,23 @@ function adjustCircuit(id, field, dir) {
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
 }
 
-function editCircuit(id) {
+async function editCircuit(id) {
     const c = projectData.circuits.find(x => x.id === id);
     if (!c) return;
-    const answer = prompt('Calibre (A), section (mm²), points maximum pour « ' + c.name + ' » :', c.breakerRating + ', ' + c.wireSection + ', ' + c.maxPoints);
-    if (!answer) return;
-    const [b, s, m] = answer.split(',').map(v => parseFloat(v.replace(',', '.')));
-    if (!(b > 0) || !(s > 0) || !(m >= 1)) { showNotification('Valeurs invalides (ex. : 16, 2.5, 8)', 'error'); return; }
+    const num = v => parseFloat(String(v).replace(',', '.'));
     const standardLimit = CIRCUIT_POINT_LIMITS[circuitRoot(c).id];
-    if (standardLimit !== undefined && Math.round(m) > standardLimit) {
-        showNotification('Limite NF C 15-100 dépassée : ' + standardLimit + ' points maximum pour ce circuit', 'error');
-        return;
-    }
+    const values = await askFields('Circuit « ' + c.name + ' »', [
+        { id: 'breaker', label: 'Calibre du disjoncteur (A)', value: String(c.breakerRating), inputmode: 'decimal' },
+        { id: 'section', label: 'Section du fil (mm²)', value: String(c.wireSection), inputmode: 'decimal' },
+        { id: 'points', label: 'Points maximum', value: String(c.maxPoints), inputmode: 'numeric' }
+    ], 'Enregistrer', v => {
+        const b = num(v.breaker), s = num(v.section), m = num(v.points);
+        if (!(b > 0) || !(s > 0) || !(m >= 1)) return 'Valeurs invalides (ex. : 16 ; 2,5 ; 8).';
+        if (standardLimit !== undefined && Math.round(m) > standardLimit) return 'Limite NF C 15-100 dépassée : ' + standardLimit + ' points maximum pour ce circuit.';
+        return null;
+    });
+    if (values === null) return;
+    const b = num(values.breaker), s = num(values.section), m = num(values.points);
     saveStateToUndo();
     c.breakerRating = b;
     c.wireSection = s;
@@ -3348,13 +3369,13 @@ function startAutosave() {
     }, 2000);
 }
 
-function restoreAutosave() {
+async function restoreAutosave() {
     try {
         const s = localStorage.getItem(AUTOSAVE_KEY);
         if (!s) return;
         const p = JSON.parse(s);
         if (p && Array.isArray(p.walls) && p.walls.length > 0) {
-            if (confirm('Un projet non enregistré a été retrouvé (' + p.walls.length + ' murs). Le reprendre ?')) {
+            if (await askConfirm('Projet retrouvé', 'Un projet non enregistré a été retrouvé (' + p.walls.length + ' murs). Le reprendre ?', 'Reprendre le projet', { cancelLabel: 'Ne pas reprendre' })) {
                 projectData = p;
                 ensureProjectDefaults();
                 recenter2DView();
@@ -3369,8 +3390,8 @@ function restoreAutosave() {
     } catch (e) { /* données illisibles : on ignore */ }
 }
 
-function triggerNewProject() {
-    if (confirm("Créer un nouveau projet effacera le travail en cours non sauvegardé. Continuer ?")) {
+async function triggerNewProject() {
+    if (await askConfirm('Nouveau projet', 'Créer un nouveau projet effacera le travail en cours non sauvegardé. Continuer ?', 'Créer le projet', { danger: true })) {
         projectData = {
             walls: [],
             openings: [],
@@ -3395,10 +3416,10 @@ function triggerNewProject() {
     }
 }
 
-function triggerSaveProject() {
-    const requestedName = prompt('Nom du fichier à enregistrer :', 'clic_and_volt_pro_projet');
-    if (requestedName === null) return;
-    const fileName = requestedName.trim()
+async function triggerSaveProject() {
+    const values = await askFields('Enregistrer le projet', [{ id: 'name', label: 'Nom du fichier (sans .json)', value: 'clic_and_volt_pro_projet' }], 'Enregistrer');
+    if (values === null) return;
+    const fileName = values.name
         .replace(/\.json$/i, '')
         .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
         .replace(/[. ]+$/g, '');
@@ -3456,12 +3477,12 @@ function pngDefaultFileName(mode) {
     return ('clic_and_volt_' + mode + levelPart).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_');
 }
 
-function savePlanPng(mode) {
+async function savePlanPng(mode) {
     try {
-        const input = prompt('Nom du fichier PNG (sans l’extension) :', pngDefaultFileName(mode));
-        if (input === null) return; // annulé
+        const values = await askFields('Enregistrer en PNG', [{ id: 'name', label: 'Nom du fichier PNG (sans l’extension)', value: pngDefaultFileName(mode) }], 'Enregistrer');
+        if (values === null) return; // annulé
         // nettoyage : caractères interdits dans un nom de fichier, extension .png en trop
-        let base = input.trim().replace(/\.png$/i, '').replace(/[\\/:*?"<>|]+/g, '-').trim();
+        let base = values.name.replace(/\.png$/i, '').replace(/[\\/:*?"<>|]+/g, '-').trim();
         if (!base) base = pngDefaultFileName(mode);
         const imageUrl = capturePlanImage(mode);
         if (!imageUrl) throw new Error('La vue à enregistrer est vide.');

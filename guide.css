@@ -19,6 +19,7 @@
 .g-anim { background: #020617; border: 1px solid #1e293b; border-radius: 12px; padding: 10px; display: flex; justify-content: center; }
 .g-svg { width: 100%; max-width: 480px; height: auto; }
 .g-text p { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+.g-ico { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; min-width: 26px; height: 22px; padding: 0 5px; margin: 0 2px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 13px; }
 .g-retenir { background: rgba(16,185,129,.1); border-left: 3px solid #10b981; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
 .g-prevnext { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; }
 .g-btn { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 8px 14px; border-radius: 8px; font-size: 14px; cursor: pointer; }
@@ -26,6 +27,11 @@
 .g-btn:disabled { opacity: .4; cursor: default; }
 .g-primary { background: #059669; border-color: #059669; color: #fff; }
 .g-primary:hover { background: #10b981 !important; }
+.g-essayer { border-color: #facc15; color: #fde047; }
+.g-essayer:hover { background: #334155; }
+body.theme-light .g-essayer { color: #854d0e; border-color: #ca8a04; }
+.essai-surligne { outline: 3px solid #facc15; outline-offset: 2px; animation: essai-halo .8s ease-in-out 5; }
+@keyframes essai-halo { 0%, 100% { outline-color: #facc15; } 50% { outline-color: transparent; } }
 
 /* Textes des animations */
 .g-lbl { fill: #94a3b8; font-size: 11px; text-anchor: middle; font-family: sans-serif; }
@@ -38,6 +44,7 @@
 .g-zone.z2 { animation-delay: .8s; }
 .g-zone.z3 { animation-delay: 1.6s; }
 .g-zone.z4 { animation-delay: 2.4s; }
+.g-zone.z5 { animation-delay: 3.2s; }
 @keyframes g-hl { 0%, 100% { stroke: #334155; } 5%, 20% { stroke: #34d399; } 25% { stroke: #334155; } }
 
 /* 2. Tracé de mur : le trait se dessine, les points apparaissent */
@@ -137,4 +144,5 @@ body.theme-light .g-navbtn { color: #475569; }
 body.theme-light .g-navbtn:hover { background: #e2e8f0; color: #0f172a; }
 body.theme-light .g-btn { background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; }
 body.theme-light .g-retenir { color: #0f172a; }
+body.theme-light .g-ico { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
 body.theme-light .g-navpart { color: #64748b; }

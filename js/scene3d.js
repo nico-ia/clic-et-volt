@@ -2825,12 +2825,12 @@ function updateSelected3DHeight(val) {
     }
 }
 
-function deleteSelected3DElement() {
+async function deleteSelected3DElement() {
     if (!selected3DId) return;
     const el = projectData.electrical.find(e => e.id === selected3DId);
     const op = !el ? projectData.openings.find(o => o.id === selected3DId) : null;
     const what = el ? electricalDisplayName(el) : op ? (op.type === 'door_single' ? 'la porte' : 'la fenêtre') : 'la trémie ou l’escalier sélectionné';
-    if (!confirmDeletion(what)) return;
+    if (!(await confirmDeletion(what))) return;
     saveStateToUndo();
     projectData.shafts = (projectData.shafts || []).filter(s => s.id !== selected3DId);
     projectData.stairs = (projectData.stairs || []).filter(s => s.id !== selected3DId);

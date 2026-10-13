@@ -63,9 +63,11 @@
         <rect class="g-zone z2" x="4" y="32" width="66" height="144" rx="4"/>
         <rect class="g-zone z3" x="76" y="32" width="168" height="144" rx="4"/>
         <rect class="g-zone z4" x="250" y="32" width="66" height="144" rx="4"/>
+        <rect class="g-zone z5" x="84" y="136" width="152" height="32" rx="6"/>
         <text class="g-lbl" x="37" y="110">Outils</text>
-        <text class="g-lbl" x="160" y="110">Plan</text>
+        <text class="g-lbl" x="160" y="92">Plan</text>
         <text class="g-lbl" x="283" y="110">Onglets</text>
+        <text class="g-lbl" x="160" y="156">Barre du bas</text>
         <text class="g-lbl" x="160" y="18">Barre du haut</text>`);
 
     const animTrace = () => svg(`
@@ -166,10 +168,12 @@
         <rect class="g-zone z2" x="4" y="32" width="80" height="144" rx="4"/>
         <rect class="g-zone z3" x="92" y="32" width="136" height="144" rx="4"/>
         <rect class="g-zone z4" x="236" y="32" width="80" height="144" rx="4"/>
+        <rect class="g-zone z5" x="96" y="122" width="124" height="46" rx="6"/>
         <text class="g-lbl" x="160" y="18">Barre du haut</text>
         <text class="g-lbl" x="44" y="110">Outils</text>
-        <text class="g-lbl" x="160" y="110">Vue 3D</text>
-        <text class="g-lbl" x="276" y="110">Onglets</text>`);
+        <text class="g-lbl" x="160" y="92">Vue 3D</text>
+        <text class="g-lbl" x="276" y="110">Onglets</text>
+        <text class="g-lbl" x="158" y="149">Barre du bas</text>`);
 
     // Rotation : la pièce « tourne » (largeur qui varie), clic gauche / clic droit / molette
     const animOrbit = () => svg(`
@@ -309,42 +313,49 @@
         { part: 'Plan 2D', title: 'Découvrir l\'écran', anim: animZones,
           text: ['En haut : le niveau (menu), Nouveau, Enregistrer, Ouvrir, Guide.',
                  'À gauche : la boîte à outils (tracer, sélectionner) et « Aides & Commandes ».',
-                 'Au centre : le plan. En bas du plan : Annuler, Rétablir, Imprimer, Effacer. À droite : les onglets « Portes & fenêtres », « Appareils », « Alertes ».'],
+                 'Au centre : le plan. Dans son coin haut-gauche, une bulle d\'aide indique l\'action en cours : la croix (×) la ferme, le bouton « ? » la rouvre.',
+                 'À droite : les onglets « Portes & fenêtres », « Appareils », « Circuits », « Alertes ».',
+                 'En bas du plan : la barre du bas, avec Annuler, Rétablir, Imprimer, Effacer.'],
           retenir: 'Chaque zone a un rôle précis. Échap désélectionne tout.' },
         { part: 'Plan 2D', title: 'Tracer un mur', anim: animTrace,
           text: ['Appuyez sur T, ou cliquez « Tracer mur ».',
                  'Cliquez à un coin, puis au coin suivant. Clic droit ou Échap pour arrêter.',
                  'Le mur s\'accroche aux autres murs : les bouts se rejoignent tout seuls.'],
+          essayer: { mode: '2d', tool: 'wall', pulse: '#btn-tool-wall' },
           retenir: 'L\'option Ortho (angle droit) garde les murs bien droits.' },
         { part: 'Plan 2D', title: 'Modifier ou supprimer un mur', anim: animEdit,
           text: ['Activez « Modifier les murs ». Sans cela, un clic ne fait que sélectionner.',
                  'Glissez un bout du mur pour l\'allonger, ou le mur entier pour le déplacer.',
                  'Suppr efface le mur, après confirmation. Annuler (Ctrl+Z) revient en arrière.'],
+          essayer: { mode: '2d', tool: 'select', wallEdit: true, pulse: '#btn-wall-edit' },
           retenir: '« Murs verrouillés » protège tous les murs.' },
         { part: 'Plan 2D', title: 'Poser une porte ou une fenêtre', anim: animDoor,
           text: ['Ouvrez l\'onglet « Portes & fenêtres » à droite.',
                  'Cliquez « Porte » ou « Fenêtre », puis cliquez près du mur.',
                  'Le côté cliqué est le côté de pose. Deux ouvertures ne peuvent pas se chevaucher.',
                  'Réglage « Charnière (porte poussant) » : Gauche ou Droite, vu depuis le côté où vous êtes. Par défaut, « Gauche » : la charnière est à droite de l\'ouverture, comme dans l\'animation.'],
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'door_single', pulse: '#btn-place-door_single' },
           retenir: 'Ne placez jamais une prise ou un interrupteur à l\'emplacement d\'une porte.' },
         { part: 'Plan 2D', title: 'Poser le tableau électrique', anim: animPanel,
           text: ['Ouvrez l\'onglet « Appareils ».',
                  'Cliquez « Tableau » (un seul par projet, au RDC), puis cliquez sur un mur près de l\'entrée.'],
+          essayer: { mode: '2d', tab: 'appareillage', place: 'panel', pulse: '#btn-place-panel' },
           retenir: 'Un seul tableau par projet.' },
         { part: 'Plan 2D', title: 'Poser prises, interrupteurs et luminaires', anim: animDevices,
           text: ['Onglet « Appareils » : choisissez l\'appareil.',
                  'Cliquez près d\'un mur. Pour le plafonnier, cliquez au plafond, au milieu de la pièce.',
                  'Des prises posées côte à côte se regroupent (double, triple).'],
+          essayer: { mode: '2d', tab: 'appareillage', place: 'outlet_16a', pulse: '#btn-place-outlet_16a' },
           retenir: 'Un interrupteur se place à environ 1,10 m du sol, une prise à 30 cm.' },
         { part: 'Plan 2D', title: 'Relier un interrupteur à son luminaire', anim: animControl,
           text: ['Cliquez sur l\'interrupteur.',
                  'Ouvrez « Modifier les associations », puis cochez le luminaire à commander.'],
           retenir: 'Un va-et-vient se pose toujours par deux.' },
         { part: 'Plan 2D', title: 'Ajouter un étage ou un sous-sol', anim: animLevels,
-          text: ['Cliquez « +étage » ou « Sous-sol ».',
+          text: ['Cliquez sur [fa-circle-up] pour ajouter un étage, ou sur [fa-circle-down] pour ajouter un sous-sol, dans la barre du haut.',
                  'Donnez un nom et une cote (hauteur par rapport au RDC).',
                  'Cochez « Copier les murs extérieurs » pour reprendre le contour du logement.',
-                 'Le menu du haut choisit le niveau affiché. Le crayon renomme le niveau.'],
+                 'Le menu du haut choisit le niveau affiché. Le bouton [fa-pen] renomme le niveau. Le bouton [fa-up-down] règle la cote et la hauteur sous plafond.'],
           retenir: 'Chaque élément appartient à un seul niveau.' },
         { part: 'Plan 2D', title: 'Trémie et escalier', anim: animShaft,
           text: ['La trémie (ouverture dans le plancher) se pose sur un mur et relie deux niveaux.',
@@ -360,9 +371,12 @@
         // ----- Partie 2 : Plan 3D -----
         { part: 'Plan 3D', title: 'Découvrir la vue 3D', anim: animZones3d,
           text: ['Cliquez « Plan 3D » en haut. La vue 3D montre le bâtiment en volume (comme une maquette).',
+                 'La barre du haut, la boîte à outils et les onglets de droite sont les mêmes qu\'en 2D. Seuls le centre et la barre du bas changent. La bulle d\'aide se ferme et se rouvre comme en 2D.',
                  'À gauche : la boîte à outils et « Élément sélectionné » (le réglage de l\'élément choisi).',
-                 'À droite : les onglets « Placement & contrôles », « Circuits », « Avertissements ».',
-                 'Au centre : le bâtiment en 3D. Vous pouvez aussi poser des appareils directement en 3D.'],
+                 'Au centre : le bâtiment en 3D. Vous pouvez aussi poser des appareils directement en 3D.',
+                 'À droite : les onglets « Portes & fenêtres », « Appareils », « Circuits », « Alertes ».',
+                 'En bas de la vue 3D : la barre du bas, avec Imprimer, PNG, Annuler, Rétablir, Effacer, Centrer et les vues (Isométrique, Dessus, Face, Profil).'],
+          essayer: { mode: '3d' },
           retenir: 'Le plan 2D reste la référence : c\'est là qu\'on dessine les murs et qu\'on pose les appareils.' },
         { part: 'Plan 3D', title: 'Tourner, zoomer, déplacer', anim: animOrbit,
           text: ['Clic gauche maintenu : tourner autour du bâtiment (orbite, rotation autour d\'un point).',
@@ -490,7 +504,7 @@
         const anim = el('div', 'g-anim');
         anim.innerHTML = p.anim();
         const text = el('div', 'g-text');
-        p.text.forEach(t => text.appendChild(el('p', null, t)));
+        p.text.forEach(t => text.appendChild(richP(t)));
         const retenir = el('div', 'g-retenir');
         retenir.appendChild(el('strong', null, 'À retenir : '));
         retenir.appendChild(document.createTextNode(p.retenir));
@@ -503,7 +517,16 @@
         const next = el('button', 'g-btn g-primary', i === PAGES.length - 1 ? 'Terminer' : 'Suivant →');
         next.type = 'button';
         next.addEventListener('click', () => (i === PAGES.length - 1 ? close() : show(i + 1)));
-        nav.append(prev, next);
+        nav.append(prev);
+        if (p.essayer) {
+            const essai = el('button', 'g-btn g-essayer');
+            essai.type = 'button';
+            essai.title = 'Ferme le guide et montre l\'action dans le plan';
+            essai.innerHTML = '<i class="fa-solid fa-play" aria-hidden="true"></i> Essayer';
+            essai.addEventListener('click', () => essayer(p.essayer));
+            nav.appendChild(essai);
+        }
+        nav.appendChild(next);
 
         page.append(part, h, anim, text, retenir, nav);
         overlay.querySelectorAll('.g-navbtn').forEach((b, k) => b.classList.toggle('active', k === i));
@@ -518,6 +541,22 @@
         return n;
     }
 
+    // Texte d'un paragraphe : « [fa-circle-up] » affiche l'icône Font Awesome du même nom
+    function richP(s) {
+        const p = el('p');
+        s.split(/(\[fa-[a-z-]+\])/).forEach(part => {
+            const m = /^\[(fa-[a-z-]+)\]$/.exec(part);
+            if (m) {
+                const i = el('i', 'g-ico fa-solid ' + m[1]);
+                i.setAttribute('aria-hidden', 'true');
+                p.appendChild(i);
+            } else if (part) {
+                p.appendChild(document.createTextNode(part));
+            }
+        });
+        return p;
+    }
+
     function open(i) {
         if (!overlay) build();
         overlay.classList.remove('hidden');
@@ -526,6 +565,26 @@
 
     function close() {
         if (overlay) overlay.classList.add('hidden');
+    }
+
+    // « Essayer » : ferme le guide, règle l'appli comme la page l'indique, puis surligne le bouton à utiliser
+    function essayer(spec) {
+        close();
+        if (spec.mode && spec.mode !== currentMode) switchMode(spec.mode);
+        if (spec.tab) setRightTab(spec.tab);
+        if (spec.tool) setModeTool(spec.tool);
+        if (spec.place) setPlaceType2D(spec.place);
+        if (spec.wallEdit) { if (!wallEditMode) toggleWallEdit(); }
+        else if (wallEditMode) { wallEditMode = false; updateWallEditButtons(); }
+        if (spec.pulse) surligner(document.querySelector(spec.pulse));
+    }
+
+    function surligner(node) {
+        if (!node) return;
+        node.classList.remove('essai-surligne');
+        void node.offsetWidth;   // redémarre l'animation si le bouton était déjà surligné
+        node.classList.add('essai-surligne');
+        setTimeout(() => node.classList.remove('essai-surligne'), 4000);
     }
 
     // ---------- Bouton dans la barre du haut ----------
@@ -538,7 +597,7 @@
         b.className = 'px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5';
         b.title = 'Ouvrir le guide pas à pas';
         b.innerHTML = '<i class="fa-solid fa-book-open"></i> <span class="hidden min-[1536px]:inline">Guide</span>';
-        b.addEventListener('click', () => open(0));
+        b.addEventListener('click', () => open());
         themeBtn.parentElement.insertBefore(b, themeBtn);
     }
 
