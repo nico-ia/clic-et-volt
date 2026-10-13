@@ -334,38 +334,42 @@
                  'Cliquez « Porte » ou « Fenêtre », puis cliquez près du mur.',
                  'Le côté cliqué est le côté de pose. Deux ouvertures ne peuvent pas se chevaucher.',
                  'Réglage « Charnière (porte poussant) » : Gauche ou Droite, vu depuis le côté où vous êtes. Par défaut, « Gauche » : la charnière est à droite de l\'ouverture, comme dans l\'animation.'],
-          essayer: { mode: '2d', tab: 'ouvertures', place: 'door_single', pulse: '#btn-place-door_single' },
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'door_single', pulse: '#btn-2d-place-door_single' },
           retenir: 'Ne placez jamais une prise ou un interrupteur à l\'emplacement d\'une porte.' },
         { part: 'Plan 2D', title: 'Poser le tableau électrique', anim: animPanel,
           text: ['Ouvrez l\'onglet « Appareils ».',
                  'Cliquez « Tableau » (un seul par projet, au RDC), puis cliquez sur un mur près de l\'entrée.'],
-          essayer: { mode: '2d', tab: 'appareillage', place: 'panel', pulse: '#btn-place-panel' },
+          essayer: { mode: '2d', tab: 'appareillage', place: 'panel', pulse: '#btn-2d-place-panel' },
           retenir: 'Un seul tableau par projet.' },
         { part: 'Plan 2D', title: 'Poser prises, interrupteurs et luminaires', anim: animDevices,
           text: ['Onglet « Appareils » : choisissez l\'appareil.',
                  'Cliquez près d\'un mur. Pour le plafonnier, cliquez au plafond, au milieu de la pièce.',
                  'Des prises posées côte à côte se regroupent (double, triple).'],
-          essayer: { mode: '2d', tab: 'appareillage', place: 'outlet_16a', pulse: '#btn-place-outlet_16a' },
+          essayer: { mode: '2d', tab: 'appareillage', place: 'outlet_16a', pulse: '#btn-2d-place-outlet_16a' },
           retenir: 'Un interrupteur se place à environ 1,10 m du sol, une prise à 30 cm.' },
         { part: 'Plan 2D', title: 'Relier un interrupteur à son luminaire', anim: animControl,
           text: ['Cliquez sur l\'interrupteur.',
                  'Ouvrez « Modifier les associations », puis cochez le luminaire à commander.'],
+          essayer: { mode: '2d', tab: 'appareillage', place: 'switch_simple', pulse: '#btn-2d-place-switch_simple' },
           retenir: 'Un va-et-vient se pose toujours par deux.' },
         { part: 'Plan 2D', title: 'Ajouter un étage ou un sous-sol', anim: animLevels,
           text: ['Cliquez sur [fa-circle-up] pour ajouter un étage, ou sur [fa-circle-down] pour ajouter un sous-sol, dans la barre du haut.',
                  'Donnez un nom et une cote (hauteur par rapport au RDC).',
                  'Cochez « Copier les murs extérieurs » pour reprendre le contour du logement.',
                  'Le menu du haut choisit le niveau affiché. Le bouton [fa-pen] renomme le niveau. Le bouton [fa-up-down] règle la cote et la hauteur sous plafond.'],
+          essayer: { mode: '2d', pulse: '#btn-add-level' },
           retenir: 'Chaque élément appartient à un seul niveau.' },
         { part: 'Plan 2D', title: 'Trémie et escalier', anim: animShaft,
           text: ['La trémie (ouverture dans le plancher) se pose sur un mur et relie deux niveaux.',
                  'Choisissez l\'étage à relier, puis cliquez sur le mur.',
                  'L\'escalier relie aussi deux niveaux : posez-le sur le plan, puis réglez sa largeur et sa rotation.'],
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'shaft', pulse: '#btn-2d-place-shaft' },
           retenir: 'Les câbles passent par la trémie pour rejoindre l\'autre étage.' },
         { part: 'Plan 2D', title: 'Corriger une alerte', anim: animAlert,
           text: ['Les alertes sont dans l\'onglet « Alertes ».',
                  'Cliquez « Aller ↗ » : l\'élément concerné est sélectionné et son onglet s\'ouvre.',
                  'Suivez la piste de correction écrite sous l\'alerte.'],
+          essayer: { mode: '2d', tab: 'avertissements', pulse: '#sidebar-2d-right [data-right-tab="avertissements"]' },
           retenir: 'Une alerte ne bloque rien : elle signale un point à vérifier.' },
 
         // ----- Partie 2 : Plan 3D -----
@@ -381,7 +385,9 @@
         { part: 'Plan 3D', title: 'Tourner, zoomer, déplacer', anim: animOrbit,
           text: ['Clic gauche maintenu : tourner autour du bâtiment (orbite, rotation autour d\'un point).',
                  'Clic droit maintenu : déplacer la vue (panoramique, glisser la vue sans la tourner).',
-                 'Molette de la souris : zoom avant ou arrière.'],
+                 'Molette de la souris : zoom avant ou arrière.',
+                 'Si la vue est vide, tracez d\'abord quelques murs en 2D.'],
+          essayer: { mode: '3d', pulse: '#three-container' },
           retenir: 'Si vous êtes perdu, faites un zoom arrière avec la molette.' },
         { part: 'Plan 3D', title: 'Le câblage automatique', anim: animCablesAuto,
           text: ['Vous ne dessinez pas les câbles : l\'appli les trace toute seule entre le tableau et chaque appareil.',
@@ -392,24 +398,29 @@
           text: ['Un circuit est un groupe d\'appareils protégés par le même disjoncteur (coupe-circuit automatique).',
                  'Chaque circuit a sa couleur. Cette couleur est la même en 2D, en 3D et dans la liste des circuits.',
                  'Par défaut, l\'éclairage est jaune, les prises orange et la cuisine rouge.'],
+          essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
           retenir: 'Deux circuits de même couleur ? Vérifiez le nom du circuit dans la liste.' },
         { part: 'Plan 3D', title: 'Afficher ou masquer les câbles', anim: animCablesToggle,
           text: ['Le bouton « Câbles » est dans « Aides & Commandes » (barre de gauche du plan 2D). Il affiche ou masque les câbles, en 2D et en 3D.',
                  'Quand les câbles sont masqués, le bâtiment reste visible : pratique pour repérer les pièces et les appareils.'],
+          essayer: { mode: '2d', pulse: '#btn-cables-2d' },
           retenir: 'Masquer les câbles ne les supprime pas : ils restent dans le projet.' },
         { part: 'Plan 3D', title: 'Régler un appareil en 3D', anim: animInspector3d,
           text: ['Cliquez un appareil en 3D : il est sélectionné et son réglage s\'affiche à gauche.',
                  'Le curseur « Hauteur au sol » règle la hauteur. « Distance au départ » le déplace le long du mur.',
                  '« Basculer de l\'autre côté du mur » le place de l\'autre côté. Pour une porte, « Charnière (porte poussant) » indique le côté où elle pivote.'],
+          essayer: { mode: '3d', tab: 'appareillage', place3d: 'outlet_16a', pulse: '#btn-place-outlet_16a' },
           retenir: 'Hauteurs usuelles : prise à 30 cm du sol, interrupteur à 1,10 m.' },
         { part: 'Plan 3D', title: 'Escalier en 3D', anim: animStair,
           text: ['L\'escalier posé en 2D apparaît en 3D : vous voyez sa montée d\'un étage à l\'autre.',
                  'Sélectionnez-le pour régler sa largeur et sa rotation (son orientation).'],
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'stair', pulse: '#btn-2d-place-stair' },
           retenir: 'Vérifiez la largeur de l\'escalier et le passage libre en haut et en bas.' },
         { part: 'Plan 3D', title: 'Trémie et point de dérivation', anim: animRiser,
           text: ['La trémie (ouverture dans le plancher) laisse passer les câbles entre les étages.',
                  'La boîte blanche de dérivation (boîte où se rejoignent les câbles) est placée à 1,50 m du sol par défaut, à chaque étage relié.',
                  'Pour la changer, sélectionnez la trémie et réglez « Hauteur au sol ».'],
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'shaft', pulse: '#btn-2d-place-shaft' },
           retenir: 'La boîte de dérivation se règle depuis la trémie, pas depuis la boîte.' },
 
         // ----- Partie 3 : Métré & contrôles -----
@@ -574,6 +585,8 @@
         if (spec.tab) setRightTab(spec.tab);
         if (spec.tool) setModeTool(spec.tool);
         if (spec.place) setPlaceType2D(spec.place);
+        // setPlacementType (3D) bascule le type choisi : on ne l'appelle pas si ce type est déjà actif
+        if (spec.place3d && activePlacementType !== spec.place3d) setPlacementType(spec.place3d);
         if (spec.wallEdit) { if (!wallEditMode) toggleWallEdit(); }
         else if (wallEditMode) { wallEditMode = false; updateWallEditButtons(); }
         if (spec.pulse) surligner(document.querySelector(spec.pulse));
@@ -581,6 +594,8 @@
 
     function surligner(node) {
         if (!node) return;
+        const section = node.closest('details');
+        if (section) section.open = true;   // ouvre « Aides & Commandes » si elle est repliée
         node.classList.remove('essai-surligne');
         void node.offsetWidth;   // redémarre l'animation si le bouton était déjà surligné
         node.classList.add('essai-surligne');
