@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clic & Volt - Plan 2D & Modélisateur 3D</title>
+    <title>Clic & Volt - Plan 2D/3D & câblage auto</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -11,32 +11,42 @@
     <script src="js/canvas2d.js" defer></script>
     <script src="js/scene3d.js" defer></script>
     <script src="js/app.js" defer></script>
+    <script src="js/guide.js" defer></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="guide.css">
+    
 </head>
+
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col">
 
-    <header class="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-4 z-30 shrink-0">
+    <header class="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-3 z-30 shrink-0">
         <div class="flex items-center space-x-3">
-            <div class="bg-emerald-600 p-2 rounded-xl text-white shadow-lg flex items-center justify-center w-10 h-10">
-                <i class="fa-solid fa-drafting-compass text-lg"></i>
+            <div class="flex flex-col items-center gap-0.5">
+                <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="4.4" r="2" stroke="#059669" stroke-width="2.4"/>
+                    <polygon points="10,6.2 12.8,6.2 5.6,21.4" fill="#059669"/>
+                    <polygon points="14,6.2 11.2,6.2 18.4,21.4" fill="#059669"/>
+                    <polygon points="15.4,2.4 7.6,13 12.6,13 8.8,21.8 16.4,11 11.4,11" fill="#fde047"/>
+                </svg>
+                <p class="text-[9px] leading-none text-slate-500 text-center">Duclos<br>Codeworks</p>
             </div>
             <div>
-                <h1 class="font-bold text-lg tracking-wide text-white flex items-center gap-2">
+                <h1 class="font-bold text-lg leading-tight tracking-wide text-white flex items-center gap-2">
                     Clic & Volt
                 </h1>
-                <p class="text-xs text-slate-400">Plan 2D & Modélisateur 3D (Câblage auto)</p>
+                <p class="text-xs leading-tight text-slate-400">Plan 2D/3D & câblage auto</p>
             </div>
         </div>
 
-        <!-- Mode Selector -->
-        <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
-            <button id="tab-2d" onclick="switchMode('2d')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow">
-                <i class="fa-solid fa-pen-ruler"></i> Plan 2D Ergonomique
+        <!-- Sélecteur de mode : trois boutons séparés -->
+        <div class="flex items-center gap-2">
+            <button id="tab-2d" onclick="switchMode('2d')" class="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow">
+                <i class="fa-solid fa-pen-ruler"></i> Plan 2D
             </button>
-            <button id="tab-3d" onclick="switchMode('3d')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white">
-                <i class="fa-solid fa-cube"></i> 3D & Câblage Auto
+            <button id="tab-3d" onclick="switchMode('3d')" class="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200">
+                <i class="fa-solid fa-cube"></i> Plan 3D
             </button>
-            <button id="tab-report" onclick="switchMode('report')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white">
+            <button id="tab-report" onclick="switchMode('report')" class="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200">
                 <i class="fa-solid fa-clipboard-check"></i> Métré & Contrôles
             </button>
         </div>
@@ -54,18 +64,19 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex items-center space-x-2">
-            <button id="theme-toggle" onclick="toggleTheme()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition" title="Passer au thème clair" aria-label="Passer au thème clair">
-                <i class="fa-solid fa-sun theme-toggle-sun"></i>
+        <div class="flex items-center space-x-1.5">
+            <button id="help-fab" type="button" class="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-bold transition" title="Aide et raccourcis (touche ?)" aria-label="Aide et raccourcis">?</button>
+            <button id="theme-toggle" onclick="toggleTheme()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Passer au thème clair">
+                <i class="fa-solid fa-moon"></i> <span class="hidden min-[1536px]:inline">Sombre</span>
             </button>
             <button onclick="triggerNewProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Nouveau projet">
-                <i class="fa-solid fa-file-circle-plus"></i> <span class="hidden md:inline">Nouveau</span>
+                <i class="fa-solid fa-file-circle-plus"></i> <span class="hidden min-[1536px]:inline">Nouveau</span>
             </button>
             <button onclick="triggerSaveProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Enregistrer JSON">
-                <i class="fa-solid fa-floppy-disk"></i> <span class="hidden md:inline">Enregistrer</span>
+                <i class="fa-solid fa-floppy-disk"></i> <span class="hidden min-[1536px]:inline">Enregistrer</span>
             </button>
             <label class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5 cursor-pointer" title="Charger JSON">
-                <i class="fa-solid fa-folder-open"></i> <span class="hidden md:inline">Ouvrir</span>
+                <i class="fa-solid fa-folder-open"></i> <span class="hidden min-[1536px]:inline">Ouvrir</span>
                 <input type="file" id="load-file-input" accept=".json" class="hidden" onchange="triggerLoadProject(event)">
             </label>
         </div>
@@ -84,12 +95,12 @@
                     <!-- Outils communs 2D et 3D : même bloc dans les deux sidebars gauches -->
                     <div id="shared-tools-block" class="space-y-4">
                     <div>
-                        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap"><label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mode d'interaction</label><span id="active-tool-badge" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">Tracé de mur</span> <button id="btn-deselect-all" onclick="clearAllSelection()" class="hidden px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 rounded-lg text-xs transition" title="Désélectionner tout (Échap)" aria-label="Désélectionner tout"><i class="fa-solid fa-xmark"></i><span>Désélectionner</span></button></div>
+                        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap"><label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mode d'interaction</label><span id="active-tool-badge" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">Tracé de mur</span> <button id="btn-deselect-all" onclick="clearAllSelection()" class="hidden px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-lg text-xs transition" title="Désélectionner tout (Échap)" aria-label="Désélectionner tout"><i class="fa-solid fa-xmark"></i><span>Désélectionner</span></button></div>
                         <div class="grid grid-cols-2 gap-2">
-                            <button onclick="setModeTool('wall')" id="btn-tool-wall" class="tool-btn px-2 py-2 rounded-xl border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-2 transition" title="Tracer un mur (T) : cliquez pour poser les points, clic droit pour terminer">
+                            <button onclick="setModeTool('wall')" id="btn-tool-wall" class="tool-btn px-2 py-2 rounded-xl border border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-2 transition" title="Tracer un mur (T) : cliquez pour poser les points, clic droit pour terminer">
                                 <i class="fa-solid fa-pencil text-sm"></i> Tracer mur
                             </button>
-                            <button onclick="setModeTool('select')" id="btn-tool-select" class="tool-btn px-2 py-2 rounded-xl border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-2 transition" title="Sélectionner (S) : cliquez un élément, glissez pour encadrer">
+                            <button onclick="setModeTool('select')" id="btn-tool-select" class="tool-btn px-2 py-2 rounded-xl border border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-2 transition" title="Sélectionner (S) : cliquez un élément, glissez pour encadrer">
                                 <i class="fa-solid fa-arrow-pointer text-sm"></i> Sélectionner
                             </button>
                         </div>
@@ -97,11 +108,11 @@
 
                     <!-- Garde-fous des murs : modification désactivée par défaut, verrouillage possible -->
                     <div class="space-y-2">
-                        <button onclick="toggleWallEdit()" id="btn-wall-edit" class="wall-edit-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Modifier les murs : permet de déplacer, étirer et régler les murs à la souris. Désactivé par défaut. Les autres clics ne font que sélectionner. Impossible si les murs sont verrouillés." aria-pressed="false">
+                        <button onclick="toggleWallEdit()" id="btn-wall-edit" class="wall-edit-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Modifier les murs : permet de déplacer, étirer et régler les murs à la souris. Désactivé par défaut. Les autres clics ne font que sélectionner. Impossible si les murs sont verrouillés." aria-pressed="false">
                             <span class="flex items-center gap-2"><i class="fa-solid fa-up-down-left-right"></i> Modifier les murs</span>
                             <span class="text-slate-400">Activé : <span class="wall-edit-state font-semibold text-slate-200">non</span></span>
                         </button>
-                        <button onclick="toggleWallsLock()" id="btn-wall-lock" class="wall-lock-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Murs verrouillés : protège tous les murs. Aucun déplacement, étirement ni changement d’épaisseur, de hauteur ou de longueur. Active, « Modifier les murs » est grisé et se désactive." aria-pressed="false">
+                        <button onclick="toggleWallsLock()" id="btn-wall-lock" class="wall-lock-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Murs verrouillés : protège tous les murs. Aucun déplacement, étirement ni changement d’épaisseur, de hauteur ou de longueur. Active, « Modifier les murs » est grisé et se désactive." aria-pressed="false">
                             <span class="flex items-center gap-2"><i class="fa-solid fa-lock"></i> Murs verrouillés</span>
                             <span class="text-slate-400"><span class="wall-lock-state font-semibold text-slate-200">non</span></span>
                         </button>
@@ -112,16 +123,16 @@
                         <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Aides & Commandes</summary>
                         <!-- Aides en une seule ligne : état ON/OFF affiché dans chaque bouton -->
                         <div class="grid grid-cols-4 gap-1.5">
-                            <button onclick="toggleGridSnap()" id="btn-grid-snap" title="Aimantation : les points de tracé s’accrochent à la grille et aux angles" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
+                            <button onclick="toggleGridSnap()" id="btn-grid-snap" title="Aimantation : les points de tracé s’accrochent à la grille et aux angles" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
                                 <i class="fa-solid fa-magnet text-xs"></i><span class="text-[10px] leading-none">Aimantation</span><b class="text-[10px] leading-none font-semibold">ON</b>
                             </button>
-                            <button onclick="toggleAngleSnap()" id="btn-angle-snap" title="Ortho : aimante l’angle des murs" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
+                            <button onclick="toggleAngleSnap()" id="btn-angle-snap" title="Ortho : aimante l’angle des murs" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
                                 <i class="fa-solid fa-compass text-xs"></i><span class="text-[10px] leading-none">Ortho</span><b class="text-[10px] leading-none font-semibold">ON</b>
                             </button>
-                            <button onclick="toggleCables2D()" id="btn-cables-2d" title="Câbles : affiche ou masque les câbles en 2D et en 3D" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
+                            <button onclick="toggleCables2D()" id="btn-cables-2d" title="Câbles : affiche ou masque les câbles en 2D et en 3D" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
                                 <i class="fa-solid fa-bezier-curve text-xs"></i><span class="text-[10px] leading-none">Câbles</span><b class="text-[10px] leading-none font-semibold">ON</b>
                             </button>
-                            <button onclick="toggleGridView()" id="btn-grid-view" title="Quadrillage 50 cm : affiche ou masque la grille en 2D et en 3D" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
+                            <button onclick="toggleGridView()" id="btn-grid-view" title="Quadrillage 50 cm : affiche ou masque la grille en 2D et en 3D" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
                                 <i class="fa-solid fa-table-cells text-xs"></i><span class="text-[10px] leading-none">Quadrillage</span><b class="text-[10px] leading-none font-semibold">ON</b>
                             </button>
                         </div>
@@ -291,16 +302,16 @@
                     <details open class="space-y-2">
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Ouvertures</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
-                            <button id="btn-2d-place-door_single" data-type="door_single" onclick="pickPlacement('door_single')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Porte : cliquez sur un mur">
+                            <button id="btn-2d-place-door_single" data-type="door_single" onclick="pickPlacement('door_single')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Porte : cliquez sur un mur">
                                 <i class="fa-solid fa-door-open text-emerald-400 text-sm"></i> Porte
                             </button>
-                            <button id="btn-2d-place-window_std" data-type="window_std" onclick="pickPlacement('window_std')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Fenêtre : cliquez sur un mur">
+                            <button id="btn-2d-place-window_std" data-type="window_std" onclick="pickPlacement('window_std')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Fenêtre : cliquez sur un mur">
                                 <i class="fa-solid fa-window-maximize text-cyan-400 text-sm"></i> Fenêtre
                             </button>
-                            <button id="btn-2d-place-shaft" data-type="shaft" onclick="pickPlacement('shaft')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Trémie : ouverture dans la dalle qui relie des niveaux, posée sur un mur">
+                            <button id="btn-2d-place-shaft" data-type="shaft" onclick="pickPlacement('shaft')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Trémie : ouverture dans la dalle qui relie des niveaux, posée sur un mur">
                                 <i class="fa-solid fa-border-none text-amber-400 text-sm"></i> Trémie
                             </button>
-                            <button id="btn-2d-place-stair" data-type="stair" onclick="pickPlacement('stair')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Escalier : emprise au sol, relie des niveaux">
+                            <button id="btn-2d-place-stair" data-type="stair" onclick="pickPlacement('stair')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Escalier : emprise au sol, relie des niveaux">
                                 <i class="fa-solid fa-stairs text-violet-400 text-sm"></i> Escalier
                             </button>
                             <div id="shaft-link-wrap"class="hidden col-span-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 flex flex-col gap-1.5 text-xs text-slate-200">
@@ -319,34 +330,34 @@
                     <details open class="space-y-2">
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Appareillage</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
-                            <button id="btn-2d-place-panel" data-type="panel" onclick="pickPlacement('panel')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Tableau électrique : un seul par projet, au RDC">
+                            <button id="btn-2d-place-panel" data-type="panel" onclick="pickPlacement('panel')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Tableau électrique : un seul par projet, au RDC">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -20 16 40" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="-1" y="-18" width="11" height="36" fill="#f8fafc" stroke="#06b6d4" stroke-width="1.6"/><path d="M-1,-6 H10 M-1,6 H10" stroke="#06b6d4" stroke-width="0.9"/><polygon points="3,-4 7.5,-0.5 5,-0.5 7.5,4 2.5,0.5 5,0.5" fill="#06b6d4"/></svg> Tableau
                             </button>
-                            <button id="btn-2d-place-junction_box" data-type="junction_box" onclick="pickPlacement('junction_box')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Boîte de dérivation : point où se rejoignent les câbles d’un circuit">
+                            <button id="btn-2d-place-junction_box" data-type="junction_box" onclick="pickPlacement('junction_box')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Boîte de dérivation : point où se rejoignent les câbles d’un circuit">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-8 -8 16 16" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="-6" y="-6" width="12" height="12" fill="#f8fafc" stroke="#64748b" stroke-width="1.6"/><path d="M-4,0 H4 M0,-4 V4" stroke="#0f172a" stroke-width="0.9"/></svg> Dérivation
                             </button>
-                            <button id="btn-2d-place-outlet_16a" data-type="outlet_16a" onclick="pickPlacement('outlet_16a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 16 A : cliquez sur un mur">
+                            <button id="btn-2d-place-outlet_16a" data-type="outlet_16a" onclick="pickPlacement('outlet_16a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 16 A : cliquez sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-3 -8 17 16" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,-6 V6" stroke="#f97316" stroke-width="1.2"/><path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#f97316" stroke-width="1.3"/><path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#f97316" stroke-width="1.1"/></svg> Prise 16A
                             </button>
-                            <button id="btn-2d-place-outlet_20a" data-type="outlet_20a" onclick="pickPlacement('outlet_20a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 20 A (cuisine) : cliquez sur un mur">
+                            <button id="btn-2d-place-outlet_20a" data-type="outlet_20a" onclick="pickPlacement('outlet_20a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 20 A (cuisine) : cliquez sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-3 -8 17 16" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,-6 V6" stroke="#ef4444" stroke-width="1.2"/><path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#ef4444" stroke-width="1.3"/><path d="M3.5,0 H8.5 M8.5,-3.5 V3.5 M6,-3 V3" stroke="#ef4444" stroke-width="1.1"/></svg> Prise 20A
                             </button>
-                            <button id="btn-2d-place-outlet_32a" data-type="outlet_32a" onclick="pickPlacement('outlet_32a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 32 A (cuisson) : cliquez sur un mur">
+                            <button id="btn-2d-place-outlet_32a" data-type="outlet_32a" onclick="pickPlacement('outlet_32a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 32 A (cuisson) : cliquez sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-3 -13 22 26" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,-11 V11" stroke="#ec4899" stroke-width="1.2"/><path d="M-1,-9.5 A9.5,9.5 0 0 1 -1,9.5 Z" fill="#ec4899" stroke="#ec4899" stroke-width="1.3"/><path d="M8.5,0 H13.5 M13.5,-3.5 V3.5 M11,-4.5 V4.5" stroke="#ec4899" stroke-width="1.1"/></svg> Prise 32A
                             </button>
-                            <button id="btn-2d-place-switch_simple" data-type="switch_simple" onclick="pickPlacement('switch_simple')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Interrupteur simple : commande un luminaire">
+                            <button id="btn-2d-place-switch_simple" data-type="switch_simple" onclick="pickPlacement('switch_simple')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Interrupteur simple : commande un luminaire">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -6 18 14" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,0 H5" stroke="#10b981" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#10b981" stroke-width="1.2"/><path d="M8.5,0 L12.7,-4.2" stroke="#10b981" stroke-width="1.1"/><circle cx="12.7" cy="-4.2" r="1" fill="#10b981"/></svg> Interrupteur
                             </button>
-                            <button id="btn-2d-place-switch_va_et_vient" data-type="switch_va_et_vient" onclick="pickPlacement('switch_va_et_vient')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Va-et-vient : deux interrupteurs commandent un même luminaire">
+                            <button id="btn-2d-place-switch_va_et_vient" data-type="switch_va_et_vient" onclick="pickPlacement('switch_va_et_vient')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Va-et-vient : deux interrupteurs commandent un même luminaire">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -6 18 14" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,0 H5" stroke="#22c55e" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#22c55e" stroke-width="1.2"/><path d="M8.5,0 L13.5,-4.5 M8.5,0 L13.5,4.5" stroke="#22c55e" stroke-width="1.1"/><circle cx="13.5" cy="-4.5" r="1" fill="#22c55e"/><circle cx="13.5" cy="4.5" r="1" fill="#22c55e"/></svg> Va-et-vient
                             </button>
-                            <button id="btn-2d-place-switch_pushbutton" data-type="switch_pushbutton" onclick="pickPlacement('switch_pushbutton')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Poussoir (télérupteur) : commande un luminaire par impulsion">
+                            <button id="btn-2d-place-switch_pushbutton" data-type="switch_pushbutton" onclick="pickPlacement('switch_pushbutton')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Poussoir (télérupteur) : commande un luminaire par impulsion">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -6 18 14" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,0 H5" stroke="#38bdf8" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#38bdf8" stroke-width="1.2"/><circle cx="8.5" cy="0" r="1.2" fill="#38bdf8"/></svg> Poussoir
                             </button>
-                            <button id="btn-2d-place-wall_light" data-type="wall_light" onclick="pickPlacement('wall_light')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Applique : luminaire fixé sur un mur">
+                            <button id="btn-2d-place-wall_light" data-type="wall_light" onclick="pickPlacement('wall_light')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Applique : luminaire fixé sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-5 -9 30 18" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="-3" y="-7" width="3" height="14" rx="1" fill="#facc15" stroke="#ca8a04" stroke-width="1"/><path d="M0,0 H4" stroke="#eab308" stroke-width="1.2"/><path d="M4,-6 Q15,-5 15,0 Q15,5 4,6 Z" fill="#facc15" stroke="#ca8a04" stroke-width="1"/><path d="M17,-5 L21,-7 M18,0 H23 M17,5 L21,7" stroke="#eab308" stroke-width="1"/></svg> Applique
                             </button>
-                            <button id="btn-2d-place-light_ceiling" data-type="light_ceiling" onclick="pickPlacement('light_ceiling')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Plafonnier : cliquez au plafond, dans la pièce">
+                            <button id="btn-2d-place-light_ceiling" data-type="light_ceiling" onclick="pickPlacement('light_ceiling')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Plafonnier : cliquez au plafond, dans la pièce">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-12 -12 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="0" cy="0" r="10" fill="#fef9c3" stroke="#fde047" stroke-width="1.4"/><path d="M-6.5,-6.5 L6.5,6.5 M-6.5,6.5 L6.5,-6.5" stroke="#0f172a" stroke-width="1"/></svg> Plafonnier
                             </button>
                         </div>
@@ -355,8 +366,8 @@
 
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
   <summary class="text-xs font-semibold text-slate-300 uppercase tracking-wider cursor-pointer">Circuits <span class="font-normal normal-case text-slate-500">— cliquer pour visualiser</span></summary>
-                        <button id="clear-link-highlight" onclick="clearLinkSelection()" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre en évidence cette liaison (le circuit reste affiché)"><i class="fa-solid fa-xmark"></i><span></span></button>
-                        <button id="clear-circuit-highlight" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Désélectionner le circuit</span></button>
+                        <button id="clear-link-highlight" onclick="clearLinkSelection()" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre en évidence cette liaison (le circuit reste affiché)"><i class="fa-solid fa-xmark"></i><span></span></button>
+                        <button id="clear-circuit-highlight" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Désélectionner le circuit</span></button>
                         <div id="circuits-list-2d" class="space-y-2 text-xs"></div>
                     </details>
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
@@ -514,16 +525,16 @@
                     <details open class="space-y-2">
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Ouvertures</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
-                            <button id="btn-place-door_single" data-type="door_single" onclick="pickPlacement('door_single')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Porte : cliquez sur un mur">
+                            <button id="btn-place-door_single" data-type="door_single" onclick="pickPlacement('door_single')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Porte : cliquez sur un mur">
                                 <i class="fa-solid fa-door-open text-emerald-400 text-sm"></i> Porte
                             </button>
-                            <button id="btn-place-window_std" data-type="window_std" onclick="pickPlacement('window_std')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Fenêtre : cliquez sur un mur">
+                            <button id="btn-place-window_std" data-type="window_std" onclick="pickPlacement('window_std')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Fenêtre : cliquez sur un mur">
                                 <i class="fa-solid fa-window-maximize text-cyan-400 text-sm"></i> Fenêtre
                             </button>
-                            <button id="btn-place-shaft" data-type="shaft" onclick="pickPlacement('shaft')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Trémie : ouverture dans la dalle qui relie des niveaux, posée sur un mur">
+                            <button id="btn-place-shaft" data-type="shaft" onclick="pickPlacement('shaft')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Trémie : ouverture dans la dalle qui relie des niveaux, posée sur un mur">
                                 <i class="fa-solid fa-border-none text-amber-400 text-sm"></i> Trémie
                             </button>
-                            <button id="btn-place-stair" data-type="stair" onclick="pickPlacement('stair')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Escalier : emprise au sol, relie des niveaux">
+                            <button id="btn-place-stair" data-type="stair" onclick="pickPlacement('stair')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Escalier : emprise au sol, relie des niveaux">
                                 <i class="fa-solid fa-stairs text-violet-400 text-sm"></i> Escalier
                             </button>
                             <div id="shaft-link-wrap-3d"class="hidden col-span-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 flex flex-col gap-1.5 text-xs text-slate-200">
@@ -542,34 +553,34 @@
                     <details open class="space-y-2">
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Appareillage</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
-                            <button id="btn-place-panel" data-type="panel" onclick="pickPlacement('panel')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Tableau électrique : un seul par projet, au RDC">
+                            <button id="btn-place-panel" data-type="panel" onclick="pickPlacement('panel')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Tableau électrique : un seul par projet, au RDC">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -20 16 40" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="-1" y="-18" width="11" height="36" fill="#f8fafc" stroke="#06b6d4" stroke-width="1.6"/><path d="M-1,-6 H10 M-1,6 H10" stroke="#06b6d4" stroke-width="0.9"/><polygon points="3,-4 7.5,-0.5 5,-0.5 7.5,4 2.5,0.5 5,0.5" fill="#06b6d4"/></svg> Tableau
                             </button>
-                            <button id="btn-place-junction_box" data-type="junction_box" onclick="pickPlacement('junction_box')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Boîte de dérivation : point où se rejoignent les câbles d’un circuit">
+                            <button id="btn-place-junction_box" data-type="junction_box" onclick="pickPlacement('junction_box')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Boîte de dérivation : point où se rejoignent les câbles d’un circuit">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-8 -8 16 16" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="-6" y="-6" width="12" height="12" fill="#f8fafc" stroke="#64748b" stroke-width="1.6"/><path d="M-4,0 H4 M0,-4 V4" stroke="#0f172a" stroke-width="0.9"/></svg> Dérivation
                             </button>
-                            <button id="btn-place-outlet_16a" data-type="outlet_16a" onclick="pickPlacement('outlet_16a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 16 A : cliquez sur un mur">
+                            <button id="btn-place-outlet_16a" data-type="outlet_16a" onclick="pickPlacement('outlet_16a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 16 A : cliquez sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-3 -8 17 16" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,-6 V6" stroke="#f97316" stroke-width="1.2"/><path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#f97316" stroke-width="1.3"/><path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#f97316" stroke-width="1.1"/></svg> Prise 16A
                             </button>
-                            <button id="btn-place-outlet_20a" data-type="outlet_20a" onclick="pickPlacement('outlet_20a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 20 A (cuisine) : cliquez sur un mur">
+                            <button id="btn-place-outlet_20a" data-type="outlet_20a" onclick="pickPlacement('outlet_20a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 20 A (cuisine) : cliquez sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-3 -8 17 16" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,-6 V6" stroke="#ef4444" stroke-width="1.2"/><path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#ef4444" stroke-width="1.3"/><path d="M3.5,0 H8.5 M8.5,-3.5 V3.5 M6,-3 V3" stroke="#ef4444" stroke-width="1.1"/></svg> Prise 20A
                             </button>
-                            <button id="btn-place-outlet_32a" data-type="outlet_32a" onclick="pickPlacement('outlet_32a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 32 A (cuisson) : cliquez sur un mur">
+                            <button id="btn-place-outlet_32a" data-type="outlet_32a" onclick="pickPlacement('outlet_32a')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Prise 32 A (cuisson) : cliquez sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-3 -13 22 26" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,-11 V11" stroke="#ec4899" stroke-width="1.2"/><path d="M-1,-9.5 A9.5,9.5 0 0 1 -1,9.5 Z" fill="#ec4899" stroke="#ec4899" stroke-width="1.3"/><path d="M8.5,0 H13.5 M13.5,-3.5 V3.5 M11,-4.5 V4.5" stroke="#ec4899" stroke-width="1.1"/></svg> Prise 32A
                             </button>
-                            <button id="btn-place-switch_simple" data-type="switch_simple" onclick="pickPlacement('switch_simple')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Interrupteur simple : commande un luminaire">
+                            <button id="btn-place-switch_simple" data-type="switch_simple" onclick="pickPlacement('switch_simple')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Interrupteur simple : commande un luminaire">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -6 18 14" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,0 H5" stroke="#10b981" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#10b981" stroke-width="1.2"/><path d="M8.5,0 L12.7,-4.2" stroke="#10b981" stroke-width="1.1"/><circle cx="12.7" cy="-4.2" r="1" fill="#10b981"/></svg> Interrupteur
                             </button>
-                            <button id="btn-place-switch_va_et_vient" data-type="switch_va_et_vient" onclick="pickPlacement('switch_va_et_vient')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Va-et-vient : deux interrupteurs commandent un même luminaire">
+                            <button id="btn-place-switch_va_et_vient" data-type="switch_va_et_vient" onclick="pickPlacement('switch_va_et_vient')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Va-et-vient : deux interrupteurs commandent un même luminaire">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -6 18 14" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,0 H5" stroke="#22c55e" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#22c55e" stroke-width="1.2"/><path d="M8.5,0 L13.5,-4.5 M8.5,0 L13.5,4.5" stroke="#22c55e" stroke-width="1.1"/><circle cx="13.5" cy="-4.5" r="1" fill="#22c55e"/><circle cx="13.5" cy="4.5" r="1" fill="#22c55e"/></svg> Va-et-vient
                             </button>
-                            <button id="btn-place-switch_pushbutton" data-type="switch_pushbutton" onclick="pickPlacement('switch_pushbutton')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Poussoir (télérupteur) : commande un luminaire par impulsion">
+                            <button id="btn-place-switch_pushbutton" data-type="switch_pushbutton" onclick="pickPlacement('switch_pushbutton')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Poussoir (télérupteur) : commande un luminaire par impulsion">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-2 -6 18 14" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M-1,0 H5" stroke="#38bdf8" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#38bdf8" stroke-width="1.2"/><circle cx="8.5" cy="0" r="1.2" fill="#38bdf8"/></svg> Poussoir
                             </button>
-                            <button id="btn-place-wall_light" data-type="wall_light" onclick="pickPlacement('wall_light')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Applique : luminaire fixé sur un mur">
+                            <button id="btn-place-wall_light" data-type="wall_light" onclick="pickPlacement('wall_light')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Applique : luminaire fixé sur un mur">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-5 -9 30 18" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="-3" y="-7" width="3" height="14" rx="1" fill="#facc15" stroke="#ca8a04" stroke-width="1"/><path d="M0,0 H4" stroke="#eab308" stroke-width="1.2"/><path d="M4,-6 Q15,-5 15,0 Q15,5 4,6 Z" fill="#facc15" stroke="#ca8a04" stroke-width="1"/><path d="M17,-5 L21,-7 M18,0 H23 M17,5 L21,7" stroke="#eab308" stroke-width="1"/></svg> Applique
                             </button>
-                            <button id="btn-place-light_ceiling" data-type="light_ceiling" onclick="pickPlacement('light_ceiling')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Plafonnier : cliquez au plafond, dans la pièce">
+                            <button id="btn-place-light_ceiling" data-type="light_ceiling" onclick="pickPlacement('light_ceiling')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Plafonnier : cliquez au plafond, dans la pièce">
                                 <svg class="w-7 h-6 shrink-0" viewBox="-12 -12 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="0" cy="0" r="10" fill="#fef9c3" stroke="#fde047" stroke-width="1.4"/><path d="M-6.5,-6.5 L6.5,6.5 M-6.5,6.5 L6.5,-6.5" stroke="#0f172a" stroke-width="1"/></svg> Plafonnier
                             </button>
                         </div>
@@ -578,8 +589,8 @@
 
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
   <summary class="text-xs font-semibold text-slate-300 uppercase tracking-wider cursor-pointer">Circuits <span class="font-normal normal-case text-slate-500">— cliquer pour visualiser</span></summary>
-                        <button id="clear-link-highlight-3d" onclick="clearLinkSelection()" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre en évidence cette liaison (le circuit reste affiché)"><i class="fa-solid fa-xmark"></i><span></span></button>
-                        <button id="clear-circuit-highlight-3d" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border-2 border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Désélectionner le circuit</span></button>
+                        <button id="clear-link-highlight-3d" onclick="clearLinkSelection()" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre en évidence cette liaison (le circuit reste affiché)"><i class="fa-solid fa-xmark"></i><span></span></button>
+                        <button id="clear-circuit-highlight-3d" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Désélectionner le circuit</span></button>
                         <div id="circuits-list" class="space-y-2 text-xs"></div>
                     </details>
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">

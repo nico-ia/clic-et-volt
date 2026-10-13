@@ -1211,6 +1211,8 @@ function drawOpening2D(op, ghostColor) {
             const anticlockwise = hx > 0 ? swing > 0 : swing < 0;
             ctx2D.moveTo(hingeX, p.th / 2);
             ctx2D.lineTo(hingeX + (hx > 0 ? -1 : 1) * w * Math.cos(end), p.th / 2 + w * Math.sin(end));
+            // Sans ce moveTo, l'arc relie le bout de la feuille à son début par une diagonale
+            ctx2D.moveTo(hingeX + w * Math.cos(start), p.th / 2 + w * Math.sin(start));
             ctx2D.arc(hingeX, p.th / 2, w, start, end, anticlockwise);
         } else {
             ctx2D.rect(-w / 2, -p.th / 2 + 3, w, p.th - 6);

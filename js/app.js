@@ -109,7 +109,7 @@ window.addEventListener('DOMContentLoaded', () => {
     startCollisionBlink();
     startLiveReport();
     ensureNudgePads();
-    ensureHelpButton();
+    bindHelpButton();
     // outil par défaut : Sélectionner (surligne le bon bouton et affiche son aide)
     setTool('select');
     placeSharedInspectors();
@@ -289,10 +289,9 @@ function applyTheme() {
     const button = document.getElementById('theme-toggle');
     if (button) {
         button.innerHTML = light
-            ? '<i class="fa-solid fa-sun theme-toggle-sun"></i>'
-            : '<i class="fa-solid fa-moon"></i>';
+            ? '<i class="fa-solid fa-sun theme-toggle-sun"></i> <span class="hidden min-[1536px]:inline">Clair</span>'
+            : '<i class="fa-solid fa-moon"></i> <span class="hidden min-[1536px]:inline">Sombre</span>';
         button.title = light ? 'Passer au thème sombre' : 'Passer au thème clair';
-        button.setAttribute('aria-label', button.title);
     }
     if (threeScene) threeScene.background = new THREE.Color(light ? 0xe2e8f0 : 0x020617);
     redraw2D();
@@ -372,8 +371,8 @@ function switchMode(mode) {
     document.getElementById('view-3d').classList.toggle('hidden', mode !== '3d');
     document.getElementById('view-report').classList.toggle('hidden', mode !== 'report');
 
-    const tabOn = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow';
-    const tabOff = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white';
+    const tabOn = 'px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow';
+    const tabOff = 'px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200';
     ['2d', '3d', 'report'].forEach(m => { document.getElementById('tab-' + m).className = mode === m ? tabOn : tabOff; });
 
     if (mode === 'report') {
@@ -550,8 +549,8 @@ function setTool(tool) {
     const panCanvasButton = document.getElementById('btn-pan-canvas');
     if (panCanvasButton) {
         panCanvasButton.className = tool === 'pan'
-            ? 'w-9 h-9 rounded-xl border-2 border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 flex items-center justify-center transition'
-            : 'w-9 h-9 rounded-xl border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition';
+            ? 'w-9 h-9 rounded-xl border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 flex items-center justify-center transition'
+            : 'w-9 h-9 rounded-xl border border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition';
         panCanvasButton.title = tool === 'pan'
             ? 'Déplacement actif : faites glisser avec le bouton gauche'
             : 'Activer le déplacement du plan à la souris gauche';
@@ -1097,7 +1096,7 @@ function paintAideBtn(btn, icon, label, on) {
     if (!btn) return;
     btn.innerHTML = `<i class="fa-solid ${icon} text-xs"></i><span class="text-[10px] leading-none">${label}</span><b class="text-[10px] leading-none font-semibold">${on ? 'ON' : 'OFF'}</b>`;
     // Même identité que les onglets de la barre droite : liseré gris, liseré jaune quand actif
-    btn.className = 'h-12 flex flex-col items-center justify-center gap-1 rounded-xl border-2 transition ' +
+    btn.className = 'h-12 flex flex-col items-center justify-center gap-1 rounded-xl border transition ' +
         (on ? 'border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800' : 'border-slate-500 bg-slate-800 text-slate-200 hover:bg-slate-700');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
 }
@@ -1971,7 +1970,7 @@ function updateCircuitsUI() {
             '<button onclick="event.stopPropagation();toggleWiringMode(\'' + esc(c.id) + '\')" class="w-6 h-6 shrink-0 rounded-md border text-[11px] ' +
             (star ? 'border-sky-500/50 bg-sky-500/15 text-sky-300' : 'border-slate-700 bg-slate-800 text-slate-200') +
             '" title="Câblage : ' + (star ? 'étoile (chaque appareil relié au tableau)' : 'chaîné (en guirlande)') + '. Cliquer pour changer"><i class="fa-solid ' + (star ? 'fa-sitemap' : 'fa-link') + '"></i></button>' +
-            '<button onclick="event.stopPropagation();toggleCircuitCard(\'' + esc(c.id) + '\')" class="w-6 h-6 shrink-0 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]" aria-expanded="' + (open ? 'true' : 'false') + '"' + (hasWarn ? ' data-alert-blink' : '') + ' title="Réglages du circuit"><i class="fa-solid ' + (open ? 'fa-chevron-up' : 'fa-sliders') + '"></i></button>' +
+            '<button onclick="event.stopPropagation();toggleCircuitCard(\'' + esc(c.id) + '\')" class="w-6 h-6 shrink-0 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]" aria-expanded="' + (open ? 'true' : 'false') + '"' + (hasWarn ? ' data-alert-blink' : '') + ' title="Réglages du circuit"><i class="fa-solid ' + (open ? 'fa-chevron-up' : 'fa-chevron-down') + '"></i></button>' +
             '</div>' +
             '<div class="mt-0.5 pl-4 text-[10px] text-slate-400 truncate">' + esc(summary + multiLevel) + '</div>' +
             (open
@@ -2361,7 +2360,7 @@ function setRightTab(key, save = true) {
     document.querySelectorAll('.right-tabs [data-right-tab]').forEach(b => {
         const on = b.dataset.rightTab === key;
         // Chaque onglet a son propre liseré (gris) ; l'onglet actif est entouré d'un liseré jaune
-        b.className = 'right-tab-btn relative px-2 py-2 rounded-xl border-2 flex items-center gap-2 transition text-[11px] leading-tight ' +
+        b.className = 'right-tab-btn relative px-2 py-2 rounded-xl border flex items-center gap-2 transition text-[11px] leading-tight ' +
             (on ? 'border-yellow-400 bg-slate-800 ring-1 ring-yellow-400/60'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-500 text-slate-200');
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2449,7 +2448,7 @@ function refreshToolButtons(override) {
     const active = override || (currentMode === '3d' ? (activePlacementType === 'wall' ? 'wall' : 'select') : currentTool);
     document.querySelectorAll('.tool-btn').forEach(btn => {
         const on = btn.id === 'btn-tool-' + active;
-        btn.className = 'tool-btn px-2 py-2 rounded-xl border-2 bg-slate-800 hover:bg-slate-700 text-[11px] font-medium flex items-center gap-2 transition ' +
+        btn.className = 'tool-btn px-2 py-2 rounded-xl border bg-slate-800 hover:bg-slate-700 text-[11px] font-medium flex items-center gap-2 transition ' +
             (on ? 'border-yellow-400 ring-1 ring-yellow-400/60' : 'border-slate-500 text-slate-200');
     });
 }
@@ -2760,18 +2759,10 @@ function levelPrefix(levelId) {
     return lv ? lv.name + ' : ' : '';
 }
 
-// G3 : aide et raccourcis (bouton « ? » et touche ?)
-function ensureHelpButton() {
-    if (document.getElementById('help-fab')) return;
-    const b = document.createElement('button');
-    b.id = 'help-fab';
-    b.type = 'button';
-    b.title = 'Aide et raccourcis (touche ?)';
-    b.setAttribute('aria-label', 'Aide et raccourcis');
-    b.textContent = '?';
-    b.className = 'fixed bottom-4 right-4 z-[60] w-9 h-9 rounded-full border border-slate-600 bg-slate-900 text-slate-200 font-bold shadow-xl hover:border-emerald-500 hover:text-emerald-300 transition';
-    b.addEventListener('click', () => toggleHelpPanel());
-    document.body.appendChild(b);
+// G3 : aide et raccourcis (bouton « ? » de la barre et touche ?)
+function bindHelpButton() {
+    const b = document.getElementById('help-fab');
+    if (b) b.addEventListener('click', () => toggleHelpPanel());
 }
 
 function toggleHelpPanel(force) {
@@ -3275,7 +3266,7 @@ function ensureNudgePads() {
         if (!bar || bar.querySelector('.nudge-pad')) return;
         const pad = document.createElement('div');
         pad.className = 'nudge-pad hidden flex items-center gap-1 pl-2 ml-1 border-l border-slate-700';
-        const btn = (key, icon, title) => '<button type="button" data-key="' + key + '" title="' + title + '" class="w-8 h-8 rounded-lg border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center"><i class="fa-solid ' + icon + '"></i></button>';
+        const btn = (key, icon, title) => '<button type="button" data-key="' + key + '" title="' + title + '" class="w-8 h-8 rounded-lg border border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center"><i class="fa-solid ' + icon + '"></i></button>';
         pad.innerHTML =
             btn('ArrowLeft', 'fa-arrow-left', 'Gauche (le long du mur, ou x). Maj : 1 cm') +
             '<div class="flex flex-col gap-1">' +
