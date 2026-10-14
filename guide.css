@@ -3,26 +3,26 @@
 
 .g-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(2, 6, 23, 0.72); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .g-panel { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 14px; width: min(980px, 100%); height: min(640px, 100%); display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
-.g-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1e293b; font-size: 15px; }
+.g-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1e293b; font-size: 13px; }
 .g-close { background: none; border: 0; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 4px 8px; }
 .g-close:hover { color: #fff; }
 .g-body { flex: 1; min-height: 0; display: flex; }
 
 .g-nav { width: 240px; border-right: 1px solid #1e293b; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-.g-navbtn { text-align: left; background: none; border: 1px solid transparent; color: #94a3b8; padding: 7px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.g-navbtn { text-align: left; background: none; border: 1px solid transparent; color: #94a3b8; padding: 6px 10px; border-radius: 8px; font-size: 11.5px; cursor: pointer; }
 .g-navbtn:hover { background: #1e293b; color: #fff; }
 .g-navbtn.active { background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.4); color: #6ee7b7; }
 
 .g-page { flex: 1; min-width: 0; padding: 22px 26px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-.g-part { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #34d399; }
-.g-title { font-size: 22px; font-weight: 700; color: #fff; margin: 0; }
+.g-part { font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: #34d399; }
+.g-title { font-size: 18px; font-weight: 700; color: #fff; margin: 0; }
 .g-anim { background: #020617; border: 1px solid #1e293b; border-radius: 12px; padding: 10px; display: flex; justify-content: center; }
 .g-svg { width: 100%; max-width: 480px; height: auto; }
-.g-text p { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
-.g-ico { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; min-width: 26px; height: 22px; padding: 0 5px; margin: 0 2px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 13px; }
-.g-retenir { background: rgba(16,185,129,.1); border-left: 3px solid #10b981; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
+.g-text p { margin: 0 0 7px; font-size: 12.5px; line-height: 1.5; }
+.g-ico { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; min-width: 22px; height: 19px; padding: 0 4px; margin: 0 2px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 11px; }
+.g-retenir { background: rgba(16,185,129,.1); border-left: 3px solid #10b981; padding: 9px 11px; border-radius: 6px; font-size: 12px; }
 .g-prevnext { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; }
-.g-btn { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 8px 14px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.g-btn { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; }
 .g-btn:hover:not(:disabled) { background: #334155; }
 .g-btn:disabled { opacity: .4; cursor: default; }
 .g-primary { background: #059669; border-color: #059669; color: #fff; }
@@ -65,7 +65,7 @@ body.theme-light .g-essayer { color: #854d0e; border-color: #ca8a04; }
 
 /* 4. Porte : le battant s'ouvre */
 .g-door { animation: g-swing 3.5s ease-in-out infinite; }
-@keyframes g-swing { 0%, 20% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
+@keyframes g-swing { 0%, 20% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
 
 /* 5. Tableau : apparition puis éclair */
 .g-pop { animation: g-in 4s infinite; }
@@ -125,12 +125,13 @@ body.theme-light .g-essayer { color: #854d0e; border-color: #ca8a04; }
 .g-row { opacity: 0; animation: g-stairin 4s infinite; }
 .g-row.r2 { animation-delay: .6s; }
 .g-row.r3 { animation-delay: 1.2s; }
+.g-row.r4 { animation-delay: 1.8s; }
 
 /* 15. Contrôles : avertissement puis correction */
 .g-ok { fill: #34d399; }
 
 /* En-têtes de partie dans le sommaire */
-.g-navpart { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #64748b; padding: 10px 10px 2px; }
+.g-navpart { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #64748b; padding: 10px 10px 2px; }
 @media (prefers-reduced-motion: reduce) {
     .g-svg *, .g-svg { animation: none !important; }
 }

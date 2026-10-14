@@ -405,24 +405,28 @@ function on2DMouseDown(e) {
             endX = me.x;
             endY = me.y;
             const len = Math.hypot(endX - drawingStartPoint.x, endY - drawingStartPoint.y);
-            if (len > 10) {
-                saveStateToUndo();
-                projectData.walls.push({ levelId: activeLevelId,
-                    id: 'w_' + Date.now(),
-                    x1: drawingStartPoint.x,
-                    y1: drawingStartPoint.y,
-                    x2: endX,
-                    y2: endY,
-                    thickness: activeWallThickness,
-                    height: activeWallHeight
-                });
-                updateStats();
-                showNotification("Mur tracé avec succès", "success");
-            }
+            if (len > 10 && segmentOverlapsWall(drawingStartPoint.x, drawingStartPoint.y, endX, endY)) {
+                showNotification("Mur déjà existant à cet endroit : tracé refusé", "error");
+            } else {
+                if (len > 10) {
+                    saveStateToUndo();
+                    projectData.walls.push({ levelId: activeLevelId,
+                        id: 'w_' + Date.now(),
+                        x1: drawingStartPoint.x,
+                        y1: drawingStartPoint.y,
+                        x2: endX,
+                        y2: endY,
+                        thickness: activeWallThickness,
+                        height: activeWallHeight
+                    });
+                    updateStats();
+                    showNotification("Mur tracé avec succès", "success");
+                }
 
-            drawingStartPoint = { x: endX, y: endY };
-            mouseCurrentPos = { x: endX, y: endY };
-            document.getElementById('drawing-instruction-hint').textContent = "Déplacez et cliquez pour tracer un autre mur connecté (Clic droit pour arrêter)";
+                drawingStartPoint = { x: endX, y: endY };
+                mouseCurrentPos = { x: endX, y: endY };
+                document.getElementById('drawing-instruction-hint').textContent = "Déplacez et cliquez pour tracer un autre mur connecté (Clic droit pour arrêter)";
+            }
         }
     } else if (currentTool === 'place') {
         place2DAt(coords);
@@ -530,7 +534,7 @@ let placeGhost2D = null;
 function updatePlaceGhost2D(coords) {
     const type = document.getElementById('place-type').value;
     let ghost = null;
-    if (type === 'light_ceiling') {
+    if (CEILING_TYPES.includes(type)) {
         ghost = { id: '__ghost', levelId: activeLevelId, type, x: coords.x, y: 245, z: coords.y };
         ghost.blocked = !!ceilingSpotBlocker(coords.x, coords.y, activeLevelId);
     } else if (type !== 'stair') {
@@ -935,7 +939,7 @@ function derivFacePos2D(sh, dist) {
 
 // Angle de la face avant d'un appareil mural (direction opposée au mur) dans le repère du plan
 function elFrontAngle(el) {
-    if (el.type === 'light_ceiling') return 0;
+    if (CEILING_TYPES.includes(el.type)) return 0;
     const w = projectData.walls.find(x => x.id === el.wallId);
     if (!w) return 0;
     const ux = w.x2 - w.x1, uy = w.y2 - w.y1, l = Math.hypot(ux, uy) || 1;
@@ -967,27 +971,33 @@ function drawElementSymbol2D(el) {
     ctx2D.lineJoin = 'round';
     ctx2D.lineCap = 'round';
 
-    if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_32a') {
+    if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_20a_classic' || t === 'outlet_dedicated_20' || t === 'outlet_dedicated_32' || t === 'outlet_switched') {
         // prise simple : demi-disque à l'échelle du module ; dans une double / triple, le demi-disque est un peu plus petit
     // pour que les prises voisines (7,5 cm d'entraxe) ne se chevauchent pas
     const inGang = (_gangSizes2D || computeOutletGangs().sizeOf).get(el.id) > 1;
-    const r = t === 'outlet_32a' ? 9.5 : (inGang ? 3.4 : 4.5);
+    const r = isDedicatedOutlet(el) ? 9.5 : (inGang ? 3.4 : 4.5);
         line(-1, -r - 1.5, -1, r + 1.5, 2.2);                      // trait de mur
         ctx2D.beginPath();                                          // demi-disque
         ctx2D.arc(-1, 0, r, -Math.PI / 2, Math.PI / 2);
         ctx2D.closePath();
-        ctx2D.fillStyle = t === 'outlet_32a' ? col : paper;
+        ctx2D.fillStyle = t === 'outlet_dedicated_32' ? col : paper;
         ctx2D.fill();
         ctx2D.lineWidth = 2;
         ctx2D.strokeStyle = col;
         ctx2D.stroke();
         line(r - 1, 0, r + 4, 0, 1.8);                             // broche de terre
         line(r + 4, -3.5, r + 4, 3.5, 1.8);
-        if (t === 'outlet_20a') line(r + 1.5, -3, r + 1.5, 3, 1.8);
-        if (t === 'outlet_32a') line(r + 1.5, -4.5, r + 1.5, 4.5, 1.8);
+        if (t === 'outlet_20a' || t === 'outlet_20a_classic') line(r + 1.5, -3, r + 1.5, 3, 1.8);
+        if (t === 'outlet_dedicated_32') line(r + 1.5, -4.5, r + 1.5, 4.5, 1.8);
+        if (t === 'outlet_switched') {                               // repère : prise pilotée par une commande
+            ctx2D.beginPath();
+            ctx2D.arc(r * 0.45 - 1, r * 0.55, 1.6, 0, Math.PI * 2);
+            ctx2D.fillStyle = col;
+            ctx2D.fill();
+        }
         ringX = 3; ringR = r + 4;
-        textAt = { x: r * 0.45 - 1, y: 0, label: t.slice(7, 9) };
-    } else if (isLightingControl(el)) {
+        textAt = { x: r * 0.45 - 1, y: 0, label: isDedicatedOutlet(el) ? String(dedicatedAmpsOf(el)) : t === 'outlet_switched' ? 'C' : t.slice(7, 9) };
+    } else if (isLightingControl(el) || t === 'doorbell_button' || t === 'shutter_control') {
         line(-1, 0, 5, 0, 1.8);
         ctx2D.beginPath();
         ctx2D.arc(8.5, 0, 3.6, 0, Math.PI * 2);
@@ -996,7 +1006,7 @@ function drawElementSymbol2D(el) {
         ctx2D.lineWidth = 1.8;
         ctx2D.strokeStyle = col;
         ctx2D.stroke();
-        if (t === 'switch_pushbutton') {
+        if (t === 'switch_pushbutton' || t === 'doorbell_button') {
             ctx2D.beginPath();
             ctx2D.arc(8.5, 0, 1.2, 0, Math.PI * 2);
             ctx2D.fillStyle = col;
@@ -1010,6 +1020,11 @@ function drawElementSymbol2D(el) {
                 ctx2D.arc(x, y, 1, 0, Math.PI * 2);
                 ctx2D.fill();
             });
+        } else if (t === 'shutter_control') {
+            // commande de volet : flèche vers le haut (monter) et vers le bas (descendre)
+            ctx2D.fillStyle = col;
+            ctx2D.beginPath(); ctx2D.moveTo(8.5, -2.4); ctx2D.lineTo(7.4, -0.9); ctx2D.lineTo(9.6, -0.9); ctx2D.closePath(); ctx2D.fill();
+            ctx2D.beginPath(); ctx2D.moveTo(8.5, 2.4); ctx2D.lineTo(7.4, 0.9); ctx2D.lineTo(9.6, 0.9); ctx2D.closePath(); ctx2D.fill();
         } else {
             line(8.5, 0, 12.7, -4.2, 1.8);
             ctx2D.fillStyle = col;
@@ -1018,6 +1033,52 @@ function drawElementSymbol2D(el) {
             ctx2D.fill();
         }
         ringX = 8; ringR = 10;
+        if (t === 'switch_dimmer') {
+            // variateur : arc de graduation au-dessus du bouton
+            ctx2D.beginPath();
+            ctx2D.arc(8.5, 0, 6.2, -1.1, 1.1);
+            ctx2D.lineWidth = 1.2;
+            ctx2D.strokeStyle = col;
+            ctx2D.stroke();
+        } else if (t === 'motion_timer') {
+            // détecteur de mouvement : ondes émises vers l'extérieur du bouton
+            [6.5, 9.5].forEach(r => {
+                ctx2D.beginPath();
+                ctx2D.arc(8.5, 0, r, -0.7, 0.7);
+                ctx2D.lineWidth = 1.2;
+                ctx2D.strokeStyle = col;
+                ctx2D.stroke();
+            });
+        }
+    } else if (t === 'doorbell_chime') {
+        // sonnerie : disque clair avec ondes sonores
+        ctx2D.beginPath();
+        ctx2D.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        [8, 11].forEach(r => {
+            ctx2D.beginPath();
+            ctx2D.arc(0, 0, r, -0.7, 0.7);
+            ctx2D.lineWidth = 1.2;
+            ctx2D.strokeStyle = col;
+            ctx2D.stroke();
+        });
+        ringX = 0; ringR = 13;
+    } else if (t === 'shutter_motor') {
+        // moteur de volet : petit boîtier clair avec deux traits d'axe
+        ctx2D.beginPath();
+        ctx2D.roundRect(-7, -5, 14, 10, 2);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        line(-4, -2, 4, -2, 1.2, ink);
+        line(-4, 2, 4, 2, 1.2, ink);
+        ringX = 0; ringR = 10;
     } else if (t === 'wall_light') {
         ctx2D.fillStyle = '#facc15';
         ctx2D.strokeStyle = '#ca8a04';
@@ -1041,6 +1102,34 @@ function drawElementSymbol2D(el) {
         line(18, 0, 23, 0, 1.5, '#eab308');
         line(17, 5, 21, 7, 1.5, '#eab308');
         ringX = 10; ringR = 14;
+    } else if (t === 'light_spot') {
+        // spot encastré : petit disque affleurant avec une lentille au centre
+        ctx2D.beginPath();
+        ctx2D.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        ctx2D.beginPath();
+        ctx2D.arc(0, 0, 2.2, 0, Math.PI * 2);
+        ctx2D.fillStyle = col;
+        ctx2D.fill();
+        ringX = 0; ringR = 9;
+    } else if (t === 'smoke_detector') {
+        // DAAF : disque clair à double cercle (capteur)
+        ctx2D.beginPath();
+        ctx2D.arc(0, 0, 9, 0, Math.PI * 2);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        ctx2D.beginPath();
+        ctx2D.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx2D.lineWidth = 1.4;
+        ctx2D.stroke();
+        ringX = 0; ringR = 12;
     } else if (t === 'light_ceiling') {
         ctx2D.rotate(-ang);
         ctx2D.beginPath();
@@ -1065,6 +1154,24 @@ function drawElementSymbol2D(el) {
         line(-4, 0, 4, 0, 1.2, ink);
         line(0, -4, 0, 4, 1.2, ink);
         ringX = 0; ringR = 9;
+    } else if (t === 'subpanel') {
+        // sous-tableau : petit coffret clair, une rangée de modules
+        ctx2D.beginPath();
+        ctx2D.rect(-1, -12, 9, 24);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        line(-1, -6, 8, -6, 1, col);                                // rangées de modules
+        line(-1, 6, 8, 6, 1, col);
+        ctx2D.beginPath();                                          // éclair (même tracé que le tableau, à l'échelle)
+        ctx2D.moveTo(2.2, -2.6); ctx2D.lineTo(5.1, -0.3); ctx2D.lineTo(3.5, -0.3);
+        ctx2D.lineTo(5.1, 2.6); ctx2D.lineTo(1.9, 0.3); ctx2D.lineTo(3.5, 0.3);
+        ctx2D.closePath();
+        ctx2D.fillStyle = col;
+        ctx2D.fill();
+        ringR = 0;
     } else if (t === 'panel') {
         ctx2D.beginPath();
         ctx2D.rect(-1, -18, 11, 36);
@@ -1098,6 +1205,7 @@ function drawElementSymbol2D(el) {
     if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
         const ringPath = () => {
             if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
+            else if (t === 'subpanel') ctx2D.rect(-5, -16, 15, 32);
             else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + (blinkSel ? 6 : 4), 0, Math.PI * 2);
         };
         if (blinkSel) {
@@ -1117,7 +1225,7 @@ function drawElementSymbol2D(el) {
     if (textAt) {                                                   // calibre (10 / 16 / 20 / 32), texte à l'endroit
         const fx = Math.cos(ang), fy = Math.sin(ang);
         ctx2D.save();
-        ctx2D.fillStyle = t === 'outlet_32a' ? paper : ink;
+        ctx2D.fillStyle = t === 'outlet_dedicated_32' ? paper : ink;
         ctx2D.font = 'bold 6.5px Inter, sans-serif';
         ctx2D.textAlign = 'center';
         ctx2D.textBaseline = 'middle';
@@ -1262,7 +1370,7 @@ function draw2DEquipment() {
         const net = getCableNetwork();
         const selectedElement = projectData.electrical.find(el => el.id === selected3DId);
         const isLightingSelection = selectedElement &&
-            (isLightingControl(selectedElement) || selectedElement.type === 'light_ceiling' || selectedElement.type === 'wall_light');
+            (isControl(selectedElement) || isControlledLoad(selectedElement));
         const selectedLinkIds = new Set(isLightingSelection
             ? (net.controlLinks || [])
                 .filter(link => link.switchId === selected3DId || link.lightIds.includes(selected3DId))
@@ -1270,7 +1378,7 @@ function draw2DEquipment() {
             : []);
         const hasLinkFocus = selectedLinkIds.size > 0;
         const focusCircuit = !hasLinkFocus && selectedCircuitId
-            ? projectData.circuits.find(c => c.id === selectedCircuitId) || null
+            ? circuitById(selectedCircuitId)
             : null;
         const focusMode = hasLinkFocus || !!focusCircuit;
         const dimColor = currentTheme === 'light' ? '#94a3b8' : '#64748b';
@@ -1287,7 +1395,13 @@ function draw2DEquipment() {
             const ox = -dy / len * off, oy = dx / len * off;
             const ids = [...new Set((s.cids || []).filter(Boolean))];
             const circs = ids.map(id => projectData.circuits.find(c => c.id === id)).filter(Boolean);
-            const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && (s.cids || []).includes(focusCircuit.id));
+            const feederSeg = (s.cids || []).includes(FEEDER_CID);
+            const feederOff = !hasLinkFocus && !feederShownForSelection();
+            const onFeeder = feederSeg && !feederOff;
+            // câble de liaison seul : masqué tant qu'aucun circuit ni éclairage n'est sélectionné, ou s'il est retiré du circuit
+            if (feederSeg && !circs.length && (!focusMode || feederOff)) return;
+            const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && ((s.cids || []).includes(focusCircuit.id) || onFeeder));
+            const focusColor = hasLinkFocus ? '#facc15' : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
             ctx2D.globalAlpha = focusMode ? (focusHit ? 1 : 0.16) : 0.85;
             ctx2D.lineWidth = focusMode && focusHit ? 5 : 3;
             ctx2D.beginPath();
@@ -1295,7 +1409,7 @@ function draw2DEquipment() {
             ctx2D.lineTo(s.b.x + ox, s.b.y + oy);
             if (focusMode || circs.length <= 1) {
                 ctx2D.strokeStyle = focusMode
-                    ? (focusHit ? (hasLinkFocus ? '#facc15' : circuitColor(focusCircuit)) : dimColor)
+                    ? (focusHit ? focusColor : dimColor)
                     : circs.length ? circuitColor(circs[0]) : '#94a3b8';
                 ctx2D.setLineDash(isLow ? [8, 6] : []);
                 ctx2D.stroke();
@@ -1483,9 +1597,11 @@ function nearestWallInfo(coords) {
 }
 
 function defaultHeightFor(type) {
-    if (type === 'panel' || type === 'junction_box') return 150;
+    if (type === 'panel' || type === 'subpanel' || type === 'junction_box') return 150;
     if (type === 'wall_light') return 180;
-    if (type === 'outlet_32a') return 20;
+    if (type === 'doorbell_chime') return 200;
+    if (type === 'shutter_motor') return 210;
+    if (type.startsWith('outlet_dedicated')) return 20;
     if (type.startsWith('outlet')) return 30;
     return 110;
 }
@@ -1516,7 +1632,7 @@ function place2DAt(coords) {
         showNotification('Escalier posé', 'success');
         return;
     }
-    if (type === 'light_ceiling') {
+    if (CEILING_TYPES.includes(type)) {
         if (ceilingSpotBlocker(coords.x, coords.y, activeLevelId)) { refuseSameSpot(); return; }
         saveStateToUndo();
         projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, x: coords.x, y: 245, z: coords.y });
@@ -1576,7 +1692,7 @@ function dragElement2D(coords) {
     const item = el || op || sh;
     if (!item) return;
     if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
-    if (el && el.type === 'light_ceiling') {
+    if (el && CEILING_TYPES.includes(el.type)) {
         el.x = coords.x;
         el.z = coords.y;
     } else {

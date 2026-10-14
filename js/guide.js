@@ -1,4 +1,4 @@
-// Guide intégré à Clic & Volt (parties 1 à 3 : Plan 2D, Plan 3D, Métré & contrôles).
+// Guide intégré à Clic & Volt (parties 1 à 3 : Plan 2D, Vue 3D et câblage, Métré & contrôles).
 // Les symboles des animations sont ceux de l'appli : mêmes formes et mêmes couleurs que les boutons
 // de la colonne de droite et que le plan (canvas2d.js, drawElementSymbol2D).
 // Script autonome : à charger après app.js.
@@ -52,7 +52,11 @@
                  <rect x="-30" y="-4" width="60" height="8" fill="none" stroke="#22d3ee" stroke-width="2"/>
                  <line x1="-30" y1="0" x2="30" y2="0" stroke="#22d3ee" stroke-width="2"/>`,
         // trémie (ambre) : carré en pointillés, point de dérivation
-        shaft: `<rect x="-20" y="-20" width="40" height="40" fill="rgba(251,191,36,0.3)" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6 4"/>`
+        shaft: `<rect x="-20" y="-20" width="40" height="40" fill="rgba(251,191,36,0.3)" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6 4"/>`,
+        // sous-tableau (cyan clair) : même forme que le plan, avec l'éclair
+        subpanel: `<rect x="-1" y="-10" width="9" height="20" fill="#f8fafc" stroke="#67e8f9" stroke-width="1.6"/>
+                   <path d="M-1,0 H8" stroke="#67e8f9" stroke-width="0.9"/>
+                   <polygon class="g-bolt" points="2,-6 5,-3 3.5,-3 5,0 1.5,3 3,3 1,6" fill="#67e8f9"/>`
     };
 
     // ---------- Animations (SVG, animées en CSS) ----------
@@ -88,15 +92,15 @@
         <rect class="g-key" x="122" y="150" width="76" height="22" rx="5"/>
         <text class="g-lbl" x="160" y="165">Suppr</text>`);
 
-    // Porte : même dessin que le plan. Charnière (pivot) à droite de l'ouverture, comme le réglage par défaut « Gauche » de l'appli
+    // Porte : même dessin que le plan. Mur tracé de gauche à droite : charnière (pivot) à gauche, côté départ du mur, comme le réglage par défaut « Gauche »
     const animDoor = () => svg(`
         <rect x="40" y="105" width="240" height="10" fill="#334155"/>
         <rect x="130" y="105" width="80" height="10" fill="#0f172a"/>
-        <g class="g-door" style="transform-origin:210px 110px">
-            <line x1="210" y1="110" x2="130" y2="110" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+        <g class="g-door" style="transform-origin:130px 110px">
+            <line x1="130" y1="110" x2="210" y2="110" stroke="#b07a4a" stroke-width="4" stroke-linecap="round"/>
         </g>
-        <path d="M130 110 A80 80 0 0 1 210 30" fill="none" stroke="#38bdf8" stroke-dasharray="3 4" opacity=".5"/>
-        <circle cx="210" cy="110" r="4" fill="#f8fafc"/>
+        <path d="M210 110 A80 80 0 0 0 130 30" fill="none" stroke="#b07a4a" stroke-dasharray="3 4" opacity=".6"/>
+        <circle cx="130" cy="110" r="4" fill="#f8fafc"/>
         ${sym(S.window, 260, 110)}
         <text class="g-lbl" x="130" y="165">Porte</text>
         <text class="g-lbl" x="260" y="150">Fenêtre</text>`);
@@ -204,6 +208,18 @@
         <text class="g-lbl" x="270" y="170">Prise</text>
         <text class="g-lbl" x="160" y="18">Posé en 2D ou en 3D : le câble se trace seul</text>`);
 
+    // Pièce séparée : tableau dans une pièce, sous-tableau dans l'autre, câble fuchsia qui passe au-dessus du mur
+    const animSubpanel = () => svg(`
+        <rect x="20" y="30" width="130" height="120" rx="4" fill="none" stroke="#475569" stroke-width="2"/>
+        <rect x="170" y="30" width="130" height="120" rx="4" fill="none" stroke="#475569" stroke-width="2"/>
+        <line x1="160" y1="30" x2="160" y2="150" stroke="#334155" stroke-width="8"/>
+        <path class="g-wall-draw" d="M62 100 V60 H236 V100 H247" fill="none" stroke="#e879f9" stroke-width="3" stroke-linejoin="round"/>
+        <g class="g-pop p1">${sym(S.panel, 40, 100, 0, 2.2)}</g>
+        <g class="g-pop p2">${sym(S.subpanel, 250, 100, 0, 2.4)}</g>
+        <text class="g-lbl" x="85" y="170">Tableau principal</text>
+        <text class="g-lbl" x="235" y="170">Sous-tableau</text>
+        <text class="g-lbl" x="160" y="18">Câble entre tableaux (fuchsia)</text>`);
+
     // Circuits : trois couleurs (même palette qu'en 2D et dans la liste des circuits)
     const animCircuits = () => svg(`
         <line x1="30" y1="40" x2="290" y2="40" stroke="#334155" stroke-width="6"/>
@@ -213,7 +229,7 @@
         <path class="g-circ c3" d="M50 100 V150 H150" fill="none" stroke="#ef4444" stroke-width="3"/>
         <text class="g-lbl" x="180" y="150" style="text-anchor:start;font-size:10px;fill:#facc15">Éclairage 10A</text>
         <text class="g-lbl" x="180" y="164" style="text-anchor:start;font-size:10px;fill:#f97316">Prises de courant 16A</text>
-        <text class="g-lbl" x="180" y="178" style="text-anchor:start;font-size:10px;fill:#ef4444">Spécialisé Cuisine 20A</text>`);
+        <text class="g-lbl" x="180" y="178" style="text-anchor:start;font-size:10px;fill:#ef4444">Prises 20A plan de travail</text>`);
 
     // Bouton « Câbles » : tuile de la grille « Aides & Commandes » (barre de gauche du plan 2D). ON : câbles visibles, OFF : masqués
     const animCablesToggle = () => svg(`
@@ -259,14 +275,15 @@
         <text class="g-lbl" x="64" y="31">Plan 2D</text>
         <text class="g-lbl" x="160" y="31">Plan 3D</text>
         <text class="g-lbl" x="260" y="31">Métré &amp; Contrôles</text>
-        <rect x="30" y="58" width="260" height="106" rx="6" fill="#0f172a" stroke="#334155"/>
-        <line x1="30" y1="82" x2="290" y2="82" stroke="#334155"/>
-        <text class="g-lbl" x="56" y="76" style="fill:#e2e8f0;text-anchor:start">Circuit</text>
-        <text class="g-lbl" x="210" y="76" style="fill:#e2e8f0">Calibre</text>
-        <text class="g-lbl" x="270" y="76" style="fill:#e2e8f0">Points</text>
-        <g class="g-row"><text class="g-lbl" x="56" y="104" style="text-anchor:start">Éclairage 10A</text><text class="g-lbl" x="210" y="104">10 A</text><text class="g-lbl" x="270" y="104">6/8</text></g>
-        <g class="g-row r2"><text class="g-lbl" x="56" y="130" style="text-anchor:start">Prises de courant 16A</text><text class="g-lbl" x="210" y="130">16 A</text><text class="g-lbl" x="270" y="130">5/8</text></g>
-        <g class="g-row r3"><text class="g-lbl" x="56" y="156" style="text-anchor:start">Spécialisé Cuisine 20A</text><text class="g-lbl" x="210" y="156">20 A</text><text class="g-lbl" x="270" y="156">2/12</text></g>`);
+        <rect x="30" y="50" width="260" height="126" rx="6" fill="#0f172a" stroke="#334155"/>
+        <line x1="30" y1="74" x2="290" y2="74" stroke="#334155"/>
+        <text class="g-lbl" x="56" y="68" style="fill:#e2e8f0;text-anchor:start">Circuit</text>
+        <text class="g-lbl" x="210" y="68" style="fill:#e2e8f0">Calibre</text>
+        <text class="g-lbl" x="270" y="68" style="fill:#e2e8f0">Points</text>
+        <g class="g-row"><text class="g-lbl" x="56" y="96" style="text-anchor:start">Éclairage 10A</text><text class="g-lbl" x="210" y="96">10 A</text><text class="g-lbl" x="270" y="96">6/8</text></g>
+        <g class="g-row r2"><text class="g-lbl" x="56" y="120" style="text-anchor:start">Prises de courant 16A</text><text class="g-lbl" x="210" y="120">16 A</text><text class="g-lbl" x="270" y="120">5/8</text></g>
+        <g class="g-row r3"><text class="g-lbl" x="56" y="144" style="text-anchor:start">Prises 20A plan trav.</text><text class="g-lbl" x="210" y="144">20 A</text><text class="g-lbl" x="270" y="144">2/6</text></g>
+        <g class="g-row r4"><text class="g-lbl" x="56" y="168" style="text-anchor:start">Prises 20A</text><text class="g-lbl" x="210" y="168">20 A</text><text class="g-lbl" x="270" y="168">4/12</text></g>`);
 
     // Métré : les lignes arrivent une à une
     const animBom = () => svg(`
@@ -275,8 +292,8 @@
         <text class="g-lbl" x="32" y="34" style="text-anchor:start;fill:#e2e8f0">Catégorie</text>
         <text class="g-lbl" x="140" y="34" style="text-anchor:start;fill:#e2e8f0">Désignation</text>
         <text class="g-lbl" x="288" y="34" style="text-anchor:end;fill:#e2e8f0">Quantité</text>
-        <g class="g-row"><text class="g-lbl" x="32" y="66" style="text-anchor:start">Appareillage</text><text class="g-lbl" x="140" y="66" style="text-anchor:start">Prise 16 A</text><text class="g-lbl" x="288" y="66" style="text-anchor:end;fill:#e2e8f0">6</text></g>
-        <g class="g-row r2"><text class="g-lbl" x="32" y="96" style="text-anchor:start">Appareillage</text><text class="g-lbl" x="140" y="96" style="text-anchor:start">Interrupteur simple</text><text class="g-lbl" x="288" y="96" style="text-anchor:end;fill:#e2e8f0">4</text></g>
+        <g class="g-row"><text class="g-lbl" x="32" y="66" style="text-anchor:start">Appareillages</text><text class="g-lbl" x="140" y="66" style="text-anchor:start">Prise 16 A</text><text class="g-lbl" x="288" y="66" style="text-anchor:end;fill:#e2e8f0">6</text></g>
+        <g class="g-row r2"><text class="g-lbl" x="32" y="96" style="text-anchor:start">Appareillages</text><text class="g-lbl" x="140" y="96" style="text-anchor:start">Interrupteur simple</text><text class="g-lbl" x="288" y="96" style="text-anchor:end;fill:#e2e8f0">4</text></g>
         <g class="g-row r3"><text class="g-lbl" x="32" y="126" style="text-anchor:start">Gaines et câbles</text><text class="g-lbl" x="140" y="126" style="text-anchor:start">Boîte de dérivation</text><text class="g-lbl" x="288" y="126" style="text-anchor:end;fill:#e2e8f0">3</text></g>
         <text class="g-lbl" x="160" y="168">Quantités comptées sur le plan</text>`);
 
@@ -312,47 +329,56 @@
     const PAGES = [
         { part: 'Plan 2D', title: 'Découvrir l\'écran', anim: animZones,
           text: ['En haut : le niveau (menu), Nouveau, Enregistrer, Ouvrir, Guide.',
-                 'À gauche : la boîte à outils (tracer, sélectionner) et « Aides & Commandes ».',
+                 'À gauche : le bloc « Mode d\'interaction » (mode actif, Désélection, Supprimer la sélection, puis Tracer mur et Sélectionner) et « Aides & Commandes ».',
                  'Au centre : le plan. Dans son coin haut-gauche, une bulle d\'aide indique l\'action en cours : la croix (×) la ferme, le bouton « ? » la rouvre.',
-                 'À droite : les onglets « Ouvertures », « Appareils », « Circuits », « Alertes ».',
+                 'À droite : les onglets « Ouvertures », « Appareillages », « Circuits », « Alertes ».',
                  'En bas du plan : la barre du bas, avec Annuler, Rétablir, Imprimer.'],
           retenir: 'Chaque zone a un rôle précis. Échap désélectionne tout.' },
         { part: 'Plan 2D', title: 'Tracer un mur', anim: animTrace,
           text: ['Appuyez sur T, ou cliquez « Tracer mur ».',
                  'Cliquez à un coin, puis au coin suivant. Clic droit ou Échap pour arrêter.',
-                 'Le mur s\'accroche aux autres murs : les bouts se rejoignent tout seuls.'],
+                 'Le mur s\'accroche aux autres murs : les bouts se rejoignent tout seuls.',
+                 'Un mur ne peut pas être tracé par-dessus un mur existant : le tracé est refusé avec une notification, et le mur n\'est pas créé. Le tracé continue depuis le même point.'],
           essayer: { mode: '2d', tool: 'wall', pulse: '#btn-tool-wall' },
           retenir: 'L\'option Ortho (angle droit) garde les murs bien droits.' },
         { part: 'Plan 2D', title: 'Modifier ou supprimer un mur', anim: animEdit,
           text: ['Activez « Modifier les murs ». Sans cela, un clic ne fait que sélectionner.',
                  'Glissez un bout du mur pour l\'allonger, ou le mur entier pour le déplacer.',
-                 'Sélectionnez un ou plusieurs éléments : la barre du haut affiche « Déselection » et « Supprimer la sélection » (rouge). Suppr fait la même chose, après confirmation. Annuler (Ctrl+Z) revient en arrière.'],
+                 'Sélectionnez un ou plusieurs éléments : le bloc « Mode d\'interaction », à gauche, affiche « Désélection » (orange) et « Supprimer la sélection » (rouge). Suppr fait la même chose, après confirmation. Annuler (Ctrl+Z) revient en arrière.'],
           essayer: { mode: '2d', tool: 'select', wallEdit: true, pulse: '#btn-wall-edit' },
           retenir: '« Murs verrouillés » protège tous les murs : ils ne se sélectionnent plus, seuls les autres éléments se sélectionnent et se suppriment.' },
         { part: 'Plan 2D', title: 'Poser une porte ou une fenêtre', anim: animDoor,
           text: ['Ouvrez l\'onglet « Ouvertures » à droite.',
                  'Cliquez « Porte » ou « Fenêtre », puis cliquez près du mur.',
                  'Le côté cliqué est le côté de pose. Deux ouvertures ne peuvent pas se chevaucher.',
-                 'Réglage « Charnière (porte poussant) » : Gauche ou Droite, vu depuis le côté où vous êtes. Par défaut, « Gauche » : la charnière est à droite de l\'ouverture, comme dans l\'animation.'],
+                 'Réglage « Charnière (porte poussant) » : Gauche ou Droite, vu depuis le côté où vous êtes. Par défaut, « Gauche » : la charnière est du côté de départ du mur, comme dans l\'animation.'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'door_single', pulse: '#btn-2d-place-door_single' },
           retenir: 'Ne placez jamais une prise ou un interrupteur à l\'emplacement d\'une porte.' },
         { part: 'Plan 2D', title: 'Poser le tableau électrique', anim: animPanel,
-          text: ['Ouvrez l\'onglet « Appareils ».',
+          text: ['Ouvrez l\'onglet « Appareillages ».',
                  'Cliquez « Tableau » (un seul par projet, au RDC), puis cliquez sur un mur près de l\'entrée.'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'panel', pulse: '#btn-2d-place-panel' },
           retenir: 'Un seul tableau par projet.' },
         { part: 'Plan 2D', title: 'Poser prises, interrupteurs et luminaires', anim: animDevices,
-          text: ['Onglet « Appareils » : choisissez l\'appareil.',
+          text: ['Onglet « Appareillages » : choisissez l\'appareil.',
                  'Cliquez près d\'un mur. Pour le plafonnier, cliquez au plafond, au milieu de la pièce.',
                  'Des prises posées côte à côte se regroupent (double, triple).',
-                 'Pour arrêter la pose, cliquez « Désélection » en haut de la sidebar gauche (ou Échap).'],
+                 'Pour arrêter la pose, cliquez « Désélection » (orange) dans le bloc « Mode d\'interaction », à gauche (ou Échap).'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'outlet_16a', pulse: '#btn-2d-place-outlet_16a' },
           retenir: 'Un interrupteur se place à environ 1,10 m du sol, une prise à 30 cm.' },
         { part: 'Plan 2D', title: 'Relier un interrupteur à son luminaire', anim: animControl,
           text: ['Cliquez sur l\'interrupteur.',
-                 'Ouvrez « Modifier les associations », puis cochez le luminaire à commander.'],
+                 'Ouvrez « Modifier les associations », puis cochez le luminaire à commander.',
+                 'Le luminaire peut être sur un autre circuit que l\'interrupteur : le câble de commande part alors du circuit de l\'interrupteur jusqu\'à celui du luminaire.'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'switch_simple', pulse: '#btn-2d-place-switch_simple' },
           retenir: 'Un va-et-vient se pose toujours par deux.' },
+        { part: 'Plan 2D', title: 'Prise commandée, sonnette et volet', anim: animControl,
+          text: ['Prise commandée : un interrupteur la coupe ou la rétablit, comme un luminaire. Reliez-la dans « Modifier les associations ».',
+                 'Sonnette : posez le « Bouton de sonnette » et la « Sonnerie ». Le bouton fait sonner la sonnerie.',
+                 'Volet roulant : la « Commande de volet roulant » monte ou descend le « Moteur de volet roulant ». Le moteur est alimenté par le circuit des prises.',
+                 'Ces câblages sont simplifiés : la sonnette et le volet ne montrent pas les fils réels (basse tension, moteur à plusieurs fils).'],
+          essayer: { mode: '2d', tab: 'appareillage', place: 'doorbell_button', pulse: '#btn-2d-place-doorbell_button' },
+          retenir: 'Une prise commandée se relie à un interrupteur, comme un luminaire.' },
         { part: 'Plan 2D', title: 'Ajouter un étage ou un sous-sol', anim: animLevels,
           text: ['Cliquez sur [fa-circle-up] pour ajouter un étage, ou sur [fa-circle-down] pour ajouter un sous-sol, dans la barre du haut.',
                  'Donnez un nom et une cote (hauteur par rapport au RDC).',
@@ -373,51 +399,62 @@
           essayer: { mode: '2d', tab: 'avertissements', pulse: '#sidebar-2d-right [data-right-tab="avertissements"]' },
           retenir: 'Une alerte ne bloque rien : elle signale un point à vérifier.' },
 
-        // ----- Partie 2 : Plan 3D -----
-        { part: 'Plan 3D', title: 'Découvrir la vue 3D', anim: animZones3d,
+        // ----- Partie 2 : Vue 3D et câblage -----
+        { part: 'Vue 3D et câblage', title: 'Découvrir la vue 3D', anim: animZones3d,
           text: ['Cliquez « Plan 3D » en haut. La vue 3D montre le bâtiment en volume (comme une maquette).',
                  'La barre du haut, la boîte à outils et les onglets de droite sont les mêmes qu\'en 2D. Seuls le centre et la barre du bas changent. La bulle d\'aide se ferme et se rouvre comme en 2D.',
                  'À gauche : la boîte à outils, et le réglage de l\'élément sélectionné (ses curseurs et ses boutons).',
                  'Au centre : le bâtiment en 3D. Vous pouvez aussi poser des appareils directement en 3D.',
-                 'À droite : les onglets « Ouvertures », « Appareils », « Circuits », « Alertes ».',
+                 'À droite : les onglets « Ouvertures », « Appareillages », « Circuits », « Alertes ».',
                  'En bas de la vue 3D : la barre du bas, avec Imprimer, PNG, Annuler, Rétablir, Centrer et les vues (Isométrique, Dessus, Face, Profil).'],
           essayer: { mode: '3d' },
           retenir: 'Le plan 2D reste la référence : c\'est là qu\'on dessine les murs et qu\'on pose les appareils.' },
-        { part: 'Plan 3D', title: 'Tourner, zoomer, déplacer', anim: animOrbit,
+        { part: 'Vue 3D et câblage', title: 'Tourner, zoomer, déplacer', anim: animOrbit,
           text: ['Clic gauche maintenu : tourner autour du bâtiment (orbite, rotation autour d\'un point).',
                  'Clic droit maintenu : déplacer la vue (panoramique, glisser la vue sans la tourner).',
                  'Molette de la souris : zoom avant ou arrière.',
                  'Si la vue est vide, tracez d\'abord quelques murs en 2D.'],
           essayer: { mode: '3d', pulse: '#three-container' },
           retenir: 'Si vous êtes perdu, faites un zoom arrière avec la molette.' },
-        { part: 'Plan 3D', title: 'Le câblage automatique', anim: animCablesAuto,
+        { part: 'Vue 3D et câblage', title: 'Le câblage automatique', anim: animCablesAuto,
           text: ['Vous ne dessinez pas les câbles : l\'appli les trace toute seule entre le tableau et chaque appareil.',
                  'Un appareil posé en 2D ou en 3D reçoit son câble automatiquement.',
-                 'Le câble suit les murs et passe par les trémies (ouvertures dans le plancher) pour rejoindre l\'autre étage.'],
+                 'Le câble suit les murs et passe par les trémies (ouvertures dans le plancher) pour rejoindre l\'autre étage.',
+                 'Pièce fermée sans liaison au tableau : l\'alerte propose un mur commun ou « Autoriser le passage » (câble au plafond entre les pièces). Le bouton « Retirer l\'autorisation », dans le panneau Avertissements ou dans l\'onglet Appareillages, annule ce choix.',
+                 'Pour une pièce séparée, voir l\'étape « Pièce séparée : le sous-tableau ».'],
           retenir: 'Pas besoin de tracer les câbles : vérifiez seulement la place des appareils.' },
-        { part: 'Plan 3D', title: 'Les circuits en couleur', anim: animCircuits,
+        { part: 'Vue 3D et câblage', title: 'Pièce séparée : le sous-tableau', anim: animSubpanel,
+          text: ['Une pièce séparée du tableau principal par un mur reçoit un sous-tableau : bouton « Sous-tableau » dans l\'onglet Appareillages, puis cliquez dans la pièce.',
+                 'Le câble d\'alimentation part automatiquement du tableau principal et passe au-dessus du mur. Il est tracé en fuchsia.',
+                 'Ce câble n\'est pas compté dans les longueurs des circuits. Il a sa propre ligne dans les quantités : « Liaison tableau → sous-tableau », 3G6 mm² pour un disjoncteur de tête de 32 A.',
+                 'Il est masqué par défaut. Sélectionnez « Câble entre tableaux » dans la liste des circuits pour le voir seul. Sur la carte d\'un circuit, le bouton ⇄ le retire de l\'affichage de ce circuit (ce choix reste en place pendant vos sélections).',
+                 'Le sous-tableau alimente ensuite les appareils de sa pièce.'],
+          essayer: { mode: '2d', tab: 'appareillage', pulse: '#btn-2d-place-subpanel' },
+          retenir: 'Une pièce séparée = un sous-tableau. Le câble entre tableaux n\'a pas besoin d\'être affiché pour fonctionner.' },
+        { part: 'Vue 3D et câblage', title: 'Les circuits en couleur', anim: animCircuits,
           text: ['Un circuit est un groupe d\'appareils protégés par le même disjoncteur (coupe-circuit automatique).',
                  'Chaque circuit a sa couleur. Cette couleur est la même en 2D, en 3D et dans la liste des circuits.',
-                 'Par défaut, l\'éclairage est jaune, les prises orange et la cuisine rouge.'],
+                 'Par défaut, l\'éclairage est jaune, les prises orange, les prises 20 A classiques cyan et les prises 20 A plan de travail rouges.'],
           essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
           retenir: 'Deux circuits de même couleur ? Vérifiez le nom du circuit dans la liste.' },
-        { part: 'Plan 3D', title: 'Afficher ou masquer les câbles', anim: animCablesToggle,
+        { part: 'Vue 3D et câblage', title: 'Afficher ou masquer les câbles', anim: animCablesToggle,
           text: ['Le bouton « Câbles » est dans « Aides & Commandes » (barre de gauche du plan 2D). Il affiche ou masque les câbles, en 2D et en 3D.',
                  'Quand les câbles sont masqués, le bâtiment reste visible : pratique pour repérer les pièces et les appareils.'],
           essayer: { mode: '2d', pulse: '#btn-cables-2d' },
           retenir: 'Masquer les câbles ne les supprime pas : ils restent dans le projet.' },
-        { part: 'Plan 3D', title: 'Régler un appareil en 3D', anim: animInspector3d,
+        { part: 'Vue 3D et câblage', title: 'Régler un appareil en 3D', anim: animInspector3d,
           text: ['Cliquez un appareil en 3D : il est sélectionné et son réglage s\'affiche à gauche.',
                  'Le curseur « Hauteur au sol » règle la hauteur. « Distance au départ » le déplace le long du mur.',
-                 '« Basculer de l\'autre côté du mur » le place de l\'autre côté. Pour une porte, « Charnière (porte poussant) » indique le côté où elle pivote.'],
+                 '« Basculer de l\'autre côté du mur » le place de l\'autre côté. Pour une porte, « Charnière (porte poussant) » indique le côté où elle pivote.',
+                 'Pour une prise dédiée, l\'inspecteur indique l\'appareil alimenté. Le calibre dépend du type : prise 20A dédiée ou prise 32A dédiée.'],
           essayer: { mode: '3d', tab: 'appareillage', place3d: 'outlet_16a', pulse: '#btn-place-outlet_16a' },
           retenir: 'Hauteurs usuelles : prise à 30 cm du sol, interrupteur à 1,10 m.' },
-        { part: 'Plan 3D', title: 'Escalier en 3D', anim: animStair,
+        { part: 'Vue 3D et câblage', title: 'Escalier en 3D', anim: animStair,
           text: ['L\'escalier posé en 2D apparaît en 3D : vous voyez sa montée d\'un étage à l\'autre.',
                  'Sélectionnez-le pour régler sa largeur et sa rotation (son orientation).'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'stair', pulse: '#btn-2d-place-stair' },
           retenir: 'Vérifiez la largeur de l\'escalier et le passage libre en haut et en bas.' },
-        { part: 'Plan 3D', title: 'Trémie et point de dérivation', anim: animRiser,
+        { part: 'Vue 3D et câblage', title: 'Trémie et point de dérivation', anim: animRiser,
           text: ['La trémie (ouverture dans le plancher) laisse passer les câbles entre les étages.',
                  'La boîte blanche de dérivation (boîte où se rejoignent les câbles) est placée à 1,50 m du sol par défaut, à chaque étage relié.',
                  'Pour la changer, sélectionnez la trémie et réglez « Hauteur au sol ».'],
@@ -425,23 +462,23 @@
           retenir: 'La boîte de dérivation se règle depuis la trémie, pas depuis la boîte.' },
 
         // ----- Partie 3 : Métré & contrôles -----
-        { part: 'Métré & contrôles', title: 'Découvrir l\'onglet', anim: animReport,
+        { part: 'Métré & Contrôles', title: 'Découvrir l\'onglet', anim: animReport,
           text: ['Cliquez « Métré & Contrôles » en haut. L\'écran affiche des tableaux prêts à lire.',
                  'Le tableau « Quantitatif » se remplit tout seul à partir du plan. Le tableau « Circuits » a 7 colonnes (Circuit, Calibre, Section, Points, Câble, ΔU, Contrôle) ; l\'animation n\'en montre que 3.',
                  'Les contrôles vérifient chaque circuit : nombre de points, section des fils, chute de tension ΔU (perte de tension le long du câble).'],
           retenir: 'Le métré se met à jour dès que vous changez le plan.' },
-        { part: 'Métré & contrôles', title: 'Lire le métré', anim: animBom,
-          text: ['Le tableau « Quantitatif » compte les éléments par catégorie : Ouvertures, Appareillage, Gaines et câbles.',
+        { part: 'Métré & Contrôles', title: 'Lire le métré', anim: animBom,
+          text: ['Le tableau « Quantitatif » compte les éléments par catégorie : Ouvertures, Appareillages, Gaines et câbles.',
                  'Chaque ligne donne une désignation, une quantité et une unité.',
                  'Les boîtes de dérivation sont dans « Gaines et câbles ». Les longueurs de câble sont données avec 10 % de marge.'],
           retenir: 'Le métré sert à préparer le devis et la liste d\'achat.' },
-        { part: 'Métré & contrôles', title: 'Contrôles par circuit', anim: animControls,
+        { part: 'Métré & Contrôles', title: 'Contrôles par circuit', anim: animControls,
           text: ['Chaque circuit a un calibre (intensité du disjoncteur : 10, 16, 20 ou 32 A), une section (épaisseur du fil : 1,5, 2,5 ou 6 mm²) et un nombre de points maximum.',
                  'Avec − et +, changez ces valeurs. Pour 16 A, il faut au moins 2,5 mm² : un fil plus fin est signalé par une alerte.',
-                 'Points max (NF C 15-100) : 8 pour l\'éclairage et les prises, 12 pour la cuisine. Au-delà, l\'appli crée un circuit supplémentaire.',
+                 'Points max (NF C 15-100) : 8 pour l\'éclairage et les prises 16 A, 12 pour les prises 20 A classiques, 6 pour les prises 20 A du plan de travail. Au-delà, l\'appli crée un circuit supplémentaire.',
                  'La chute de tension doit rester sous 3 % pour l\'éclairage et sous 5 % pour le reste.'],
           retenir: 'Les contrôles sont indicatifs : faites-les valider par un électricien.' },
-        { part: 'Métré & contrôles', title: 'Imprimer et exporter', anim: animExport,
+        { part: 'Métré & Contrôles', title: 'Imprimer et exporter', anim: animExport,
           text: ['« Imprimer le métré » ouvre l\'aperçu d\'impression (enregistrement en PDF possible).',
                  '« Exporter le métré (CSV) » crée un fichier à ouvrir dans un tableur comme Excel ou LibreOffice.'],
           retenir: 'Imprimez ou exportez le métré avant de commander le matériel.' }

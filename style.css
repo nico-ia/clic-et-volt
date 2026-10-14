@@ -12,11 +12,11 @@ button:not(.rounded-full):not(.sb-toggle) { border-radius: 4px !important; }
 /* Barres haut et bas flottantes de la vue 2D/3D */
 .absolute.top-4.left-4.rounded-xl, .absolute.bottom-4.left-4.rounded-xl { border-radius: 6px !important; }
 /* Mini-fenêtre de niveau (RDC, renommer, cote, fantômes) dans la barre du haut */
-div:has(> #level-select), #level-select { border-radius: 4px !important; }
+#level-select { border-radius: 4px !important; }
 div:has(> #level-select) { border-radius: 6px !important; }
 /* Tous les cadres, panneaux et champs (hors boutons, formes rondes et poignées) : 6px au lieu de 4 à 16px selon Tailwind.
    :where() garde la spécificité nulle pour que les règles des boutons et des fenêtres ci-dessus restent prioritaires. */
-:where(*):not(button):not(.rounded-full):not(.sb-toggle)[class*="rounded-"],
+:where(.rounded-md, .rounded-lg, .rounded-xl):not(button):not(.rounded-full):not(.sb-toggle),
 .g-anim { border-radius: 6px !important; }
 select, kbd { border-radius: 4px !important; }
 .tool-active-yellow { border-color: #facc15 !important; box-shadow: none !important; background-color: #1e293b !important; }
@@ -24,9 +24,9 @@ body.theme-light .tool-active-yellow.tool-active-yellow { background-color: #fff
 body.theme-light .tool-active-yellow .text-slate-200 { color: #0f172a !important; }
 body.theme-light .tool-active-yellow .text-slate-400 { color: #475569 !important; }
 body.theme-light .bg-slate-950 { background-color: #f8fafc !important; }
-body.theme-light [class*="bg-slate-950/"] { background-color: rgba(248, 250, 252, 0.94) !important; }
+body.theme-light .bg-slate-950\/60, body.theme-light .bg-slate-950\/70, body.theme-light .bg-slate-950\/80 { background-color: rgba(248, 250, 252, 0.94) !important; }
 body.theme-light .bg-slate-900 { background-color: #ffffff !important; }
-body.theme-light [class*="bg-slate-900/"] { background-color: rgba(255, 255, 255, 0.94) !important; }
+body.theme-light .bg-slate-900\/40, body.theme-light .bg-slate-900\/90, body.theme-light .bg-slate-900\/95 { background-color: rgba(255, 255, 255, 0.94) !important; }
 body.theme-light .bg-slate-800 { background-color: #e2e8f0 !important; }
 body.theme-light .bg-slate-700 { background-color: #cbd5e1 !important; }
 body.theme-light .bg-black { background-color: #e2e8f0 !important; }
@@ -43,10 +43,8 @@ body.theme-light .text-slate-600 { color: #475569 !important; }
 body.theme-light .text-amber-300,
 body.theme-light .text-amber-400 { color: #92400e !important; }
 body.theme-light .text-sky-300 { color: #075985 !important; }
-body.theme-light .text-emerald-300 { color: #047857 !important; }
-body.theme-light .text-emerald-400 { color: #047857 !important; }
-body.theme-light .text-green-300 { color: #047857 !important; }
-body.theme-light .text-green-400 { color: #047857 !important; }
+body.theme-light .text-emerald-300, body.theme-light .text-emerald-400,
+body.theme-light .text-green-300, body.theme-light .text-green-400 { color: #047857 !important; }
 body.theme-light .hover\:bg-slate-700:hover { background-color: #cbd5e1 !important; }
 body.theme-light .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
 body.theme-light .hover\:text-white:hover { color: #0f172a !important; }
@@ -81,7 +79,7 @@ body.theme-light .rt tr.rt-warn td { background: #fee2e2; color: #991b1b; }
 body.theme-light .sb-toggle { background: #ffffff; border-color: #cbd5e1; color: #475569; }
 
 /* Liseré de sélection : on garde la bordure 1 px, sans le second contour */
-[class*="ring-"] { box-shadow: none !important; }
+.ring-1, .ring-rose-400\/60, .ring-yellow-400\/60 { box-shadow: none !important; }
 
 /* Curseurs fins, pouce réduit, couleur unique (--thumb) */
 input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent !important; height: 12px !important; border: 0; margin: 0; padding: 0; cursor: pointer; --thumb: #10b981; }
