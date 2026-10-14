@@ -157,8 +157,8 @@ function redraw2D() {
     if (!isPrintRendering && wallSnap && (draggingWall || drawingStartPoint)) {
         const sn = wallSnap;
         ctx2D.save();
-        ctx2D.strokeStyle = '#f59e0b';
-        ctx2D.fillStyle = '#f59e0b';
+        ctx2D.strokeStyle = '#f8fafc';
+        ctx2D.fillStyle = '#f8fafc';
         ctx2D.lineWidth = 2 / zoom;
         ctx2D.beginPath();
         ctx2D.arc(sn.pt.x, sn.pt.y, 6 / zoom, 0, Math.PI * 2);
@@ -423,7 +423,9 @@ function on2DMouseDown(e) {
         let endpointHit = null;
         const endpointRadius = 14 / zoom;
         let endpointScore = Infinity;
-        wallsOn().forEach(w => {
+        // murs verrouillés : ils ne sont plus sélectionnables (seuls les autres éléments le sont)
+        const wallsPickable = !projectData.wallsLocked;
+        if (wallsPickable) wallsOn().forEach(w => {
             [['start', w.x1, w.y1], ['end', w.x2, w.y2]].forEach(([endpoint, x, y]) => {
                 const distance = Math.hypot(coords.x - x, coords.y - y);
                 if (distance >= endpointRadius) return;
@@ -457,7 +459,7 @@ function on2DMouseDown(e) {
             return;
         }
         let foundId = null;
-        wallsOn().forEach(w => {
+        if (wallsPickable) wallsOn().forEach(w => {
             const dist = distToSegment(coords, {x: w.x1, y: w.y1}, {x: w.x2, y: w.y2});
             if (dist < w.thickness / 2 + 12 / zoom) {
                 foundId = w.id;
@@ -696,7 +698,7 @@ function on2DMouseUp(e) {
             }
             return true;
         };
-        const matched = Math.hypot(end.x - start.x, end.y - start.y) > 4 / zoom
+        const matched = Math.hypot(end.x - start.x, end.y - start.y) > 4 / zoom && !projectData.wallsLocked
             ? wallsOn().filter(w => {
                 const a = { x: w.x1, y: w.y1 }, b = { x: w.x2, y: w.y2 };
                 return isEnclosing
@@ -1197,7 +1199,7 @@ function drawOpening2D(op, ghostColor) {
         ctx2D.rotate(p.angle);
         ctx2D.fillStyle = '#020617';
         ctx2D.fillRect(-w / 2, -p.th / 2 - 1, w, p.th + 2);
-        ctx2D.strokeStyle = ghostColor || ((op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? '#f59e0b' : (isDoor ? '#38bdf8' : '#22d3ee'));
+        ctx2D.strokeStyle = ghostColor || ((op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? '#f8fafc' : (isDoor ? '#b07a4a' : '#3b82f6'));
         ctx2D.lineWidth = 2;
         ctx2D.beginPath();
         if (isDoor) {
@@ -1299,8 +1301,8 @@ function draw2DEquipment() {
         ctx2D.translate(p.x, p.y);
         ctx2D.rotate(p.angle);
         // toujours visible en fort (comme à la sélection) ; sélectionnée : liseré blanc extérieur
-        ctx2D.fillStyle = 'rgba(251,191,36,0.30)';
-        ctx2D.strokeStyle = '#f59e0b';
+        ctx2D.fillStyle = 'rgba(248,250,252,0.30)';
+        ctx2D.strokeStyle = '#f8fafc';
         ctx2D.lineWidth = 3 / zoom;
         ctx2D.fillRect(-s / 2, -s / 2, s, s);
         ctx2D.strokeRect(-s / 2, -s / 2, s, s);
@@ -1317,12 +1319,12 @@ function draw2DEquipment() {
         const dq = derivFacePos2D(sh, derivDistOf(sh, activeLevelId)) || p;
         ctx2D.beginPath();
         ctx2D.arc(dq.x, dq.y, 5 / zoom, 0, Math.PI * 2);
-        ctx2D.fillStyle = '#fbbf24';
-        ctx2D.strokeStyle = '#78350f';
+        ctx2D.fillStyle = '#f8fafc';
+        ctx2D.strokeStyle = '#334155';
         ctx2D.lineWidth = 1.5 / zoom;
         ctx2D.fill();
         ctx2D.stroke();
-        ctx2D.fillStyle = '#fbbf24';
+        ctx2D.fillStyle = '#f8fafc';
         ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
         ctx2D.textAlign = 'center';
         ctx2D.fillText(shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - 6 / zoom);
@@ -1423,6 +1425,12 @@ function pickElement2D(coords) {
         if (!p) return;
         const d = Math.hypot(p.x - coords.x, p.y - coords.y);
         if (d < (sh.size || 40) / 2 + 6 && d < bd) { bd = d; best = { id: sh.id }; }
+        // boîte de dérivation : un clic dessus sélectionne la trémie (et non le mur voisin)
+        const dq = derivFacePos2D(sh, derivDistOf(sh, activeLevelId));
+        if (dq) {
+            const dd = Math.hypot(dq.x - coords.x, dq.y - coords.y);
+            if (dd < 10 / zoom + 4 && dd < bd) { bd = dd; best = { id: sh.id }; }
+        }
     });
     if (!best) stairsOn().forEach(st => {
         const R = stairRect(st);

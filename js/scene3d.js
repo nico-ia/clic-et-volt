@@ -140,9 +140,9 @@ function createShaftGhost3D(sh, cx, cy) {
     const s = sh.size || 40;
     const group = new THREE.Group();
     const pos = new THREE.Vector3(sp.x - cx, span.base + span.height / 2, sp.y - cy);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: 0xfbbf24 }));
+    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: 0xf8fafc }));
     box.position.copy(pos);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0xfbbf24 }));
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0xf8fafc }));
     edges.position.copy(pos);
     group.add(box, edges);
     return group;
@@ -1564,7 +1564,7 @@ function build3DScene() {
         const s = sh.size || 40;
         const frame = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
-            new THREE.LineBasicMaterial({ color: 0xfbbf24 }));
+            new THREE.LineBasicMaterial({ color: 0xf8fafc }));
         const sp = shaftPos2D(sh) || { x: w.x1 + (w.x2 - w.x1) * d / len, y: w.y1 + (w.y2 - w.y1) * d / len };
         frame.position.set(sp.x - cx, 1, sp.y - cy);
         frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
@@ -1574,7 +1574,7 @@ function build3DScene() {
         const span = shaftSpan3D(sh);
         const column = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
-            new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.85 }));
+            new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.85 }));
         column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
         column.userData.shaftId = sh.id;
         threeScene.add(column);
@@ -1591,7 +1591,7 @@ function build3DScene() {
         // trémie sélectionnée : volume blanc translucide dans la colonne (en plus du cadre de sélection)
         if (sh.id === selected3DId) {
             const sel = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
-                new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.3, depthWrite: false }));
+                new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.3, depthWrite: false }));
             sel.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
             sel.renderOrder = 5;
             threeScene.add(sel);
@@ -1603,7 +1603,7 @@ function build3DScene() {
         const lctx = labelCanvas.getContext('2d');
         lctx.fillStyle = 'rgba(15,23,42,0.85)';
         lctx.fillRect(0, 0, 512, 96);
-        lctx.fillStyle = '#fbbf24';
+        lctx.fillStyle = '#f8fafc';
         lctx.font = 'bold 40px sans-serif';
         lctx.textAlign = 'center';
         lctx.textBaseline = 'middle';
@@ -1755,7 +1755,7 @@ function createOpeningMesh3D(op, wall, cx, cy) {
         group.rotation.y = -angle;
 
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
-        const panelMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3 });
+        const panelMat = new THREE.MeshStandardMaterial({ color: 0xb07a4a, roughness: 0.3 });
 
         const postGeo = new THREE.BoxGeometry(6, doorHeight, wallThickness + 4);
         const leftPost = new THREE.Mesh(postGeo, frameMat);
@@ -1794,13 +1794,24 @@ function createOpeningMesh3D(op, wall, cx, cy) {
         group.rotation.y = -angle;
 
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
-        const glassMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.5, roughness: 0.1 });
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0x60a5fa, emissiveIntensity: 0.6, transparent: true, opacity: 0.8, roughness: 0.1 });
 
-        const outerGeo = new THREE.BoxGeometry(winWidth, winHeight, wallThickness + 2);
-        const outerFrame = new THREE.Mesh(outerGeo, frameMat);
-        group.add(outerFrame);
+        // Cadre à quatre montants (pas de pavé plein) : le vitrage reste visible.
+        const frameDepth = wallThickness + 2;
+        const frameBar = 6;
+        const sideGeo = new THREE.BoxGeometry(frameBar, winHeight, frameDepth);
+        const topGeo = new THREE.BoxGeometry(winWidth, frameBar, frameDepth);
+        const leftBar = new THREE.Mesh(sideGeo, frameMat);
+        leftBar.position.set(-(winWidth / 2 - frameBar / 2), 0, 0);
+        const rightBar = new THREE.Mesh(sideGeo, frameMat);
+        rightBar.position.set(winWidth / 2 - frameBar / 2, 0, 0);
+        const topBar = new THREE.Mesh(topGeo, frameMat);
+        topBar.position.set(0, winHeight / 2 - frameBar / 2, 0);
+        const bottomBar = new THREE.Mesh(topGeo, frameMat);
+        bottomBar.position.set(0, -(winHeight / 2 - frameBar / 2), 0);
+        group.add(leftBar, rightBar, topBar, bottomBar);
 
-        const glassGeo = new THREE.BoxGeometry(Math.max(4, winWidth - 12), Math.max(4, winHeight - 12), 4);
+        const glassGeo = new THREE.BoxGeometry(Math.max(4, winWidth - 2 * frameBar), Math.max(4, winHeight - 2 * frameBar), 2);
         const glass = new THREE.Mesh(glassGeo, glassMat);
         group.add(glass);
     }
@@ -2260,6 +2271,7 @@ function on3DPointerDown(e) {
         const derivHit = interactiveIntersects.find(i => i.object.userData && i.object.userData.derivation);
         if (derivHit) {
             // un clic sur la boîte sélectionne la trémie (sa hauteur se règle dans le panneau)
+            setSelectedWalls([]);
             select3DElement(derivHit.object.userData.id, derivHit.object);
             return;
         }
@@ -2312,7 +2324,7 @@ function on3DPointerDown(e) {
             let wm = wallHit[0].object;
             while (wm && !(wm.userData && wm.userData.id) && wm.parent) wm = wm.parent;
             const wid = wm && wm.userData && wm.userData.id;
-            if (wid && projectData.walls.some(w => w.id === wid)) {
+            if (wid && projectData.walls.some(w => w.id === wid) && !projectData.wallsLocked) {
                 const wasSelected = selectedWallIds.includes(wid);
                 if (selected3DId) { selected3DId = null; selectedCircuitId = null; }
                 setSelectedWalls([wid]);
@@ -2565,7 +2577,7 @@ function addGhostOpening3D(op, dy, cx, cy) {
     const p = w && openingPos2D(op);
     if (!p) return;
     const b = openingBox(op, w);
-    const color = b.isDoor ? 0x10b981 : 0x22d3ee;
+    const color = b.isDoor ? 0xb07a4a : 0x93c5fd;
     const geo = new THREE.BoxGeometry(p.th + 1, Math.max(1, b.z1 - b.z0), 2 * b.half);
     const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false }));
     mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 })));
@@ -2586,7 +2598,7 @@ function addGhostShaft3D(sh, cx, cy) {
     const span = shaftSpan3D(sh);
     const base = span.base;
     const add = obj => { threeScene.add(obj); wallMeshes3D.push(obj); return obj; };
-    const colMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.35, depthWrite: false });
+    const colMat = new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.35, depthWrite: false });
     const frame = add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)), colMat));
     frame.position.set(p.x - cx, base + 1, p.y - cy);
     frame.renderOrder = 3;
@@ -2595,7 +2607,7 @@ function addGhostShaft3D(sh, cx, cy) {
     const column = add(new THREE.LineSegments(new THREE.EdgesGeometry(colGeo), colMat));
     column.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     column.renderOrder = 3;
-    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.05, depthWrite: false })));
+    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.05, depthWrite: false })));
     fill.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     fill.renderOrder = 2;
     // boîtes de dérivation de chaque niveau relié, comme en réel (même taille, même position dans la gaine)
@@ -2606,7 +2618,7 @@ function addGhostShaft3D(sh, cx, cy) {
         const geo = new THREE.BoxGeometry(10, DERIV_BOX_H, 14);
         const y = elevOf(lv) - elevOf(activeLevelId) + derivHeightOf(sh, lv);
         const box = add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })));
-        box.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.35 })));
+        box.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.35 })));
         box.position.set(dp.x - cx, y, dp.y - cy);
         box.rotation.y = -dp.angle + Math.PI / 2;
         box.renderOrder = 4;
@@ -2643,7 +2655,7 @@ function addStair3D(st, cx, cy, ghost = false) {
     group.position.set(st.x - cx, base, st.y - cy);
     group.rotation.y = -(st.angleDeg || 0) * Math.PI / 180;
     group.userData = { type: 'stair', id: st.id };
-    const stepMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, roughness: 0.7, metalness: 0, transparent: true, opacity: ghost ? 0.25 : 0.85, depthWrite: !ghost });
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.7, metalness: 0, transparent: true, opacity: ghost ? 0.25 : 0.85, depthWrite: !ghost });
     for (let i = 0; i < n; i++) {
         const h = (i + 1) * H / n;
         const step = new THREE.Mesh(new THREE.BoxGeometry(L / n, h, W), stepMat);
@@ -2653,7 +2665,7 @@ function addStair3D(st, cx, cy, ghost = false) {
     // contour de l'emprise au sol : repère même quand les marches sont cachées
     const footprint = new THREE.LineSegments(
         new THREE.EdgesGeometry(new THREE.BoxGeometry(L, 1, W)),
-        new THREE.LineBasicMaterial({ color: 0xc4b5fd }));
+        new THREE.LineBasicMaterial({ color: 0x8b5cf6 }));
     footprint.position.set(0, 0.5, 0);
     group.add(footprint);
     // zone invisible sur toute la montée : permet de cliquer l'escalier et de le glisser
@@ -2789,7 +2801,7 @@ function updateSelectionHighlight(obj) {
     // escalier : le cadre suit le groupe (et non la zone cliquable seule) ; matrices à jour avant calcul
     const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
     target.updateWorldMatrix(true, true);
-    selectedHighlightMesh = new THREE.BoxHelper(target, 0xf59e0b);
+    selectedHighlightMesh = new THREE.BoxHelper(target, 0xf8fafc);
     threeScene.add(selectedHighlightMesh);
 }
 

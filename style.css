@@ -4,8 +4,25 @@ body { font-family: 'Inter', sans-serif; user-select: none; overflow: hidden; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
 canvas { display: block; outline: none; }
-.tool-active-yellow { border-color: #facc15 !important; box-shadow: 0 0 15px rgba(250, 204, 21, 0.6); background-color: rgba(250, 204, 21, 0.15) !important; color: #fef08a !important; }
-body.theme-light { background: #f1f5f9; color: #0f172a; }
+/* Boutons moins arrondis (remplace les rounded-lg / rounded-xl de Tailwind) ; les boutons circulaires et les poignées de sidebar gardent leur forme */
+button:not(.rounded-full):not(.sb-toggle) { border-radius: 4px !important; }
+/* Fenêtres (dialogues, aide, guide) et leurs champs */
+[role="dialog"], .g-panel { border-radius: 6px !important; }
+[role="dialog"] input, [role="dialog"] select, [role="dialog"] textarea { border-radius: 4px !important; }
+/* Barres haut et bas flottantes de la vue 2D/3D */
+.absolute.top-4.left-4.rounded-xl, .absolute.bottom-4.left-4.rounded-xl { border-radius: 6px !important; }
+/* Mini-fenêtre de niveau (RDC, renommer, cote, fantômes) dans la barre du haut */
+div:has(> #level-select), #level-select { border-radius: 4px !important; }
+div:has(> #level-select) { border-radius: 6px !important; }
+/* Tous les cadres, panneaux et champs (hors boutons, formes rondes et poignées) : 6px au lieu de 4 à 16px selon Tailwind.
+   :where() garde la spécificité nulle pour que les règles des boutons et des fenêtres ci-dessus restent prioritaires. */
+:where(*):not(button):not(.rounded-full):not(.sb-toggle)[class*="rounded-"],
+.g-anim { border-radius: 6px !important; }
+select, kbd { border-radius: 4px !important; }
+.tool-active-yellow { border-color: #facc15 !important; box-shadow: none !important; background-color: #1e293b !important; }
+body.theme-light .tool-active-yellow.tool-active-yellow { background-color: #ffffff !important; }
+body.theme-light .tool-active-yellow .text-slate-200 { color: #0f172a !important; }
+body.theme-light .tool-active-yellow .text-slate-400 { color: #475569 !important; }
 body.theme-light .bg-slate-950 { background-color: #f8fafc !important; }
 body.theme-light [class*="bg-slate-950/"] { background-color: rgba(248, 250, 252, 0.94) !important; }
 body.theme-light .bg-slate-900 { background-color: #ffffff !important; }
@@ -16,11 +33,12 @@ body.theme-light .bg-black { background-color: #e2e8f0 !important; }
 body.theme-light .border-slate-800 { border-color: #cbd5e1 !important; }
 body.theme-light .border-slate-700 { border-color: #cbd5e1 !important; }
 body.theme-light .text-white { color: #0f172a !important; }
+body.theme-light { background-color: #f8fafc !important; color: #1e293b !important; }
 body.theme-light .text-slate-100 { color: #1e293b !important; }
 body.theme-light .text-slate-200 { color: #334155 !important; }
 body.theme-light .text-slate-300 { color: #475569 !important; }
-body.theme-light .text-slate-400 { color: #64748b !important; }
-body.theme-light .text-slate-500 { color: #64748b !important; }
+body.theme-light .text-slate-400 { color: #475569 !important; }
+body.theme-light .text-slate-500 { color: #475569 !important; }
 body.theme-light .text-slate-600 { color: #475569 !important; }
 body.theme-light .text-amber-300,
 body.theme-light .text-amber-400 { color: #92400e !important; }
@@ -58,9 +76,50 @@ body.theme-light .rt tr.rt-warn td { background: #fee2e2; color: #991b1b; }
 .sb-resizer:hover, .sb-resizer.active { background: rgba(16, 185, 129, 0.55); }
 .sb-toggle { position: absolute; top: 50%; transform: translateY(-50%); z-index: 30; width: 18px; height: 56px; display: flex; align-items: center; justify-content: center; background: #0f172a; border: 1px solid #334155; color: #94a3b8; cursor: pointer; font-size: 10px; }
 .sb-toggle:hover { color: #fff; background: #1e293b; }
-.sb-toggle.left { left: 0; border-radius: 0 8px 8px 0; border-left: 0; }
-.sb-toggle.right { right: 0; border-radius: 8px 0 0 8px; border-right: 0; }
+.sb-toggle.left { left: 0; border-radius: 0 6px 6px 0; border-left: 0; }
+.sb-toggle.right { right: 0; border-radius: 6px 0 0 6px; border-right: 0; }
 body.theme-light .sb-toggle { background: #ffffff; border-color: #cbd5e1; color: #475569; }
+
+/* Liseré de sélection : on garde la bordure 1 px, sans le second contour */
+[class*="ring-"] { box-shadow: none !important; }
+
+/* Curseurs fins, pouce réduit, couleur unique (--thumb) */
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent !important; height: 12px !important; border: 0; margin: 0; padding: 0; cursor: pointer; --thumb: #10b981; }
+input[type="range"]:focus { outline: none; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: #334155; border-radius: 2px; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 9px; height: 9px; margin-top: -3.5px; border: 0; border-radius: 50%; background: var(--thumb); }
+input[type="range"]::-moz-range-track { height: 2px; background: #334155; border-radius: 2px; }
+input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--thumb); }
+
+/* Écriture des lignes de réglage plus petite */
+div:has(> input[type="range"]) > span,
+div:has(> input[type="range"]) > div > span { font-size: 11px !important; }
+
+/* Typographie homogène des inspecteurs (gauche/droite) : même police, même taille, même couleur de libellé */
+#sidebar-2d, #sidebar-2d-right, #sidebar-3d-left, #sidebar-3d-right,
+#el-inspector-2d, #wall-inspector, #inspector-3d, #shaft-inspector, #shared-inspector-slot-3d,
+#el-inspector-2d *:not(i), #wall-inspector *:not(i), #inspector-3d *:not(i), #shaft-inspector *:not(i), #shared-inspector-slot-3d *:not(i) {
+    font-family: 'Inter', system-ui, sans-serif;
+}
+#el-inspector-2d .text-xs, #wall-inspector .text-xs, #inspector-3d .text-xs, #shaft-inspector .text-xs,
+#el-inspector-2d .text-\[10px\], #wall-inspector .text-\[10px\], #inspector-3d .text-\[10px\], #shaft-inspector .text-\[10px\],
+#el-inspector-2d .text-\[11px\], #wall-inspector .text-\[11px\], #inspector-3d .text-\[11px\], #shaft-inspector .text-\[11px\] {
+    font-size: 11px !important;
+    line-height: 1.35;
+}
+#el-inspector-2d .text-sm, #wall-inspector .text-sm, #inspector-3d .text-sm, #shaft-inspector .text-sm { font-size: 12px !important; }
+/* Libellés des réglages : une seule couleur */
+body:not(.theme-light) #wall-inspector label, body:not(.theme-light) #wall-inspector .text-slate-400, body:not(.theme-light) #inspector-3d .text-slate-300, body:not(.theme-light) #shaft-inspector .text-slate-300,
+body:not(.theme-light) #el-inspector-2d .text-slate-300, body:not(.theme-light) #inspector-3d .text-xs.text-slate-300 { color: #cbd5e1 !important; }
+/* Valeurs : même poids et taille */
+#wall-inspector .text-emerald-400, #inspector-3d .text-emerald-400 { font-weight: 500 !important; }
+/* Lignes de réglage : une seule ligne, valeur à droite sans retour */
+#wall-inspector [id$="-container"].flex > span:first-child { width: 4.5rem !important; }
+#wall-inspector [id$="-container"].flex > span:last-child { width: auto !important; min-width: 3.25rem; white-space: nowrap; text-align: right; }
+#inspector-3d .flex.items-center.gap-2 > span:first-child,
+#shaft-inspector .flex.items-center.gap-2 > span:first-child { width: 7rem; flex-shrink: 0; }
+body:not(.theme-light) #inspector-3d [data-op-row] > div:first-child,
+body:not(.theme-light) #shared-inspector-slot-3d [data-op-row] > div:first-child { font-size: 11px !important; color: #cbd5e1; }
 body.sb-dragging { cursor: col-resize !important; user-select: none; }
 body.sb-dragging canvas { pointer-events: none; }
 @media print {
@@ -76,7 +135,7 @@ body.theme-light .text-amber-200\/90 { color: #92400e !important; }
 body.theme-light .text-violet-400 { color: #6d28d9 !important; }
 body.theme-light .text-cyan-400 { color: #0e7490 !important; }
 body.theme-light .hover\:text-emerald-300:hover { color: #047857 !important; }
-body.theme-light .tool-active-yellow { color: #854d0e !important; }
+body.theme-light .tool-active-yellow { color: #0f172a !important; }
 body.theme-light .text-red-300,
 body.theme-light .text-red-400 { color: #b91c1c !important; }
 body.theme-light .text-blue-300,
@@ -88,8 +147,48 @@ body.theme-light .bg-sky-600,
 body.theme-light .bg-blue-600,
 body.theme-light .bg-red-600,
 body.theme-light .bg-violet-600 { color: #ffffff !important; }
+body.theme-light .bg-emerald-600 { background-color: #047857 !important; }
 body.theme-light .hover\:bg-rose-500:hover,
 body.theme-light .hover\:bg-emerald-500:hover,
 body.theme-light .hover\:bg-sky-500:hover,
 body.theme-light .hover\:bg-blue-500:hover,
 body.theme-light .hover\:bg-red-500:hover { color: #ffffff !important; }
+
+/* ---- Poids de police homogène dans les panneaux : texte normal partout, titres de section en semi-gras ---- */
+:is(#el-inspector-2d, #wall-inspector, #inspector-3d, #shaft-inspector, #sidebar-2d-right) :is(b, strong, .font-semibold, .font-bold, .font-black) {
+    font-weight: 500 !important;
+}
+:is(#el-inspector-2d, #wall-inspector, #inspector-3d, #shaft-inspector, #sidebar-2d-right) :is(summary, #el2d-name, #inspector-3d-element-name) {
+    font-weight: 600 !important;
+}
+
+/* ---- Pliage uniforme des sections : une seule petite flèche chevron, sans marqueur natif ---- */
+.panel-section > summary,
+summary.panel-section,
+details > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::marker { content: ""; }
+details > summary::after {
+    content: "\f078"; /* fa-chevron-down */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 10px;
+    color: #94a3b8;
+    margin-left: auto;
+    transition: transform 0.2s ease;
+}
+details[open] > summary::after { transform: rotate(180deg); }
+
+/* ---- Flèches des champs numériques toujours visibles (sans survol) ---- */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: inner-spin-button;
+    opacity: 1 !important;
+}

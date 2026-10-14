@@ -138,8 +138,8 @@
         <text class="g-lbl" x="60" y="48">Étage</text>
         <text class="g-lbl" x="60" y="128">RDC</text>
         <g class="g-shaftpulse">${sym(S.shaft, 160, 90)}</g>
-        <circle cx="160" cy="55" r="5" fill="#fbbf24" stroke="#78350f" stroke-width="1.5"/>
-        <circle cx="160" cy="135" r="5" fill="#fbbf24" stroke="#78350f" stroke-width="1.5"/>
+        <circle cx="160" cy="55" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+        <circle cx="160" cy="135" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
         <text class="g-lbl" x="160" y="175">La trémie relie les deux étages</text>`);
 
     // Escalier : marches violettes (même couleur que le plan), montée visible
@@ -156,7 +156,7 @@
         <rect x="16" y="26" width="288" height="98" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
         <text x="32" y="48" class="g-warn" style="font-size:11px">▲ Trémie chevauche une porte : à déplacer</text>
         <text class="g-lbl" x="32" y="66" style="text-anchor:start">Déplacez la trémie depuis l'onglet</text>
-        <text class="g-lbl" x="32" y="80" style="text-anchor:start">Portes &amp; fenêtres, hors de la porte</text>
+        <text class="g-lbl" x="32" y="80" style="text-anchor:start">Ouvertures, hors de la porte</text>
         <rect class="g-btnpress" x="222" y="96" width="66" height="18" rx="5"/>
         <text class="g-lbl" x="255" y="109">Aller ↗</text>
         <text class="g-lbl" x="160" y="150">Cliquez « Aller ↗ » : l'élément est sélectionné</text>`);
@@ -230,7 +230,7 @@
     // Inspecteur 3D : curseur « Hauteur au sol » qui glisse, libellés réels de l'appli
     const animInspector3d = () => svg(`
         <rect x="40" y="14" width="240" height="110" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
-        <text class="g-lbl" x="58" y="36" style="text-anchor:start;fill:#e2e8f0">Élément sélectionné</text>
+        <text class="g-lbl" x="58" y="36" style="text-anchor:start;fill:#e2e8f0">Réglage de l'appareil</text>
         <text class="g-lbl" x="58" y="66" style="text-anchor:start">Hauteur au sol</text>
         <line x1="58" y1="90" x2="262" y2="90" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
         <circle class="g-slide" cx="68" cy="90" r="8" fill="#34d399"/>
@@ -314,8 +314,8 @@
           text: ['En haut : le niveau (menu), Nouveau, Enregistrer, Ouvrir, Guide.',
                  'À gauche : la boîte à outils (tracer, sélectionner) et « Aides & Commandes ».',
                  'Au centre : le plan. Dans son coin haut-gauche, une bulle d\'aide indique l\'action en cours : la croix (×) la ferme, le bouton « ? » la rouvre.',
-                 'À droite : les onglets « Portes & fenêtres », « Appareils », « Circuits », « Alertes ».',
-                 'En bas du plan : la barre du bas, avec Annuler, Rétablir, Imprimer, Effacer.'],
+                 'À droite : les onglets « Ouvertures », « Appareils », « Circuits », « Alertes ».',
+                 'En bas du plan : la barre du bas, avec Annuler, Rétablir, Imprimer, Effacer tout le plan.'],
           retenir: 'Chaque zone a un rôle précis. Échap désélectionne tout.' },
         { part: 'Plan 2D', title: 'Tracer un mur', anim: animTrace,
           text: ['Appuyez sur T, ou cliquez « Tracer mur ».',
@@ -326,11 +326,11 @@
         { part: 'Plan 2D', title: 'Modifier ou supprimer un mur', anim: animEdit,
           text: ['Activez « Modifier les murs ». Sans cela, un clic ne fait que sélectionner.',
                  'Glissez un bout du mur pour l\'allonger, ou le mur entier pour le déplacer.',
-                 'Suppr efface le mur, après confirmation. Annuler (Ctrl+Z) revient en arrière.'],
+                 'Sélectionnez un ou plusieurs éléments : la barre du haut affiche « Déselection » et « Supprimer la sélection » (rouge). Suppr fait la même chose, après confirmation. Annuler (Ctrl+Z) revient en arrière.'],
           essayer: { mode: '2d', tool: 'select', wallEdit: true, pulse: '#btn-wall-edit' },
-          retenir: '« Murs verrouillés » protège tous les murs.' },
+          retenir: '« Murs verrouillés » protège tous les murs : ils ne se sélectionnent plus, seuls les autres éléments se sélectionnent et se suppriment.' },
         { part: 'Plan 2D', title: 'Poser une porte ou une fenêtre', anim: animDoor,
-          text: ['Ouvrez l\'onglet « Portes & fenêtres » à droite.',
+          text: ['Ouvrez l\'onglet « Ouvertures » à droite.',
                  'Cliquez « Porte » ou « Fenêtre », puis cliquez près du mur.',
                  'Le côté cliqué est le côté de pose. Deux ouvertures ne peuvent pas se chevaucher.',
                  'Réglage « Charnière (porte poussant) » : Gauche ou Droite, vu depuis le côté où vous êtes. Par défaut, « Gauche » : la charnière est à droite de l\'ouverture, comme dans l\'animation.'],
@@ -376,10 +376,10 @@
         { part: 'Plan 3D', title: 'Découvrir la vue 3D', anim: animZones3d,
           text: ['Cliquez « Plan 3D » en haut. La vue 3D montre le bâtiment en volume (comme une maquette).',
                  'La barre du haut, la boîte à outils et les onglets de droite sont les mêmes qu\'en 2D. Seuls le centre et la barre du bas changent. La bulle d\'aide se ferme et se rouvre comme en 2D.',
-                 'À gauche : la boîte à outils et « Élément sélectionné » (le réglage de l\'élément choisi).',
+                 'À gauche : la boîte à outils, et le réglage de l\'élément sélectionné (ses curseurs et ses boutons).',
                  'Au centre : le bâtiment en 3D. Vous pouvez aussi poser des appareils directement en 3D.',
-                 'À droite : les onglets « Portes & fenêtres », « Appareils », « Circuits », « Alertes ».',
-                 'En bas de la vue 3D : la barre du bas, avec Imprimer, PNG, Annuler, Rétablir, Effacer, Centrer et les vues (Isométrique, Dessus, Face, Profil).'],
+                 'À droite : les onglets « Ouvertures », « Appareils », « Circuits », « Alertes ».',
+                 'En bas de la vue 3D : la barre du bas, avec Imprimer, PNG, Annuler, Rétablir, Effacer tout le plan, Centrer et les vues (Isométrique, Dessus, Face, Profil).'],
           essayer: { mode: '3d' },
           retenir: 'Le plan 2D reste la référence : c\'est là qu\'on dessine les murs et qu\'on pose les appareils.' },
         { part: 'Plan 3D', title: 'Tourner, zoomer, déplacer', anim: animOrbit,

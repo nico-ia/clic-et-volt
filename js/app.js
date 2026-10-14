@@ -472,64 +472,56 @@ function setPlaceType2D(type) {
     setTool('place');
 }
 
-// Nom de l'outil et indication, en 2D (même texte que la barre de la 2D)
-function toolTexts2D(tool, currentType) {
-    const badges = { wall: 'Tracer Mur', select: 'Sélectionner / Glisser', place: 'Placer appareil', pan: 'Déplacer la vue' };
-    const hints = {
-        wall: 'Cliquez pour placer le premier point du mur (Clic droit pour fermer/arrêter)',
-        select: 'Cliquez un élément (mur, appareil, ouverture, trémie, escalier) pour le sélectionner ; glissez-le pour le déplacer ; glissez dans le vide pour encadrer plusieurs éléments ; tirez une extrémité de mur pour l’allonger ; Ctrl, Cmd ou Maj + clic pour ajouter à la sélection',
-        place: placementHintText(currentType),
-        pan: 'Faites glisser le plan avec le bouton gauche de la souris'
-    };
-    return { badge: badges[tool] || tool, hint: hints[tool] || '' };
+// Mode affiché : un seul libellé, le même en 2D et en 3D
+const MODE_BADGES = { select: 'Mode : sélection', wall: 'Mode : tracer un mur', place: 'Mode : pose d’appareil', pan: 'Mode : déplacer la vue' };
+
+function currentModeKey() {
+    if (currentMode === '3d') return activePlacementType === 'wall' ? 'wall' : (activePlacementType ? 'place' : 'select');
+    return MODE_BADGES[currentTool] ? currentTool : 'select';
 }
 
-// Nom de l'outil et indication : mêmes emplacements en 2D et en 3D (haut de la sidebar gauche, coin haut-gauche du plan)
+function selectionCount() {
+    return selectedWallIds.length + selectedDeviceIds.length + selectedOpeningIds.length || (selected3DId ? 1 : 0);
+}
+
+// Phrase d'aide selon le mode (les actions en cours la remplacent, en 2D)
+function modeHint(key) {
+    if (key === 'wall') {
+        if (currentMode === '3d') return traceBannerText3D();
+        return drawingStartPoint
+            ? 'Cliquez pour poser le point suivant. Clic droit ou Échap pour arrêter.'
+            : 'Cliquez pour placer le premier point du mur. Clic droit pour terminer.';
+    }
+    if (key === 'place') return placementHintText(currentMode === '3d' ? activePlacementType : document.getElementById('place-type').value);
+    if (key === 'pan') return 'Faites glisser le plan avec le bouton gauche de la souris.';
+    return 'Cliquez un élément pour le sélectionner. Glissez dans le vide pour en encadrer plusieurs. Ctrl ou Maj + clic pour ajouter.';
+}
+
+// Libellé du mode et phrase d'aide : mêmes emplacements en 2D et en 3D (haut de la sidebar gauche, coin haut-gauche du plan)
 function refreshToolHint() {
-    let t;
-    if (currentMode === '3d') {
-        if (activePlacementType === 'wall') t = { badge: 'Tracer Mur', hint: traceBannerText3D() };
-        else if (activePlacementType) t = { badge: 'Placer appareil', hint: placementHintText(activePlacementType) };
-        else t = toolTexts2D('select');
-    } else {
-        t = interactionStatus2D();
+    const key = currentModeKey();
+    let hint = modeHint(key);
+    const n = selectionCount();
+    if (key === 'select' && n) {
+        hint = (n === 1 ? '1 élément sélectionné' : n + ' éléments sélectionnés') + ' : glissez pour déplacer, Suppr pour effacer, Échap pour désélectionner.';
+    }
+    if (currentMode !== '3d') {
+        if (draggingWall) {
+            hint = draggingWall.mode === 'move'
+                ? 'Glissez pour déplacer le mur ; relâchez pour valider (Ctrl+Z pour annuler).'
+                : 'Longueur : ' + (Math.hypot(draggingWall.wall.x2 - draggingWall.wall.x1, draggingWall.wall.y2 - draggingWall.wall.y1) / 100).toFixed(2).replace('.', ',') + ' m ; relâchez pour valider (Ctrl+Z pour annuler).';
+        } else if (draggingEl2D) {
+            hint = 'Glissez le long du mur ; relâchez pour valider (Ctrl+Z pour annuler).';
+        } else if (selectionBoxStart) {
+            hint = 'Relâchez pour sélectionner ce qui est encadré (Ctrl ou Maj pour ajouter).';
+        }
     }
     const badge = document.getElementById('active-tool-badge');
-    const hint = document.getElementById('drawing-instruction-hint');
-    if (badge.textContent !== t.badge) badge.textContent = t.badge;
-    if (hint.textContent !== t.hint) hint.textContent = t.hint;
+    const hintEl = document.getElementById('drawing-instruction-hint');
+    const badgeText = MODE_BADGES[key];
+    if (badge.textContent !== badgeText) badge.textContent = badgeText;
+    if (hintEl.textContent !== hint) hintEl.textContent = hint;
 }
-
-// Mode d'interaction en 2D, selon ce qui se passe réellement (glissement, tracé, pose, sélection…)
-function interactionStatus2D() {
-    if (draggingWall) {
-        if (draggingWall.mode === 'move') return { badge: 'Déplacer le mur', hint: 'Glissez pour déplacer le mur ; relâchez pour valider (Ctrl+Z pour annuler)' };
-        const L = (Math.hypot(draggingWall.wall.x2 - draggingWall.wall.x1, draggingWall.wall.y2 - draggingWall.wall.y1) / 100).toFixed(2).replace('.', ',');
-        return { badge: 'Étirer le mur', hint: 'Longueur : ' + L + ' m ; l’accroche orange montre le point visé (Ctrl+Z pour annuler)' };
-    }
-    if (draggingEl2D) return { badge: 'Déplacer', hint: 'Glissez le long du mur ; relâchez pour valider (Ctrl+Z pour annuler)' };
-    if (selectionBoxStart) return { badge: 'Sélection par rectangle', hint: 'Relâchez pour sélectionner ce qui est encadré (Ctrl ou Maj pour ajouter)' };
-    if (currentTool === 'wall') {
-        return drawingStartPoint
-            ? { badge: 'Tracer mur', hint: 'Cliquez pour poser le point suivant (Clic droit ou Échap pour arrêter)' }
-            : { badge: 'Tracer mur', hint: 'Cliquez pour placer le premier point du mur' };
-    }
-    if (currentTool === 'place') {
-        const type = document.getElementById('place-type').value;
-        return { badge: 'Pose : ' + placementLabel(type), hint: placementHintText(type) };
-    }
-    if (currentTool === 'pan') return toolTexts2D('pan');
-    const n = selectedWallIds.length + selectedDeviceIds.length + selectedOpeningIds.length;
-    const count = n || (selected3DId ? 1 : 0);
-    if (count) {
-        const hint = count === 1 && selected3DId
-            ? 'Glissez pour déplacer ; flèches ← → pour ajuster ; Suppr pour effacer ; Échap pour désélectionner'
-            : 'Glissez pour déplacer la sélection ; Suppr pour effacer ; Échap pour désélectionner';
-        return { badge: 'Sélection (' + count + ')', hint };
-    }
-    return toolTexts2D('select');
-}
-
 // L'indication se place dans le coin haut-gauche du plan, en 2D comme en 3D
 function placeToolHint() {
     const wrap = document.getElementById('tool-hint');
@@ -570,9 +562,7 @@ function setTool(tool) {
             : 'Activer le déplacement du plan à la souris gauche';
     }
     const currentType = document.getElementById('place-type').value;
-    const t2 = toolTexts2D(tool, currentType);
-    document.getElementById('active-tool-badge').textContent = t2.badge;
-    document.getElementById('drawing-instruction-hint').textContent = t2.hint;
+    refreshToolHint();
     // Palette de placement dans la barre de droite : le type courant est surligné quand l'outil « placer » est actif
     document.querySelectorAll('.place-btn2d').forEach(b => b.classList.toggle('tool-active-yellow', tool === 'place' && b.dataset.type === currentType));
     if (tool !== 'select' && selected3DId) { selected3DId = null; selectedCircuitId = null; syncElementInspectors(); updateCircuitsUI(); }
@@ -592,6 +582,7 @@ function setSelectedWalls(ids) {
     inspector.classList.toggle('hidden', selectedWallIds.length === 0);
     syncDefaultSpecs();
     updateWallEditButtons();
+    updateDeselectButtons();
     if (!selectedWallIds.length) return;
 
     const walls = projectData.walls.filter(w => selected.has(w.id));
@@ -716,8 +707,9 @@ function refuseIfWallsLocked() {
 }
 
 async function deleteMultiSelection() {
-    const wallIds = new Set(selectedWallIds);
-    if (wallIds.size && refuseIfWallsLocked()) wallIds.clear();   // les autres éléments sélectionnés restent supprimables
+    // murs verrouillés : on ne les retire pas, les autres éléments sélectionnés restent supprimables
+    const wallIds = new Set(projectData.wallsLocked ? [] : selectedWallIds);
+    if (selectedWallIds.length && projectData.wallsLocked) showNotification('Murs verrouillés : les murs sélectionnés ne seront pas supprimés.', 'info');
     const devIds = new Set(selectedDeviceIds);
     const opIds = new Set(selectedOpeningIds);
     const shIds = new Set([...(projectData.shafts || []), ...(projectData.stairs || [])].filter(s => s.id === selected3DId).map(s => s.id));
@@ -785,9 +777,9 @@ function ensureShaftLinkControl() {
     const btn = document.getElementById('btn-2d-place-shaft');
     if (!btn) return;
     const wrap = document.createElement('div');
-    wrap.className = 'col-span-2 flex items-center gap-2 text-xs text-slate-300';
+    wrap.className = 'col-span-2 flex items-center gap-2 text-[11px] text-slate-300';
     wrap.innerHTML = '<label for="shaft-link-level" class="whitespace-nowrap">Relier à</label>' +
-        '<select id="shaft-link-level" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"></select>';
+        '<select id="shaft-link-level" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"></select>';
     btn.insertAdjacentElement('afterend', wrap);
 }
 
@@ -1087,22 +1079,6 @@ function confirmDeletion(what) {
     return askConfirm('Supprimer', 'Supprimer ' + what + ' ?\n\nVous pourrez revenir en arrière avec Annuler (Ctrl+Z).', 'Supprimer', { danger: true });
 }
 
-async function deleteSelectedWall() {
-    if (!selectedWallIds.length) return;
-    if (refuseIfWallsLocked()) return;
-    const ids = new Set(selectedWallIds);
-    if (!(await confirmDeletion(ids.size > 1 ? ids.size + ' murs' : 'le mur sélectionné'))) return;
-    saveStateToUndo();
-    projectData.walls = projectData.walls.filter(w => !ids.has(w.id));
-    projectData.openings = projectData.openings.filter(o => !ids.has(o.wallId));
-    projectData.electrical = projectData.electrical.filter(el => !ids.has(el.wallId));
-    projectData.shafts = (projectData.shafts || []).filter(sh => !ids.has(sh.wallId));
-    setSelectedWalls([]);
-    updateStats();
-    refreshSelectedView();
-    showNotification(ids.size > 1 ? ids.size + ' murs supprimés avec succès' : 'Mur supprimé avec succès', 'success');
-}
-
 // Quadrillage 3D : affiché ou masqué, la scène est reconstruite
 // Quadrillage : même réglage en 2D et en 3D (maille 50 cm)
 let gridVisible = true;
@@ -1137,7 +1113,7 @@ function toggleAngleSnap() {
 async function clearCanvas() {
     if (projectData.walls.length === 0) return;
     if (refuseIfWallsLocked()) return;
-    if (await askConfirm('Tout effacer', 'Voulez-vous vraiment tout effacer ?', 'Tout effacer', { danger: true })) {
+    if (await askConfirm('Effacer tout le plan', 'Voulez-vous vraiment effacer tout le plan ? Tous les murs, ouvertures et appareils seront supprimés.', 'Effacer tout le plan', { danger: true })) {
         saveStateToUndo();
         projectData.walls = [];
         projectData.openings = [];
@@ -1228,10 +1204,10 @@ function startCollisionBlink() {
             wallMeshes3D.forEach(m => {
                 if (m.userData && m.userData.blinkPalette && m.material) m.material.color.set(blinkOn ? m.userData.blinkPalette[1] : m.userData.blinkPalette[0]);
             });
-            if (selectedHighlightMesh && selectedHighlightMesh.material) selectedHighlightMesh.material.color.set(blinkOn ? contrastHex3D('#f59e0b') : '#f59e0b');
+            if (selectedHighlightMesh && selectedHighlightMesh.material) selectedHighlightMesh.material.color.set(blinkOn ? contrastHex3D('#f8fafc') : '#f8fafc');
             // trémie sélectionnée : sa colonne et son cadre alternent avec un contraste (la couleur jaune seule se voyait mal)
             if (selected3DId) wallMeshes3D.forEach(m => {
-                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(0xfbbf24) : 0xfbbf24);
+                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(0xf8fafc) : 0xf8fafc);
             });
         } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded())) {
             redraw2D();
@@ -1562,7 +1538,8 @@ function stairRiseCm(st) {
         const l = (projectData.levels || []).find(x => x.id === lv);
         return l ? Number(l.elevation) || 0 : 0;
     });
-    return elev.length > 1 ? Math.max(...elev) - Math.min(...elev) : 0;
+    // un seul niveau relié : la montée va jusqu'au plafond de ce niveau (sinon les marches seraient plates)
+    return elev.length > 1 ? Math.max(...elev) - Math.min(...elev) : levelCeilingOf(st.levelId);
 }
 function stairStepCount(st) { return Math.max(2, Math.round(stairRiseCm(st) / STAIR_RISER_CM)); }
 // Rectangle orienté : axe u = (cos a, sin a), axe v perpendiculaire ; hl et hw : demi-dimensions (cm)
@@ -1802,7 +1779,7 @@ function computeCircuitReport() {
     // une boîte de dérivation posée n'est pas un appareil : seule, elle n'appelle ni tableau ni alerte d'appareil
     if (electricalOn().some(el => el.type !== 'panel' && el.type !== 'junction_box') && !panels.length) {
         if (!anyPanel) addAlert('Aucun tableau électrique : les appareils ne sont pas reliés.', { tab: 'appareillage', hint: 'Placez un tableau électrique depuis l’onglet Appareils.' });
-        else if (shaftFeedFor(activeLevelId).reason) addAlert('Cet étage n\'est relié au tableau par aucune trémie : ses appareils ne sont pas alimentés.', { tab: 'ouvertures', hint: 'Placez une trémie qui relie cet étage au tableau de l’autre niveau, depuis l’onglet Portes & fenêtres.' });
+        else if (shaftFeedFor(activeLevelId).reason) addAlert('Cet étage n\'est relié au tableau par aucune trémie : ses appareils ne sont pas alimentés.', { tab: 'ouvertures', hint: 'Placez une trémie qui relie cet étage au tableau de l’autre niveau, depuis l’onglet Ouvertures.' });
     }
     if (panels.length > 1) addAlert('Plusieurs tableaux : seul le premier est alimenté.', { tab: 'appareillage', hint: 'Gardez un seul tableau : supprimez les autres depuis l’onglet Appareils.' });
     // le réseau câblé est calculé pour l'étage affiché : ses alertes portent son nom
@@ -1834,11 +1811,11 @@ function computeCircuitReport() {
     });
     computeShaftCollisions().forEach(({ shaft, other, kind }) => {
         const otherName = kind === 'appareil' ? electricalDisplayName(other) : (other.type === 'door_single' ? 'une porte' : 'une fenêtre');
-        addAlert(levelPrefix(shaft.levelId) + shaftTitle(shaft.id) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: shaft.id, hint: 'Déplacez la trémie depuis l’onglet Portes & fenêtres, pour la sortir de ' + otherName + '.' });
+        addAlert(levelPrefix(shaft.levelId) + shaftTitle(shaft.id) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: shaft.id, hint: 'Déplacez la trémie depuis l’onglet Ouvertures, pour la sortir de ' + otherName + '.' });
     });
     computeStairCollisions().forEach(({ stair, other, kind }) => {
         const otherName = kind === 'appareil' ? electricalDisplayName(other) : kind === 'trémie' ? 'une trémie' : kind === 'mur' ? 'un mur' : (other.type === 'door_single' ? 'une porte' : 'une fenêtre');
-        addAlert(levelPrefix(stair.levelId) + stairTitle(stair) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: stair.id, hint: 'Déplacez ou réorientez l’escalier depuis l’onglet Portes & fenêtres, pour le sortir de ' + otherName + '.' });
+        addAlert(levelPrefix(stair.levelId) + stairTitle(stair) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: stair.id, hint: 'Déplacez ou réorientez l’escalier depuis l’onglet Ouvertures, pour le sortir de ' + otherName + '.' });
     });
     const infos = projectData.circuits.filter(c => c.auto).map(c => '« ' + c.name + ' » créé automatiquement (' + c.maxPoints + ' points maximum par circuit)');
 
@@ -1928,7 +1905,7 @@ function updateCircuitsUI() {
         const b = document.getElementById(id);
         if (!b) return;
         b.classList.toggle('hidden', !isLink);
-        if (isLink) b.innerHTML = '<i class="fa-solid fa-xmark"></i><span>Désélectionner la liaison de « ' + esc(electricalDisplayName(linkEl)) + ' »</span>';
+        if (isLink) b.innerHTML = '<i class="fa-solid fa-xmark"></i><span>Retirer la mise en évidence de la liaison « ' + esc(electricalDisplayName(linkEl)) + ' »</span>';
     });
 
     // bouton explicite : « Désélectionner « nom du circuit » » (affiché seulement si un circuit est mis en évidence)
@@ -1937,7 +1914,7 @@ function updateCircuitsUI() {
         const clearButton = document.getElementById(id);
         if (!clearButton) return;
         clearButton.classList.toggle('hidden', !selectedCircuitId);
-        if (selectedCircuit) clearButton.innerHTML = '<i class="fa-solid fa-xmark"></i><span>Désélectionner « ' + esc(selectedCircuit.name) + ' »</span>';
+        if (selectedCircuit) clearButton.innerHTML = '<i class="fa-solid fa-xmark"></i><span>Retirer la mise en évidence du circuit « ' + esc(selectedCircuit.name) + ' »</span>';
     });
     // circuits non utilisés (aucun appareil, par exemple un 32 A sans cuisson) : absents de la liste
     groupCircuitRowsByLevel(rep.rows.filter(r => r.points > 0)).forEach(group => {
@@ -2348,10 +2325,11 @@ function initCollapsibleSections() {
 // Les sections existantes restent les mêmes ; on leur ajoute seulement un repère data-tab.
 // [clé, libellé affiché, titre de section à reconnaître, icône, aide au survol]
 const RIGHT_TABS = [
-    ['ouvertures', 'Portes & fenêtres', 'Ouvertures', 'fa-door-open', 'Placer portes, fenêtres, trémies et escaliers'],
-    ['appareillage', 'Appareils', 'Appareillage', 'fa-plug', 'Placer tableau, dérivations, prises, interrupteurs et plafonniers'],
-    ['circuits', 'Circuits', 'Circuits', 'fa-bezier-curve', 'Voir un circuit mis en surbrillance'],
-    ['avertissements', 'Alertes', 'Avertissements', 'fa-triangle-exclamation', 'Points à vérifier dans le projet']
+    ['ouvertures', 'Ouvertures', 'Ouvertures', [['fa-door-open', '#b07a4a'], ['fa-window-maximize', '#3b82f6'], ['fa-stairs', '#8b5cf6']], 'Placer portes, fenêtres, trémies et escaliers', 'text-sky-400'],
+    // (couleurs alignées sur le plan 2D : porte marron, fenêtre bleue, trémie blanche, escalier violet)
+    ['appareillage', 'Appareils', 'Appareillage', 'fa-plug', 'Placer tableau, dérivations, prises, interrupteurs et plafonniers', 'text-violet-400'],
+    ['circuits', 'Circuits', 'Circuits', 'fa-bezier-curve', 'Voir un circuit mis en surbrillance', 'text-rose-400'],
+    ['avertissements', 'Alertes', 'Avertissements', 'fa-triangle-exclamation', 'Points à vérifier dans le projet', 'text-yellow-400']
 ];
 const RIGHT_TAB_KEY = 'cv_onglet_droite_v1';
 const RIGHT_SIDEBARS = ['sidebar-2d-right', 'sidebar-3d-right'];
@@ -2382,7 +2360,7 @@ function setRightTab(key, save = true) {
         const on = b.dataset.rightTab === key;
         // Chaque onglet a son propre liseré (gris) ; l'onglet actif est entouré d'un liseré jaune
         b.className = 'right-tab-btn relative px-2 py-2 rounded-xl border flex items-center gap-2 transition text-[11px] leading-tight ' +
-            (on ? 'border-yellow-400 bg-slate-800 ring-1 ring-yellow-400/60'
+            (on ? 'tool-active-yellow border-yellow-400 ring-1 ring-yellow-400/60'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-500 text-slate-200');
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
@@ -2411,12 +2389,14 @@ function buildRightTabs() {
         });
         const bar = document.createElement('div');
         bar.className = 'right-tabs sticky top-0 z-10 bg-slate-900 grid grid-cols-2 gap-2 pb-2 text-xs';
-        RIGHT_TABS.forEach(([key, label, , icon, tip]) => {
+        RIGHT_TABS.forEach(([key, label, , icon, tip, color]) => {
             const b = document.createElement('button');
             b.type = 'button';
             b.dataset.rightTab = key;
             b.title = tip;
-            b.innerHTML = `<i class="fa-solid ${icon} text-emerald-400 text-sm"></i><span>${label}</span><span class="tab-count opacity-80"></span>`;
+            b.innerHTML = `${Array.isArray(icon)
+                ? icon.map(([c, col]) => `<i class="fa-solid ${c} text-xs" style="color:${col}"></i>`).join('')
+                : `<i class="fa-solid ${icon} ${color} text-sm"></i>`}<span>${label}</span><span class="tab-count opacity-80"></span>`;
             // second clic sur l'onglet actif : on le désactive, comme un outil de placement
             b.addEventListener('click', () => setRightTab(rightTabCurrent === key ? null : key));
             bar.appendChild(b);
@@ -2432,7 +2412,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 const SHARED_INSPECTORS_3D = ['wall-inspector', 'default-specs-2d', 'shaft-inspector'];
-const SHARED_CONTROLS_2D = ['side-toggle-container', 'position-distance-container', 'height-control-container'];
+const SHARED_CONTROLS_2D = ['position-distance-container', 'height-control-container'];
 
 function sharedHomeMark(el) {
     if (!el._homeMark) {
@@ -2470,7 +2450,7 @@ function refreshToolButtons(override) {
     document.querySelectorAll('.tool-btn').forEach(btn => {
         const on = btn.id === 'btn-tool-' + active;
         btn.className = 'tool-btn px-2 py-2 rounded-xl border bg-slate-800 hover:bg-slate-700 text-[11px] font-medium flex items-center gap-2 transition ' +
-            (on ? 'border-yellow-400 ring-1 ring-yellow-400/60' : 'border-slate-500 text-slate-200');
+            (on ? 'tool-active-yellow border-yellow-400 ring-1 ring-yellow-400/60' : 'border-slate-500 text-slate-200');
     });
 }
 
@@ -2480,6 +2460,7 @@ function placeSharedInspectors() {
     refreshToolHint();
     const slot3d = document.getElementById('shared-inspector-slot-3d');
     const slot2d = document.getElementById('shared-controls-slot-2d');
+    const slotSide2d = document.getElementById('shared-side-slot-2d');
     const place = (id, target) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -2489,6 +2470,7 @@ function placeSharedInspectors() {
     };
     const in3d = currentMode === '3d';
     SHARED_INSPECTORS_3D.forEach(id => place(id, in3d ? slot3d : 'home'));
+    place('side-toggle-container', in3d ? 'home' : slotSide2d);
     SHARED_CONTROLS_2D.forEach(id => place(id, in3d ? 'home' : slot2d));
 }
 
@@ -2530,7 +2512,7 @@ function toggleWallEdit() {
 
 function toggleWallsLock() {
     projectData.wallsLocked = !projectData.wallsLocked;
-    if (projectData.wallsLocked) wallEditMode = false;
+    if (projectData.wallsLocked) { wallEditMode = false; if (selectedWallIds.length) setSelectedWalls([]); }
     updateWallEditButtons();
     showNotification(projectData.wallsLocked ? "Murs verrouillés" : "Murs déverrouillés", "info");
 }
@@ -2638,6 +2620,10 @@ function updateDeselectButtons() {
     const any = !!(selected3DId || selectedCircuitId || selectedWallIds.length || selectedDeviceIds.length || selectedOpeningIds.length);
     const b = document.getElementById('btn-deselect-all');
     if (b) b.classList.toggle('hidden', !any);
+    // Suppression de la sélection (un ou plusieurs éléments, 2D et 3D) : bouton unique en haut
+    const del = document.getElementById('btn-delete-multi');
+    const deletable = !!(selected3DId || selectedDeviceIds.length || selectedOpeningIds.length || (selectedWallIds.length && !projectData.wallsLocked));
+    if (del) del.classList.toggle('hidden', !deletable);
 }
 
 // Vide toute sélection (murs, appareils, ouvertures, trémies, escaliers, circuit mis en évidence)
@@ -2998,7 +2984,8 @@ function syncElementInspectors() {
         // l'inspecteur 2D couvre aussi l'escalier, comme l'inspecteur 3D
         box.classList.toggle('hidden', !(el || op || stairSel));
         if (el || op || stairSel) {
-            document.getElementById('el2d-name').textContent = el ? electricalDisplayName(el) : op ? (op.type === 'door_single' ? 'Porte' : 'Fenêtre') : 'Escalier';
+            const nameEl = document.getElementById('el2d-name');
+            nameEl.textContent = el ? electricalDisplayName(el) : op ? (op.type === 'door_single' ? 'Porte' : 'Fenêtre') : 'Escalier';
             document.getElementById('el2d-circuit-wrap').classList.toggle('hidden', !circ);
         }
     }
@@ -3038,21 +3025,22 @@ function syncElementInspectors() {
 // ---------- Dimensions des ouvertures (portes : largeur ; fenêtres : largeur, hauteur, allège) ----------
 const OPENING_ROWS = [
     ['width', 'Largeur'],
-    ['height', 'Hauteur de la fenêtre'],
-    ['sill', 'Hauteur d’allège (sol → bas de la fenêtre)']
+    ['height', 'Hauteur'],
+    ['sill', 'Espace sol-fenêtre']
 ];
 
+// Même disposition que l'escalier et la trémie : libellé, slider et valeur sur une seule ligne
 function initOpeningControls() {
     ['3d', '2d'].forEach(suffix => {
         const box = document.getElementById('opening-controls-' + suffix);
         if (!box) return;
         box.innerHTML = '<div data-op-title class="text-xs font-semibold text-slate-200"></div>' +
             OPENING_ROWS.map(([prop, label]) =>
-                '<div data-op-row="' + prop + '" class="space-y-1"><div class="text-xs text-slate-300">' + label + '</div>' +
-                '<div class="flex items-center gap-2">' +
-                '<input type="range" step="1" data-op-range="' + prop + '" oninput="setSelectedOpeningProp(\'' + prop + '\', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">' +
-                '<input type="number" step="1" data-op-num="' + prop + '" onchange="setSelectedOpeningProp(\'' + prop + '\', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-1 text-xs text-white focus:outline-none focus:border-emerald-500">' +
-                '<span class="text-[10px] text-slate-500">cm</span></div></div>').join('');
+                '<div data-op-row="' + prop + '" class="flex items-center gap-2">' +
+                '<span class="w-28 shrink-0 text-[11px] text-slate-300">' + label + '</span>' +
+                '<input type="range" step="1" data-op-range="' + prop + '" oninput="setSelectedOpeningProp(\'' + prop + '\', this.value)" class="flex-1 min-w-0 bg-slate-800 rounded-lg h-1.5 cursor-pointer">' +
+                '<span data-op-val="' + prop + '" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>' +
+                '</div>').join('');
     });
 }
 
@@ -3082,14 +3070,17 @@ function syncOpeningControls(op) {
         box.classList.toggle('hidden', !wall);
         if (!wall) return;
         const lim = openingLimits(op, wall);
-        box.querySelector('[data-op-title]').textContent = lim.isDoor ? 'Dimensions de la porte' : 'Dimensions de la fenêtre';
+        const title = box.querySelector('[data-op-title]');
+        title.textContent = lim.isDoor ? 'Dimensions de la porte' : 'Dimensions de la fenêtre';
         box.querySelectorAll('[data-op-row]').forEach(row => {
             const prop = row.dataset.opRow;
             const show = !lim.isDoor || prop === 'width';
             row.classList.toggle('hidden', !show);
             if (!show) return;
             const L = lim[prop];
-            row.querySelectorAll('input').forEach(inp => { inp.min = L.min; inp.max = L.max; inp.value = L.val; });
+            const range = row.querySelector('input[type="range"]');
+            range.min = L.min; range.max = L.max; range.value = L.val;
+            row.querySelector('[data-op-val]').textContent = L.val + ' cm';
         });
     });
 }

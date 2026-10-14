@@ -96,7 +96,7 @@
                     <!-- Outils communs 2D et 3D : même bloc dans les deux sidebars gauches -->
                     <div id="shared-tools-block" class="space-y-4">
                     <div>
-                        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap"><label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mode d'interaction</label><span id="active-tool-badge" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">Tracé de mur</span> <button id="btn-deselect-all" onclick="clearAllSelection()" class="hidden px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-lg text-xs transition" title="Désélectionner tout (Échap)" aria-label="Désélectionner tout"><i class="fa-solid fa-xmark"></i><span>Désélectionner</span></button></div>
+                        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap"><label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mode d'interaction</label><span id="active-tool-badge" class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">Tracé de mur</span> <button id="btn-deselect-all" onclick="clearAllSelection()" class="hidden px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-lg text-xs transition" title="Retirer la sélection de tous les éléments (Échap)" aria-label="Déselection"><i class="fa-solid fa-xmark"></i><span>Déselection</span></button> <button id="btn-delete-multi" onclick="deleteCurrentSelection()" class="hidden px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-red-600 hover:bg-red-500 border border-red-500 text-white rounded-lg text-xs transition" title="Supprimer les éléments sélectionnés (Suppr)" aria-label="Supprimer la sélection"><i class="fa-solid fa-trash"></i><span>Supprimer la sélection</span></button></div>
                         <div class="grid grid-cols-2 gap-2">
                             <button onclick="setModeTool('wall')" id="btn-tool-wall" class="tool-btn px-2 py-2 rounded-xl border border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-2 transition" title="Tracer un mur (T) : cliquez pour poser les points, clic droit pour terminer">
                                 <i class="fa-solid fa-pencil text-sm"></i> Tracer mur
@@ -107,19 +107,7 @@
                         </div>
                     </div>
 
-                    <!-- Garde-fous des murs : modification désactivée par défaut, verrouillage possible -->
-                    <div class="space-y-2">
-                        <button onclick="toggleWallEdit()" id="btn-wall-edit" class="wall-edit-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Modifier les murs : permet de déplacer, étirer et régler les murs à la souris. Désactivé par défaut. Les autres clics ne font que sélectionner. Impossible si les murs sont verrouillés." aria-pressed="false">
-                            <span class="flex items-center gap-2"><i class="fa-solid fa-up-down-left-right"></i> Modifier les murs</span>
-                            <span class="text-slate-400">Activé : <span class="wall-edit-state font-semibold text-slate-200">non</span></span>
-                        </button>
-                        <button onclick="toggleWallsLock()" id="btn-wall-lock" class="wall-lock-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Murs verrouillés : protège tous les murs. Aucun déplacement, étirement ni changement d’épaisseur, de hauteur ou de longueur. Active, « Modifier les murs » est grisé et se désactive." aria-pressed="false">
-                            <span class="flex items-center gap-2"><i class="fa-solid fa-lock"></i> Murs verrouillés</span>
-                            <span class="text-slate-400"><span class="wall-lock-state font-semibold text-slate-200">non</span></span>
-                        </button>
-                    </div>
-
-                    <!-- Drawing Aids & History -->
+                    <!-- Drawing Aids & History : sous Tracer mur, car elles ne concernent que le tracé -->
                     <details open data-persist="aides" class="space-y-2">
                         <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Aides & Commandes</summary>
                         <!-- Aides en une seule ligne : état ON/OFF affiché dans chaque bouton -->
@@ -138,45 +126,56 @@
                             </button>
                         </div>
                     </details>
+
+                    <!-- Garde-fous des murs : modification désactivée par défaut, verrouillage possible -->
+                    <div class="space-y-2">
+                        <button onclick="toggleWallEdit()" id="btn-wall-edit" class="wall-edit-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Modifier les murs : permet de déplacer, étirer et régler les murs à la souris. Désactivé par défaut. Les autres clics ne font que sélectionner. Impossible si les murs sont verrouillés." aria-pressed="false">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-up-down-left-right"></i> Modifier les murs</span>
+                            <span class="text-slate-400">Activé : <span class="wall-edit-state font-semibold text-slate-200">non</span></span>
+                        </button>
+                        <button onclick="toggleWallsLock()" id="btn-wall-lock" class="wall-lock-btn w-full px-2.5 py-2 flex items-center justify-between gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 rounded-xl text-xs transition" title="Murs verrouillés : protège tous les murs. Aucun déplacement, étirement ni changement d’épaisseur, de hauteur ou de longueur. Active, « Modifier les murs » est grisé et se désactive." aria-pressed="false">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-lock"></i> Murs verrouillés</span>
+                            <span class="text-slate-400"><span class="wall-lock-state font-semibold text-slate-200">non</span></span>
+                        </button>
                     </div>
 
-                    <!-- Élément sélectionné (2D) : juste sous les outils pour éviter de descendre dans la barre -->
-                    <div id="el-inspector-2d" class="hidden bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
-                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                            <span>Élément sélectionné</span>
-                            <i class="fa-solid fa-arrows-up-down-left-right"></i>
-                        </label>
+                    </div>
+
+                    <!-- Inspecteur de l'élément sélectionné (2D) : juste sous les outils pour éviter de descendre dans la barre -->
+                    <div id="el-inspector-2d" class="hidden bg-slate-950/60 p-3 rounded-xl border border-yellow-400 space-y-3">
                         <div class="border-b border-slate-800 pb-2">
                             <div id="el2d-name" class="text-sm font-semibold text-white"></div>
                         </div>
                         <!-- Escalier sélectionné : mêmes réglages et même ordre qu'en 3D -->
-                        <div id="stair-inspector" class="hidden space-y-2 border-t border-slate-800 pt-2">
+                        <div id="stair-inspector" class="hidden space-y-2 pt-1">
                             <div class="flex items-center gap-2">
                                 <span class="w-28 shrink-0 text-[11px] text-slate-300">Largeur</span>
-                                <input id="stair-width" type="range" min="60" max="150" step="5" value="90" oninput="setStairProp('width', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0 accent-violet-400">
+                                <input id="stair-width" type="range" min="60" max="150" step="5" value="90" oninput="setStairProp('width', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
                                 <span id="stair-width-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="w-28 shrink-0 text-[11px] text-slate-300">Longueur</span>
-                                <input id="stair-length" type="range" min="150" max="600" step="10" value="300" oninput="setStairProp('length', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0 accent-violet-400">
+                                <input id="stair-length" type="range" min="150" max="600" step="10" value="300" oninput="setStairProp('length', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
                                 <span id="stair-length-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="w-28 shrink-0 text-[11px] text-slate-300">Rotation</span>
-                                <input id="stair-angle" type="range" min="0" max="360" step="5" value="0" oninput="setStairProp('angle', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0 accent-violet-400">
+                                <input id="stair-angle" type="range" min="0" max="360" step="5" value="0" oninput="setStairProp('angle', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
                                 <span id="stair-angle-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                             </div>
                         </div>
                         <div id="lighting-associations-2d" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
                         <div id="door-hinge-2d-container" class="hidden space-y-1">
                             <label for="door-hinge-2d" class="text-xs text-slate-300">Charnière (porte poussant)</label>
-                            <select id="door-hinge-2d" onchange="setSelectedDoorHinge(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                            <select id="door-hinge-2d" onchange="setSelectedDoorHinge(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-300">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
                             </select>
                         </div>
+                        <!-- Côté du mur : après la charnière, avant les dimensions, comme en 3D (emplacement rempli par app.js) -->
+                        <div id="shared-side-slot-2d" class="space-y-3"></div>
                         <div id="opening-controls-2d" class="hidden space-y-2"></div>
-                        <!-- Côté et distance : mêmes réglages et même ordre qu'en 3D (emplacement rempli par app.js) -->
+                        <!-- Distance : après les dimensions, comme en 3D (emplacement rempli par app.js) -->
                         <div id="shared-controls-slot-2d" class="space-y-3"></div>
                         <!-- Circuit : après distance, comme en 3D -->
                         <div id="el2d-circuit-wrap" class="space-y-1 pt-1">
@@ -184,9 +183,6 @@
                             <div id="el2d-circuit-info" class="hidden text-[10px] text-sky-300"></div>
                             <select id="el2d-circuit" onchange="setSelectedCircuit(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
                         </div>
-                        <button onclick="deleteSelected3DElement()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs rounded-lg font-bold transition flex items-center justify-center gap-2 shadow-lg">
-                            <i class="fa-solid fa-trash-can text-sm"></i> Supprimer cet élément (Suppr)
-                        </button>
                     </div>
                     <!-- Message d'attente 2D : même texte et même style que l'inspecteur 3D -->
                     <div id="inspector-dock-empty-2d" class="text-xs text-slate-500 bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-center">
@@ -194,7 +190,7 @@
                     </div>
 
                     <!-- Wall Inspector -->
-                    <div id="wall-inspector" class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3 hidden">
+                    <div id="wall-inspector" class="bg-slate-950/60 p-3 rounded-xl border border-yellow-400 space-y-3 hidden">
                         <p id="wall-edit-hint" class="hidden text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1.5"></p>
                         <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
                             <span id="wall-inspector-title">Inspecteur de Mur</span>
@@ -211,30 +207,22 @@
                             <input type="number" id="inspector-length-input" step="0.1" min="0.5" max="30" onchange="updateSelectedWallLength(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
                         </div>
 
-                        <div id="inspector-thickness-container">
-                            <div class="flex justify-between text-xs text-slate-400 mb-1">
-                                <span>Épaisseur</span>
-                                <span id="inspector-thickness-val">10 cm</span>
-                            </div>
-                            <input type="range" id="inspector-thickness" min="5" max="50" step="5" value="10" oninput="updateSelectedWallProp('thickness', this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                        <div id="inspector-thickness-container" class="flex items-center gap-2 text-xs text-slate-300">
+                            <span class="w-20 shrink-0">Épaisseur</span>
+                            <input type="range" id="inspector-thickness" min="5" max="50" step="5" value="10" oninput="updateSelectedWallProp('thickness', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                            <span id="inspector-thickness-val" class="w-12 shrink-0 text-right text-slate-300">10 cm</span>
                         </div>
-                        <div id="inspector-height-container">
-                            <div class="flex justify-between text-xs text-slate-400 mb-1">
-                                <span id="inspector-height-label">Hauteur</span>
-                                <span id="inspector-height-val">2.50 m</span>
-                            </div>
-                            <input type="range" id="inspector-height" min="200" max="400" step="10" value="250" oninput="updateSelectedWallProp('height', this.value)" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                        <div id="inspector-height-container" class="flex items-center gap-2 text-xs text-slate-300">
+                            <span id="inspector-height-label" class="w-20 shrink-0">Hauteur</span>
+                            <input type="range" id="inspector-height" min="200" max="400" step="10" value="250" oninput="updateSelectedWallProp('height', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                            <span id="inspector-height-val" class="w-12 shrink-0 text-right text-slate-300">2.50 m</span>
                         </div>
-                        <button onclick="deleteSelectedWall()" class="w-full py-2 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 text-xs rounded-lg font-medium transition flex items-center justify-center gap-1.5 shadow">
-                            <i class="fa-solid fa-trash"></i> Supprimer le mur (Suppr)
-                        </button>
                     </div>
 
                     <!-- Default Specs -->
                     <details id="default-specs-2d" data-persist="defaults" class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                         <summary class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between cursor-pointer">
                             <span>Paramètres par défaut</span>
-                            <i class="fa-solid fa-sliders text-emerald-400"></i>
                         </summary>
                         <div class="space-y-3 pt-3">
                         <div class="flex items-center gap-2">
@@ -251,11 +239,13 @@
                     </details>
 
                     <!-- Trémie sélectionnée (2D) -->
-                    <div id="shaft-inspector" class="hidden bg-slate-950/80 p-3 rounded-xl border border-amber-500/30 space-y-2">
-                        <label class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Trémie</label>
+                    <div id="shaft-inspector" class="hidden bg-slate-950/80 p-3 rounded-xl border border-yellow-400 space-y-2">
+                        <div class="border-b border-slate-800 pb-2">
+                            <div class="text-sm font-semibold text-white">Trémie</div>
+                        </div>
                         <div class="flex items-center gap-2">
                             <span class="w-28 shrink-0 text-[11px] text-slate-300">Taille (emprise)</span>
-                            <input id="shaft-size" type="range" min="20" max="120" step="5" value="40" oninput="setShaftSize(this.value)" onchange="shaftUndoPending = false" class="flex-1 min-w-0 accent-amber-400">
+                            <input id="shaft-size" type="range" min="20" max="120" step="5" value="40" oninput="setShaftSize(this.value)" onchange="shaftUndoPending = false" class="flex-1 min-w-0">
                             <span id="shaft-size-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                         </div>
                     </div>
@@ -283,7 +273,7 @@
                     <button onclick="savePlanPng('2d')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Enregistrer le plan en PNG"><i class="fa-solid fa-image"></i><span>PNG</span></button>
                     <button onclick="undoAction()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Annuler" aria-label="Annuler"><i class="fa-solid fa-rotate-left"></i><span>Annuler</span></button>
                     <button onclick="redoAction()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Rétablir" aria-label="Rétablir"><i class="fa-solid fa-rotate-right"></i><span>Rétablir</span></button>
-                    <button onclick="clearCanvas()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Tout effacer" aria-label="Tout effacer"><i class="fa-solid fa-trash"></i><span>Effacer</span></button>
+                    <button onclick="clearCanvas()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Effacer tout le plan" aria-label="Effacer tout le plan"><i class="fa-solid fa-trash"></i><span>Effacer tout le plan</span></button>
                     <span class="w-px h-9 bg-slate-700 mx-0.5" aria-hidden="true"></span>
                     <button onclick="resetZoomPan()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Recentrer sur tout le projet" aria-label="Recentrer sur tout le projet"><i class="fa-solid fa-expand"></i><span>Centrer</span></button>
                     <button onclick="rotatePlan(-90)" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Tourner le plan de 90° vers la gauche" aria-label="Tourner le plan vers la gauche">↺<span>90°</span></button>
@@ -308,25 +298,25 @@
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Ouvertures</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
                             <button id="btn-2d-place-door_single" data-type="door_single" onclick="pickPlacement('door_single')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Porte : cliquez sur un mur">
-                                <i class="fa-solid fa-door-open text-emerald-400 text-sm"></i> Porte
+                                <i class="fa-solid fa-door-open text-sm" style="color:#b07a4a"></i> Porte
                             </button>
                             <button id="btn-2d-place-window_std" data-type="window_std" onclick="pickPlacement('window_std')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Fenêtre : cliquez sur un mur">
-                                <i class="fa-solid fa-window-maximize text-cyan-400 text-sm"></i> Fenêtre
+                                <i class="fa-solid fa-window-maximize text-sm" style="color:#3b82f6"></i> Fenêtre
                             </button>
                             <button id="btn-2d-place-shaft" data-type="shaft" onclick="pickPlacement('shaft')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Trémie : ouverture dans la dalle qui relie des niveaux, posée sur un mur">
-                                <i class="fa-solid fa-border-none text-amber-400 text-sm"></i> Trémie
+                                <i class="fa-solid fa-border-none text-sm" style="color:#f8fafc"></i> Trémie
                             </button>
                             <button id="btn-2d-place-stair" data-type="stair" onclick="pickPlacement('stair')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Escalier : emprise au sol, relie des niveaux">
                                 <i class="fa-solid fa-stairs text-violet-400 text-sm"></i> Escalier
                             </button>
-                            <div id="shaft-link-wrap"class="hidden col-span-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 flex flex-col gap-1.5 text-xs text-slate-200">
-                                <label for="shaft-link-level" class="font-semibold text-amber-200">Choisissez l’étage à relier</label>
-                                <select id="shaft-link-level" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"></select>
+                            <div id="shaft-link-wrap"class="hidden col-span-2 rounded-lg border border-slate-800 bg-slate-900/40 p-2 flex flex-col gap-1.5 text-xs text-slate-200">
+                                <label for="shaft-link-level" class="font-semibold text-slate-200">Choisissez l’étage à relier</label>
+                                <select id="shaft-link-level" class="w-full bg-slate-900 border border-yellow-400 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-yellow-300"></select>
                             </div>
                         </div>
-                        <div id="door-hinge-placement-container" class="hidden rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 space-y-1">
-                            <label for="door-hinge-placement" class="text-[11px] font-semibold text-amber-200">Choisissez la charnière</label>
-                            <select id="door-hinge-placement" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                        <div id="door-hinge-placement-container" class="hidden rounded-lg border border-slate-800 bg-slate-900/40 p-2 space-y-1">
+                            <label for="door-hinge-placement" class="text-[11px] font-semibold text-slate-200">Choisissez la charnière</label>
+                            <select id="door-hinge-placement" class="w-full bg-slate-900 border border-yellow-400 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-300">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
                             </select><p class="text-[10px] text-slate-400">Côté où la porte s’ouvre, vu de face.</p></div>
@@ -372,7 +362,7 @@
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
   <summary class="text-xs font-semibold text-slate-300 uppercase tracking-wider cursor-pointer">Circuits <span class="font-normal normal-case text-slate-500">— cliquer pour visualiser</span></summary>
                         <button id="clear-link-highlight" onclick="clearLinkSelection()" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre en évidence cette liaison (le circuit reste affiché)"><i class="fa-solid fa-xmark"></i><span></span></button>
-                        <button id="clear-circuit-highlight" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Désélectionner le circuit</span></button>
+                        <button id="clear-circuit-highlight" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Retirer la mise en évidence du circuit</span></button>
                         <div id="circuits-list-2d" class="space-y-2 text-xs"></div>
                     </details>
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
@@ -414,46 +404,40 @@
                 <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-4">
                     <div id="shared-tools-slot-3d" class="space-y-4"></div>
 
-                    <!-- Élément sélectionné d'abord, comme en 2D -->
+                    <!-- Inspecteur de l'élément sélectionné d'abord, comme en 2D -->
                     <div id="inspector-dock-slot">
                     <!-- 3D Inspector / Adjustment -->
-                    <div id="inspector-3d" class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3 hidden overflow-y-auto custom-scrollbar">
-                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                            <span>Élément sélectionné</span>
-                            <i class="fa-solid fa-arrows-up-down-left-right"></i>
-                        </label>
+                    <div id="inspector-3d" class="bg-slate-950/60 p-3 rounded-xl border border-yellow-400 space-y-3 hidden overflow-y-auto custom-scrollbar">
                         <div class="border-b border-slate-800 pb-2">
                             <div id="inspector-3d-element-name" class="text-sm font-semibold text-white"></div>
                         </div>
 
-                        <div id="stair-inspector-3d" class="hidden space-y-2 border-t border-slate-800 pt-2">
+                        <div id="stair-inspector-3d" class="hidden space-y-2 pt-1">
                             <div class="flex items-center gap-2">
                                 <span class="w-28 shrink-0 text-[11px] text-slate-300">Largeur</span>
-                                <input id="stair-width-3d" type="range" min="60" max="150" step="5" value="90" oninput="setStairProp('width', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0 accent-violet-400">
+                                <input id="stair-width-3d" type="range" min="60" max="150" step="5" value="90" oninput="setStairProp('width', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
                                 <span id="stair-width-val-3d" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="w-28 shrink-0 text-[11px] text-slate-300">Longueur</span>
-                                <input id="stair-length-3d" type="range" min="150" max="600" step="10" value="300" oninput="setStairProp('length', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0 accent-violet-400">
+                                <input id="stair-length-3d" type="range" min="150" max="600" step="10" value="300" oninput="setStairProp('length', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
                                 <span id="stair-length-val-3d" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="w-28 shrink-0 text-[11px] text-slate-300">Rotation</span>
-                                <input id="stair-angle-3d" type="range" min="0" max="360" step="5" value="0" oninput="setStairProp('angle', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0 accent-violet-400">
+                                <input id="stair-angle-3d" type="range" min="0" max="360" step="5" value="0" oninput="setStairProp('angle', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
                                 <span id="stair-angle-val-3d" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
                             </div>
                         </div>
                         <div id="lighting-associations" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
                         <div id="door-hinge-3d-container" class="hidden space-y-1">
                             <label for="door-hinge-3d" class="text-xs text-slate-300">Charnière (porte poussant)</label>
-                            <select id="door-hinge-3d" onchange="setSelectedDoorHinge(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                            <select id="door-hinge-3d" onchange="setSelectedDoorHinge(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-300">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
                             </select>
                         </div>
-                        <div id="opening-controls-3d" class="hidden space-y-2"></div>
-                        
-                        <!-- Side toggle for wall elements -->
+                        <!-- Côté du mur : juste sous la charnière -->
                         <div id="side-toggle-container" class="space-y-1 pt-1">
                             <div class="flex justify-between text-xs text-slate-300 mb-1">
                                 <span>Côté du mur</span>
@@ -463,6 +447,8 @@
                                 <i class="fa-solid fa-arrows-left-right text-emerald-400"></i> Basculer de l'autre côté du mur
                             </button>
                         </div>
+                        <div id="opening-controls-3d" class="hidden space-y-2"></div>
+                        
 
                         <div id="position-distance-container" class="space-y-1 pt-1">
                             <div class="flex items-center gap-2">
@@ -484,9 +470,6 @@
                             <div id="circuit-select-info" class="hidden text-[10px] text-sky-300"></div>
                             <select id="inspector-circuit" onchange="setSelectedCircuit(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
                         </div>
-                        <button onclick="deleteSelected3DElement()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs rounded-lg font-bold transition flex items-center justify-center gap-2 shadow-lg">
-                            <i class="fa-solid fa-trash-can text-sm"></i> Supprimer cet élément (Suppr)
-                        </button>
                     </div>
 
                     </div>
@@ -506,7 +489,7 @@
                     <button onclick="savePlanPng('3d')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Enregistrer le plan en PNG"><i class="fa-solid fa-image"></i><span>PNG</span></button>
                     <button onclick="undoAction()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Annuler" aria-label="Annuler"><i class="fa-solid fa-rotate-left"></i><span>Annuler</span></button>
                     <button onclick="redoAction()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Rétablir" aria-label="Rétablir"><i class="fa-solid fa-rotate-right"></i><span>Rétablir</span></button>
-                    <button onclick="clearCanvas()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Tout effacer" aria-label="Tout effacer"><i class="fa-solid fa-trash"></i><span>Effacer</span></button>
+                    <button onclick="clearCanvas()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Effacer tout le plan" aria-label="Effacer tout le plan"><i class="fa-solid fa-trash"></i><span>Effacer tout le plan</span></button>
                     <button onclick="frame3DOnProject()" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Recentrer sur tout le projet" aria-label="Recentrer sur tout le projet"><i class="fa-solid fa-expand"></i><span>Centrer</span></button>
                     <span class="w-px h-9 bg-slate-700 mx-0.5" aria-hidden="true"></span>
                     <button onclick="setCameraView('iso')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition"><i class="fa-solid fa-cube"></i><span>Isométrique</span></button>
@@ -531,25 +514,25 @@
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Ouvertures</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
                             <button id="btn-place-door_single" data-type="door_single" onclick="pickPlacement('door_single')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Porte : cliquez sur un mur">
-                                <i class="fa-solid fa-door-open text-emerald-400 text-sm"></i> Porte
+                                <i class="fa-solid fa-door-open text-sm" style="color:#b07a4a"></i> Porte
                             </button>
                             <button id="btn-place-window_std" data-type="window_std" onclick="pickPlacement('window_std')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Fenêtre : cliquez sur un mur">
-                                <i class="fa-solid fa-window-maximize text-cyan-400 text-sm"></i> Fenêtre
+                                <i class="fa-solid fa-window-maximize text-sm" style="color:#3b82f6"></i> Fenêtre
                             </button>
                             <button id="btn-place-shaft" data-type="shaft" onclick="pickPlacement('shaft')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Trémie : ouverture dans la dalle qui relie des niveaux, posée sur un mur">
-                                <i class="fa-solid fa-border-none text-amber-400 text-sm"></i> Trémie
+                                <i class="fa-solid fa-border-none text-sm" style="color:#f8fafc"></i> Trémie
                             </button>
                             <button id="btn-place-stair" data-type="stair" onclick="pickPlacement('stair')" class="place-btn place-btn2d relative px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-500 rounded-xl flex items-center gap-2 text-slate-200 transition text-[11px] leading-tight" title="Escalier : emprise au sol, relie des niveaux">
                                 <i class="fa-solid fa-stairs text-violet-400 text-sm"></i> Escalier
                             </button>
-                            <div id="shaft-link-wrap-3d"class="hidden col-span-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 flex flex-col gap-1.5 text-xs text-slate-200">
-                                <label for="shaft-link-level-3d" class="font-semibold text-amber-200">Choisissez l’étage à relier</label>
-                                <select id="shaft-link-level-3d" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"></select>
+                            <div id="shaft-link-wrap-3d" class="hidden col-span-2 rounded-lg border border-slate-800 bg-slate-900/40 p-2 flex flex-col gap-1.5 text-xs text-slate-200">
+                                <label for="shaft-link-level-3d" class="font-semibold text-slate-200">Choisissez l’étage à relier</label>
+                                <select id="shaft-link-level-3d" class="w-full bg-slate-900 border border-yellow-400 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-yellow-300"></select>
                             </div>
                         </div>
-                        <div id="door-hinge-3d-placement-container" class="hidden rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 space-y-1">
-                            <label for="door-hinge-3d-placement" class="text-[11px] font-semibold text-amber-200">Choisissez la charnière</label>
-                            <select id="door-hinge-3d-placement" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                        <div id="door-hinge-3d-placement-container" class="hidden rounded-lg border border-slate-800 bg-slate-900/40 p-2 space-y-1">
+                            <label for="door-hinge-3d-placement" class="text-[11px] font-semibold text-slate-200">Choisissez la charnière</label>
+                            <select id="door-hinge-3d-placement" class="w-full bg-slate-900 border border-yellow-400 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-300">
                                 <option value="left">Gauche</option>
                                 <option value="right">Droite</option>
                             </select><p class="text-[10px] text-slate-400">Côté où la porte s’ouvre, vu de face.</p></div>
@@ -595,7 +578,7 @@
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
   <summary class="text-xs font-semibold text-slate-300 uppercase tracking-wider cursor-pointer">Circuits <span class="font-normal normal-case text-slate-500">— cliquer pour visualiser</span></summary>
                         <button id="clear-link-highlight-3d" onclick="clearLinkSelection()" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre en évidence cette liaison (le circuit reste affiché)"><i class="fa-solid fa-xmark"></i><span></span></button>
-                        <button id="clear-circuit-highlight-3d" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Désélectionner le circuit</span></button>
+                        <button id="clear-circuit-highlight-3d" onclick="selectCircuit(null)" class="hidden w-full py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-500 text-slate-200 text-xs font-medium flex items-center justify-center gap-2" title="Ne plus mettre ce circuit en évidence"><i class="fa-solid fa-xmark"></i><span>Retirer la mise en évidence du circuit</span></button>
                         <div id="circuits-list" class="space-y-2 text-xs"></div>
                     </details>
                     <details open class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
