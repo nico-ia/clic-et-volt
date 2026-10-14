@@ -516,6 +516,7 @@ function refreshToolHint() {
             hint = 'Relâchez pour sélectionner ce qui est encadré (Ctrl ou Maj pour ajouter).';
         }
     }
+    updateStopPlacementButton(key);
     const badge = document.getElementById('active-tool-badge');
     const hintEl = document.getElementById('drawing-instruction-hint');
     const badgeText = MODE_BADGES[key];
@@ -1108,23 +1109,6 @@ function toggleGridSnap() {
 function toggleAngleSnap() {
     angleSnap = !angleSnap;
     paintAideBtn(document.getElementById('btn-angle-snap'), 'fa-compass', 'Ortho', angleSnap);
-}
-
-async function clearCanvas() {
-    if (projectData.walls.length === 0) return;
-    if (refuseIfWallsLocked()) return;
-    if (await askConfirm('Effacer tout le plan', 'Voulez-vous vraiment effacer tout le plan ? Tous les murs, ouvertures et appareils seront supprimés.', 'Effacer tout le plan', { danger: true })) {
-        saveStateToUndo();
-        projectData.walls = [];
-        projectData.openings = [];
-        projectData.electrical = [];
-        setSelectedWalls([]);
-        selected3DId = null;
-        document.getElementById('wall-inspector').classList.add('hidden');
-        updateStats();
-        redraw2D();
-        showNotification("Projet réinitialisé", "info");
-    }
 }
 
 function updateStats() {
@@ -2637,6 +2621,19 @@ function clearAllSelection() {
     syncElementInspectors();
     updateCircuitsUI();
     if (currentMode === '3d') build3DScene(); else redraw2D();
+}
+
+// Bouton « Désélection » de la sidebar : visible pendant la pose d'un appareil ou d'une ouverture (2D et 3D)
+function updateStopPlacementButton(key) {
+    const b = document.getElementById('btn-stop-placement');
+    if (b) b.classList.toggle('hidden', key !== 'place');
+}
+
+// Arrête la pose en cours, comme Échap
+function stopPlacement() {
+    if (currentMode === '3d') {
+        if (activePlacementType) setPlacementType(activePlacementType);
+    } else setTool('select');
 }
 
 // Désélection d'une liaison (interrupteur / point lumineux) sans toucher au circuit affiché

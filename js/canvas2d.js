@@ -25,6 +25,37 @@ function init2DCanvas() {
     recenter2DView();
 }
 
+// Les événements de molette et de déplacement arrivent plusieurs fois par image :
+// on ne redessine qu'une fois par frame pour garder le zoom fluide.
+let redraw2DQueued = false;
+function requestRedraw2D() {
+    if (redraw2DQueued) return;
+    redraw2DQueued = true;
+    requestAnimationFrame(() => {
+        redraw2DQueued = false;
+        redraw2D();
+    });
+}
+
+// Le survol n'est recalculé qu'une fois par frame, avec la dernière position de souris
+let hover2DPending = null;
+let hover2DFrame = 0;
+function hoverAllowed2D() {
+    return !isPanning && !draggingEl2D && !selectionBoxStart && !draggingWall && currentTool !== 'place' && currentTool !== 'wall';
+}
+function scheduleHover2D(clientX, clientY, coords) {
+    hover2DPending = { clientX, clientY, coords };
+    if (hover2DFrame) return;
+    hover2DFrame = requestAnimationFrame(() => {
+        hover2DFrame = 0;
+        const p = hover2DPending;
+        hover2DPending = null;
+        if (!p || !hoverAllowed2D()) { hidePlanTooltip(); return; }
+        const hovered = pickElement2D(p.coords);
+        showPlanTooltip(p.clientX, p.clientY, hovered ? hovered.id : null);
+    });
+}
+
 function on2DWheel(e) {
     e.preventDefault();
     const rect = canvas2D.getBoundingClientRect();
@@ -41,7 +72,7 @@ function on2DWheel(e) {
     panY += mouseY - moved.y;
 
     document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(zoom * 100)}%`;
-    redraw2D();
+    requestRedraw2D();
 }
 
 function resize2DCanvas() {
@@ -563,17 +594,12 @@ function on2DMouseMove(e) {
     if (currentTool === 'place' && !isPanning) { updatePlaceGhost2D(coords); redraw2D(); }
 
     // survol : étiquette de l'élément visé (hors placement, glissement et tracé)
-    if (!isPanning && !draggingEl2D && !selectionBoxStart && !draggingWall && currentTool !== 'place' && currentTool !== 'wall') {
-        const hovered = pickElement2D(coords);
-        showPlanTooltip(e.clientX, e.clientY, hovered ? hovered.id : null);
-    } else {
-        hidePlanTooltip();
-    }
+    scheduleHover2D(e.clientX, e.clientY, coords);
 
     if (isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
-        redraw2D();
+        requestRedraw2D();
         return;
     }
 

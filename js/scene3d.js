@@ -2387,14 +2387,14 @@ function on3DPointerMove(e) {
             stairDrag.x = Math.round(planeIntersectPoint.x - g.x + cx);
             stairDrag.y = Math.round(planeIntersectPoint.z - g.z + cy);
             snapStairToWalls(stairDrag, prevSt);
-            build3DScene();
+            scheduleBuild3D();
             return;
         }
         let ceilingEl = projectData.electrical.find(el => el.id === dragging3DElementId && el.type === 'light_ceiling');
         if (ceilingEl) {
             ceilingEl.x = planeIntersectPoint.x + cx;
             ceilingEl.z = planeIntersectPoint.z + cy;
-            build3DScene();
+            scheduleBuild3D();
             return;
         }
 
@@ -2409,7 +2409,7 @@ function on3DPointerMove(e) {
                 const t = ((planeIntersectPoint.x - ax) * (bx - ax) + (planeIntersectPoint.z - az) * (bz - az)) / (L * L);
                 const dCm = Math.round(Math.max(10, Math.min(L - 10, t * L)));
                 sh.derivDist = Object.assign({}, sh.derivDist, { [activeLevelId]: clampDerivDist(sh, dCm) });
-                build3DScene();
+                scheduleBuild3D();
             }
             return;
         }
@@ -2458,7 +2458,7 @@ function on3DPointerMove(e) {
                 if (distInput) distInput.value = closestDistCm;
                 if (distVal) distVal.textContent = closestDistCm + ' cm';
                 
-                build3DScene();
+                scheduleBuild3D();
             }
         }
     }
