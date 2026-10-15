@@ -1606,16 +1606,22 @@ function defaultHeightFor(type) {
     return 110;
 }
 
-// Trémie : niveau relié choisi dans la liste de la barre de droite (le plus proche par défaut).
+// Trémie / escalier : niveaux reliés cochés dans la liste de la barre de droite (le plus proche coché par défaut).
+// Renvoie null si aucun niveau n'est coché.
 function askShaftLevels() {
     const others = otherLevelsByDistance();
     if (!others.length) {
         showNotification('Aucun autre niveau : rien à relier pour l’instant. Ajoutez un étage pour le relier.', 'info');
         return [activeLevelId];
     }
-    const linkSel = document.getElementById(currentMode === '3d' ? 'shaft-link-level-3d' : 'shaft-link-level');
-    const chosen = linkSel && others.some(l => l.id === linkSel.value) ? linkSel.value : others[0].id;
-    return [activeLevelId, chosen];
+    const list = document.getElementById(currentMode === '3d' ? 'shaft-link-list-3d' : 'shaft-link-list');
+    const checked = new Set(list ? [...list.querySelectorAll('input:checked')].map(i => i.value) : []);
+    const chosen = others.filter(l => checked.has(l.id)).map(l => l.id);
+    if (!chosen.length) {
+        showNotification('Cochez au moins un niveau à relier', 'error');
+        return null;
+    }
+    return [activeLevelId, ...chosen];
 }
 
 function place2DAt(coords) {
@@ -1667,8 +1673,9 @@ function place2DAt(coords) {
     redraw2D();
     const lastShaft = type === 'shaft' ? projectData.shafts[projectData.shafts.length - 1] : null;
     if (lastShaft) {
-        const other = projectData.levels.find(l => l.id === (lastShaft.levelIds || []).find(id => id !== activeLevelId));
-        showNotification(other ? 'Trémie reliée à : ' + other.name : 'Trémie placée (un seul niveau)', 'success');
+        const linkedNames = (lastShaft.levelIds || []).filter(id => id !== activeLevelId)
+            .map(id => (projectData.levels.find(l => l.id === id) || {}).name).filter(Boolean);
+        showNotification(linkedNames.length ? 'Trémie reliée à : ' + linkedNames.join(', ') : 'Trémie placée (un seul niveau)', 'success');
     } else {
         showNotification('Élément placé', 'success');
     }

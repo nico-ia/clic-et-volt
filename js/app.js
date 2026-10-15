@@ -461,11 +461,22 @@ function openingOverlapWith(op, wallId, distCm) {
 function openingMoveBlocked(item, wallId, distCm) {
     return !!(item && OPENING_TYPES.includes(item.type) && openingOverlapWith(item, wallId, distCm));
 }
-// Paires de portes/fenêtres qui se chevauchent sur un même mur (fichiers anciens compris)
+// Emprise en plan d'une porte ou fenêtre : longueur comme en 3D, épaisseur du mur
+function openingRectOf(op) {
+    const w = (projectData.walls || []).find(x => x.id === op.wallId);
+    const p = w && openingPos2D(op);
+    return p ? orientedRect(p.x, p.y, p.angle, openingBox(op, w).half, p.th / 2) : null;
+}
+// Paires de portes/fenêtres qui se chevauchent : même mur (largeurs), ou murs voisins au coin (emprises en plan)
 function computeOpeningOverlaps() {
     const list = [], ops = openingsOn();
     ops.forEach((a, i) => ops.slice(i + 1).forEach(b => {
-        if (a.wallId === b.wallId && Math.abs((a.distanceFromStart || 0) - (b.distanceFromStart || 0)) < (openingWidthOf(a) + openingWidthOf(b)) / 2) list.push({ a, b });
+        if (a.wallId === b.wallId) {
+            if (Math.abs((a.distanceFromStart || 0) - (b.distanceFromStart || 0)) < (openingWidthOf(a) + openingWidthOf(b)) / 2) list.push({ a, b });
+            return;
+        }
+        const ra = openingRectOf(a), rb = openingRectOf(b);
+        if (ra && rb && rectsOverlap(ra, rb)) list.push({ a, b });
     }));
     return list;
 }
@@ -608,6 +619,7 @@ function setTool(tool) {
     if (tool !== 'select') {
         setSelectedWalls([]);
     }
+    syncDefaultSpecs();
     refreshPlacementHints();
     redraw2D();
 }
@@ -797,28 +809,37 @@ function renderLevelSelector() {
     const levels = [...projectData.levels].sort((a, b) => b.elevation - a.elevation);   // étages les plus hauts en premier
     sel.innerHTML = levels.map(l => '<option value="' + esc(l.id) + '">' + esc(l.name) + ' (' + (l.elevation / 100).toFixed(2) + ' m)</option>').join('');
     sel.value = activeLevelId;
-    // niveaux reliables à une trémie : le plus proche en cote d'abord
-    ['shaft-link-level', 'shaft-link-level-3d'].forEach(id => {
-        const linkSel = document.getElementById(id);
-        if (!linkSel) return;
-        const others = otherLevelsByDistance();
-        const prev = linkSel.value;
-        linkSel.innerHTML = others.length
-            ? others.map(l => '<option value="' + esc(l.id) + '">' + esc(l.name) + ' (' + (l.elevation / 100).toFixed(2) + ' m)</option>').join('')
-            : '<option value="" disabled selected>Aucun autre niveau : ajoutez un étage</option>';
-        linkSel.value = others.some(l => l.id === prev) ? prev : (others[0] ? others[0].id : '');
-    });
+    // niveaux reliables à une trémie ou un escalier : cases à cocher
+    ['shaft-link-list', 'shaft-link-list-3d'].forEach(renderShaftLinkList);
 }
 
-// Liste « Relier à » créée par le code juste après le bouton Trémie (indépendante de index.html)
+// Cases « Niveaux reliés » : le plus proche en cote est coché au premier affichage, les choix sont ensuite conservés
+function renderShaftLinkList(listId) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    const others = otherLevelsByDistance();
+    if (!others.length) {
+        list.innerHTML = '<span class="text-slate-400">Aucun autre niveau : ajoutez un étage pour le relier.</span>';
+        return;
+    }
+    const firstTime = !list.querySelector('input');
+    const prev = new Set([...list.querySelectorAll('input:checked')].map(i => i.value));
+    list.innerHTML = others.map((l, i) => {
+        const checked = firstTime ? i === 0 : prev.has(l.id);
+        return '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="checkbox" value="' + esc(l.id) + '" class="accent-yellow-400"' + (checked ? ' checked' : '') + '>' +
+            '<span>' + esc(l.name) + ' (' + (l.elevation / 100).toFixed(2) + ' m)</span></label>';
+    }).join('');
+}
+
+// Liste « Niveaux reliés » créée par le code si elle manque dans index.html
 function ensureShaftLinkControl() {
-    if (document.getElementById('shaft-link-level')) return;
+    if (document.getElementById('shaft-link-list')) return;
     const btn = document.getElementById('btn-2d-place-shaft');
     if (!btn) return;
     const wrap = document.createElement('div');
-    wrap.className = 'col-span-2 flex items-center gap-2 text-[11px] text-slate-300';
-    wrap.innerHTML = '<label for="shaft-link-level" class="whitespace-nowrap">Relier à</label>' +
-        '<select id="shaft-link-level" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"></select>';
+    wrap.className = 'col-span-2 flex flex-col gap-1 text-[11px] text-slate-300';
+    wrap.innerHTML = '<span class="font-semibold">Niveaux reliés</span><div id="shaft-link-list" class="flex flex-col gap-1"></div>';
     btn.insertAdjacentElement('afterend', wrap);
 }
 
@@ -1084,6 +1105,53 @@ function setShaftSize(v) {
     sh.size = Math.max(20, Math.min(120, parseInt(v, 10) || 40));
     document.getElementById('shaft-size-val').textContent = sh.size + ' cm';
     refreshSelectedView();   // 2D et 3D : la taille de la trémie se voit dans les deux vues
+}
+
+// Trémie sélectionnée : cases des niveaux reliés. Le niveau d'origine (où la trémie est posée) reste toujours relié.
+function renderShaftLevelEditor(sh) {
+    const list = document.getElementById('shaft-edit-levels');
+    if (!list) return;
+    const origin = sh.levelId || sh.levelIds[0];
+    const originLevel = projectData.levels.find(l => l.id === origin);
+    const originElev = originLevel ? originLevel.elevation : 0;
+    const linked = new Set(sh.levelIds || [origin]);
+    const others = projectData.levels.filter(l => l.id !== origin)
+        .sort((a, b) => Math.abs(a.elevation - originElev) - Math.abs(b.elevation - originElev));
+    const head = '<span class="text-slate-400">' + esc(originLevel ? originLevel.name : origin) + ' : niveau d’origine (toujours relié)</span>';
+    if (!others.length) {
+        list.innerHTML = head + '<span class="text-slate-400">Aucun autre niveau à relier.</span>';
+        return;
+    }
+    list.innerHTML = head + others.map(l =>
+        '<label class="flex items-center gap-2 cursor-pointer">' +
+        '<input type="checkbox" value="' + esc(l.id) + '" class="accent-yellow-400"' + (linked.has(l.id) ? ' checked' : '') + '>' +
+        '<span>' + esc(l.name) + ' (' + (l.elevation / 100).toFixed(2) + ' m)</span></label>').join('');
+    list.onchange = e => { if (e.target.type === 'checkbox') setShaftLinkedLevel(e.target.value, e.target.checked); };
+}
+
+// Ajoute ou retire un niveau relié à la trémie sélectionnée. Refus si la trémie ne tomberait pas sur un mur de cet étage,
+// ou s'il ne resterait qu'un seul niveau.
+function setShaftLinkedLevel(levelId, on) {
+    const sh = (projectData.shafts || []).find(s => s.id === selected3DId);
+    if (!sh) return;
+    const origin = sh.levelId || sh.levelIds[0];
+    const wanted = new Set(sh.levelIds || [origin]);
+    if (on) wanted.add(levelId); else wanted.delete(levelId);
+    const relinked = [origin, ...projectData.levels.map(l => l.id).filter(id => id !== origin && wanted.has(id))];
+    const lvName = (projectData.levels.find(l => l.id === levelId) || {}).name || levelId;
+    if (on && !shaftValidOn(sh, levelId)) {
+        showNotification('Pas de mur sous la trémie à l’étage ' + lvName + ' : elle ne peut pas le relier. Ajoutez d’abord un mur à cet emplacement.', 'error');
+    } else if (!on && relinked.length < 2) {
+        showNotification('Une trémie relie au moins deux niveaux.', 'error');
+    } else {
+        saveStateToUndo();
+        sh.levelId = origin;
+        sh.levelIds = relinked;
+        // l'étage affiché n'est plus relié : la trémie disparaît de cette vue, sa sélection s'arrête
+        if (!relinked.includes(activeLevelId)) selected3DId = null;
+    }
+    syncElementInspectors();
+    refreshSelectedView();
 }
 
 // Escalier sélectionné : largeur, longueur, rotation. Une seule annulation par glissement du curseur.
@@ -1592,23 +1660,49 @@ function collidingElementIds() {
     return ids;
 }
 
-// Trémies : chevauchement sur le même mur avec une ouverture ou un appareil (vérifié dans les deux sens)
+// Emprise en plan d'une trémie (carré de sa taille, posé contre son mur)
+function shaftRectOf(sh) {
+    const p = shaftPos2D(sh);
+    return p ? orientedRect(p.x, p.y, p.angle, (sh.size || 40) / 2, (sh.size || 40) / 2) : null;
+}
+// Zone d'une trémie : son emprise plus l'épaisseur du mur jusqu'à son axe, pour retrouver les ouvertures qui lui font face
+function shaftZoneOf(sh) {
+    const wp = openingPos2D({ wallId: sh.wallId, distanceFromStart: sh.distanceFromStart });
+    if (!wp) return null;
+    const size = sh.size || 40, side = sh.side === -1 ? -1 : 1;
+    const k = (wp.th / 2 + size) / 2;
+    return orientedRect(wp.x + Math.sin(wp.angle) * side * k, wp.y - Math.cos(wp.angle) * side * k, wp.angle, size / 2, k);
+}
+// Deux trémies ou escaliers qui relient un niveau en commun
+function linksSharedLevel(a, b) {
+    const lb = b.levelIds || [b.levelId];
+    return (a.levelIds || [a.levelId]).some(lv => lb.includes(lv));
+}
+// Trémies : chevauchement avec une ouverture, un mur voisin, un appareil ou une autre trémie (vérifié dans les deux sens)
 function computeShaftCollisions() {
     const list = [];
-    (projectData.shafts || []).forEach(sh => {
+    const shafts = projectData.shafts || [];
+    shafts.forEach(sh => {
         // la trémie est ancrée sur son mur d'origine, même si elle traverse plusieurs niveaux
         const w = (projectData.walls || []).find(x => x.id === sh.wallId);
         if (!w) return;
-        const wl = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
-        const d = sh.distanceFromStart !== undefined ? sh.distanceFromStart : wl / 2;
         const half = (sh.size || 40) / 2;
-        const center = shaftPos2D(sh, d);
-        // une trémie traverse chaque niveau qu'elle relie : ouvertures et appareils de chacun sont contrôlés
+        const center = shaftPos2D(sh);
+        const zone = shaftZoneOf(sh), rect = shaftRectOf(sh);
+        // une trémie traverse chaque niveau qu'elle relie : ouvertures, murs et appareils de chacun sont contrôlés
         (sh.levelIds || [sh.levelId]).forEach(lv => {
+            // ouverture face à la trémie : même mur, mur parallèle d'un autre niveau, ou mur voisin au coin
             openingsOn(lv).forEach(op => {
-                if (op.wallId !== w.id) return;
-                const b = openingBox(op, w);
-                if (Math.abs(d - b.d) < half + b.half && !list.some(c => c.kind === 'ouverture' && c.other === op && c.shaft === sh)) list.push({ shaft: sh, other: op, kind: 'ouverture' });
+                const r = openingRectOf(op);
+                if (zone && r && rectsOverlap(zone, r) && !list.some(c => c.kind === 'ouverture' && c.other === op && c.shaft === sh)) list.push({ shaft: sh, other: op, kind: 'ouverture' });
+            });
+            // mur voisin (autre que le mur d'origine) : 2 cm de tolérance, comme pour les escaliers
+            if (rect) wallsOn(lv).forEach(W => {
+                if (W.id === w.id) return;
+                const wr = wallRectOf(W);
+                if (!wr) return;
+                wr.hw -= 2;
+                if (rectsOverlap(rect, wr) && !list.some(c => c.kind === 'mur' && c.other === W && c.shaft === sh)) list.push({ shaft: sh, other: W, kind: 'mur' });
             });
             // test sur la position en plan de chaque élément (mur, plafond ou pose libre : tableau, boîte)
             if (!center) return;
@@ -1619,6 +1713,11 @@ function computeShaftCollisions() {
             });
         });
     });
+    // deux trémies qui partagent un niveau : chaque paire n'est signalée qu'une fois
+    shafts.forEach((a, i) => shafts.slice(i + 1).forEach(b => {
+        const ra = shaftRectOf(a), rb = shaftRectOf(b);
+        if (ra && rb && linksSharedLevel(a, b) && rectsOverlap(ra, rb)) list.push({ shaft: a, other: b, kind: 'trémie' });
+    }));
     return list;
 }
 
@@ -1710,6 +1809,11 @@ function computeStairCollisions() {
             });
         });
     });
+    // deux escaliers qui partagent un niveau : chaque paire n'est signalée qu'une fois
+    const stairs = projectData.stairs || [];
+    stairs.forEach((a, i) => stairs.slice(i + 1).forEach(b => {
+        if (linksSharedLevel(a, b) && rectsOverlap(stairRect(a), stairRect(b))) list.push({ stair: a, other: b, kind: 'escalier' });
+    }));
     return list;
 }
 
@@ -1828,11 +1932,14 @@ function computeOutletGangs() {
 }
 
 // Réseau de câblage de chaque niveau (le métré couvre tout le projet, pas seulement le niveau affiché)
+// Les caches existants sont utilisés : sans eux, chaque image de glissement 3D refaisait le câblage
 function networksAllLevels() {
     const saved = activeLevelId;
     const nets = [];
     try {
-        (projectData.levels || []).forEach(l => { activeLevelId = l.id; nets.push(computeCableNetwork()); });
+        (projectData.levels || []).forEach(l => {
+            nets.push(l.id === saved ? getCableNetwork() : ghostCableNetwork(l.id));
+        });
     } finally {
         activeLevelId = saved;
     }
@@ -1920,18 +2027,19 @@ function computeCircuitReport() {
     });
     computeOpeningOverlaps().forEach(({ a, b }) => {
         const nm = o => o.type === 'door_single' ? 'porte' : 'fenêtre';
-        addAlert(levelPrefix(a.levelId) + nm(a)[0].toUpperCase() + nm(a).slice(1) + ' chevauche une ' + nm(b) + ' sur le même mur : à déplacer', { tab: 'ouvertures', elId: a.id, hint: 'Sélectionnez l’une des deux et déplacez-la le long du mur, ou réduisez sa largeur.' });
+        const where = a.wallId === b.wallId ? ' sur le même mur' : ' au coin de deux murs';
+        addAlert(levelPrefix(a.levelId) + nm(a)[0].toUpperCase() + nm(a).slice(1) + ' chevauche une ' + nm(b) + where + ' : à déplacer', { tab: 'ouvertures', elId: a.id, hint: 'Sélectionnez l’une des deux et déplacez-la le long du mur, ou réduisez sa largeur.' });
     });
     computeDeviceOverlaps().forEach(({ a, b }) => {
         addAlert(levelPrefix(a.levelId) + electricalDisplayName(a) + ' chevauche ' + electricalDisplayName(b) + ' : à déplacer', { tab: 'appareillage', elId: a.id, hint: 'Sélectionnez-le et déplacez-le pour qu’il ne chevauche plus ' + electricalDisplayName(b) + '.' });
     });
     computeShaftCollisions().forEach(({ shaft, other, kind }) => {
-        const otherName = kind === 'appareil' ? electricalDisplayName(other) : (other.type === 'door_single' ? 'une porte' : 'une fenêtre');
-        addAlert(levelPrefix(shaft.levelId) + shaftTitle(shaft.id) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: shaft.id, hint: 'Déplacez la trémie depuis l’onglet Ouvertures, pour la sortir de ' + otherName + '.' });
+        const otherName = kind === 'appareil' ? electricalDisplayName(other) : kind === 'trémie' ? 'une autre trémie' : kind === 'mur' ? 'un mur' : (other.type === 'door_single' ? 'une porte' : 'une fenêtre');
+        addAlert(levelPrefix(shaft.levelId) + shaftTitle(shaft.id) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: shaft.id, hint: 'Déplacez la trémie depuis l’onglet Ouvertures pour la dégager de l’élément qui la chevauche.' });
     });
     computeStairCollisions().forEach(({ stair, other, kind }) => {
-        const otherName = kind === 'appareil' ? electricalDisplayName(other) : kind === 'trémie' ? 'une trémie' : kind === 'mur' ? 'un mur' : (other.type === 'door_single' ? 'une porte' : 'une fenêtre');
-        addAlert(levelPrefix(stair.levelId) + stairTitle(stair) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: stair.id, hint: 'Déplacez ou réorientez l’escalier depuis l’onglet Ouvertures, pour le sortir de ' + otherName + '.' });
+        const otherName = kind === 'appareil' ? electricalDisplayName(other) : kind === 'trémie' ? 'une trémie' : kind === 'mur' ? 'un mur' : kind === 'escalier' ? 'un autre escalier' : (other.type === 'door_single' ? 'une porte' : 'une fenêtre');
+        addAlert(levelPrefix(stair.levelId) + stairTitle(stair) + ' chevauche ' + otherName + ' : à déplacer', { tab: 'ouvertures', elId: stair.id, hint: 'Déplacez ou réorientez l’escalier depuis l’onglet Ouvertures pour le dégager.' });
     });
     const infos = projectData.circuits.filter(c => c.auto).map(c => '« ' + c.name + ' » créé automatiquement (' + c.maxPoints + ' points maximum par circuit)');
 
@@ -2565,7 +2673,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 const SHARED_INSPECTORS_3D = ['wall-inspector', 'default-specs-2d', 'shaft-inspector'];
-const SHARED_CONTROLS_2D = ['position-distance-container', 'height-control-container'];
+const SHARED_CONTROLS_2D = ['position-distance-container'];
 
 function sharedHomeMark(el) {
     if (!el._homeMark) {
@@ -2625,6 +2733,18 @@ function placeSharedInspectors() {
     SHARED_INSPECTORS_3D.forEach(id => place(id, in3d ? slot3d : 'home'));
     place('side-toggle-container', in3d ? 'home' : slotSide2d);
     SHARED_CONTROLS_2D.forEach(id => place(id, in3d ? 'home' : slot2d));
+    placeHeightControl();
+}
+
+// En 3D, la hauteur d'une trémie se règle dans son cadre (un seul cadre, pas de second « Trémie » au-dessus)
+function placeHeightControl() {
+    const h = document.getElementById('height-control-container');
+    const box = document.getElementById('shaft-inspector');
+    if (!h || !box) return;
+    const mark = sharedHomeMark(h);
+    const shaftIn3D = currentMode === '3d' && (projectData.shafts || []).some(s => s.id === selected3DId);
+    if (shaftIn3D) box.firstElementChild.after(h);
+    else if (box.contains(h)) mark.parentNode.insertBefore(h, mark);
 }
 
 // Rafraîchit la vue active après une modification de l'élément sélectionné (2D ou 3D)
@@ -2697,6 +2817,7 @@ function setActiveRing(el, on, colour = 'yellow') {
 function updateWallEditButtons() {
     const allowed = canEditWalls();
     const locked = !!projectData.wallsLocked;
+    syncDefaultSpecs();
     // deux copies (2D et 3D) de chaque bouton : toutes sont mises à jour ensemble
     document.querySelectorAll('.wall-edit-btn').forEach(editBtn => {
         editBtn.disabled = locked;
@@ -3119,12 +3240,14 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
     showNotification('Association d’éclairage mise à jour.', 'success');
 }
 
-// Paramètres par défaut (épaisseur, hauteur des NOUVEAUX murs) : masqués quand un élément ou un mur est sélectionné
+// Paramètres par défaut (épaisseur, hauteur des NOUVEAUX murs) : visibles seulement pendant le tracé d'un mur,
+// et masqués dès qu'un élément ou un mur est sélectionné
 function syncDefaultSpecs() {
     const box = document.getElementById('default-specs-2d');
     if (!box) return;
     const busy = selectedWallIds.length > 0 || !!selected3DId || selectedDeviceIds.length > 0 || selectedOpeningIds.length > 0;
-    box.classList.toggle('hidden', busy);
+    const tracing = currentMode === '3d' ? activePlacementType === 'wall' : currentTool === 'wall';
+    box.classList.toggle('hidden', busy || !tracing);
 }
 
 function syncElementInspectors() {
@@ -3144,7 +3267,7 @@ function syncElementInspectors() {
     const emptyDock2d = document.getElementById('inspector-dock-empty-2d');
     if (emptyDock2d) emptyDock2d.classList.toggle('hidden', isSelected);
     const dockInspector = document.getElementById('inspector-3d');
-    if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected);
+    if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected || shaftSel);
     // un appareil relié à un circuit : l'onglet Circuits s'ouvre pour montrer ce circuit
     if (el && selectedCircuitId && rightTabCurrent !== 'circuits') setRightTab('circuits');
     updateLightingAssociations(el);
@@ -3178,8 +3301,10 @@ function syncElementInspectors() {
         if (sh) {
             document.getElementById('shaft-size').value = sh.size || 40;
             document.getElementById('shaft-size-val').textContent = (sh.size || 40) + ' cm';
+            renderShaftLevelEditor(sh);
         }
     }
+    placeHeightControl();
     // Escalier sélectionné : emprise (largeur, longueur) et rotation
     const stair = (projectData.stairs || []).find(s => s.id === selected3DId) || null;
     ['stair-inspector', 'stair-inspector-3d'].forEach(id => {
@@ -3312,6 +3437,67 @@ function setSelectedOpeningProp(prop, raw) {
 }
 
 window.addEventListener('DOMContentLoaded', initOpeningControls);
+
+// Molette « − / + » à côté de chaque curseur : même effet qu'un glissement (input pendant le réglage, change au relâchement, donc un seul pas d'annulation)
+const STEPPER_BTN = 'shrink-0 w-5 h-5 flex items-center justify-center rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs leading-none select-none';
+function stepRange(input, dir) {
+    if (dir > 0) input.stepUp(); else input.stepDown();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function enhanceRangeInput(input) {
+    if (input.dataset.stepper) return;
+    input.dataset.stepper = '1';
+    // la largeur du curseur (flex-1, w-28…) passe au conteneur : le curseur remplit ensuite l'espace restant
+    const sizing = [...input.classList].filter(c => c.startsWith('w-') || c === 'flex-1');
+    sizing.forEach(c => input.classList.remove(c));
+    input.classList.add('flex-1', 'min-w-0');
+    const wrap = document.createElement('div');
+    wrap.className = 'flex items-center gap-1 min-w-0 ' + sizing.join(' ');
+    const makeBtn = (sym, dir, label) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = STEPPER_BTN;
+        b.textContent = sym;
+        b.title = label;
+        b.setAttribute('aria-label', label);
+        let delay = null, repeat = null, moved = false;
+        const stop = () => {
+            clearTimeout(delay); clearInterval(repeat); delay = repeat = null;
+            if (moved) { moved = false; input.dispatchEvent(new Event('change', { bubbles: true })); }
+        };
+        b.addEventListener('pointerdown', e => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            stepRange(input, dir);
+            moved = true;
+            delay = setTimeout(() => { repeat = setInterval(() => stepRange(input, dir), 60); }, 350);
+        });
+        b.addEventListener('pointerup', stop);
+        b.addEventListener('pointerleave', stop);
+        b.addEventListener('pointercancel', stop);
+        // clavier (Entrée / Espace) : pas de pointerdown, donc un seul pas
+        b.addEventListener('click', e => {
+            if (e.detail !== 0) return;
+            stepRange(input, dir);
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        return b;
+    };
+    const minus = makeBtn('−', -1, 'Diminuer');
+    const plus = makeBtn('+', 1, 'Augmenter');
+    input.parentNode.insertBefore(wrap, input);
+    wrap.append(minus, input, plus);
+}
+function enhanceRangeInputs(root) {
+    if (root.matches && root.matches('input[type="range"]')) enhanceRangeInput(root);
+    if (root.querySelectorAll) root.querySelectorAll('input[type="range"]').forEach(enhanceRangeInput);
+}
+window.addEventListener('DOMContentLoaded', () => {
+    enhanceRangeInputs(document.body);
+    new MutationObserver(records => {
+        records.forEach(r => r.addedNodes.forEach(n => { if (n.nodeType === 1) enhanceRangeInputs(n); }));
+    }).observe(document.body, { childList: true, subtree: true });
+});
 
 function setSelectedDoorHinge(side) {
     const op = projectData.openings.find(o => o.id === selected3DId && o.type === 'door_single');
@@ -3505,18 +3691,23 @@ function ensureNudgePads() {
     });
 }
 
-// Curseurs « Distance au départ » et « Hauteur au sol » : mêmes réglages en 2D et en 3D, suivent l'élément en temps réel
+// Curseurs « Distance au départ » et « Hauteur au sol » : réglés en 3D seulement. En 2D, la hauteur n'est jamais réglable :
+// un message indique où la régler (fenêtre 3D). Mêmes réglages en 2D et en 3D pour la distance, suivent l'élément en temps réel
 function syncSelectionSliders() {
     const dist = document.getElementById('position-distance-container');
     const height = document.getElementById('height-control-container');
     const side = document.getElementById('side-toggle-container');
     if (!dist || !height || !side) return;
     const show = (c, on) => c.classList.toggle('hidden', !on);
+    const in3d = currentMode === '3d';
     const m = selectedMovable();
+    document.getElementById('height-control-label').textContent = m && m.kind === 'trémie' ? 'Hauteur au sol boîte' : 'Hauteur au sol';
+    show(document.getElementById('height-hint-2d'), !in3d && !!m && m.kind === 'mural');
+    show(document.getElementById('shaft-height-hint-2d'), !in3d && !!m && m.kind === 'trémie');
     if (!m || m.kind === 'escalier' || m.kind === 'plafonnier') { show(dist, false); show(height, false); show(side, false); return; }
     const it = m.item;
     if (m.kind === 'trémie') {
-        show(dist, false); show(side, false); show(height, true);
+        show(dist, false); show(side, false); show(height, in3d);
         const h = derivHeightOf(it, activeLevelId);
         const hi = document.getElementById('inspector-height-3d-input');
         hi.max = levelCeilingOf(activeLevelId) - DERIV_BOX_H / 2;
@@ -3538,7 +3729,7 @@ function syncSelectionSliders() {
         di.value = d;
         document.getElementById('inspector-distance-val').textContent = d + ' cm';
     }
-    show(height, m.kind === 'mural');
+    show(height, in3d && m.kind === 'mural');
     if (m.kind === 'mural') {
         const h = it.height || defaultHeightFor(it.type);
         const hi = document.getElementById('inspector-height-3d-input');

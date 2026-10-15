@@ -32,11 +32,14 @@ Les actions de confirmation et de saisie utilisent une fenêtre de dialogue int�
 ### Plans et niveaux
 
 - Dessin et édition des murs, ouvertures (portes, fenêtres, trémies et escaliers).
+- Paramètres par défaut des murs (épaisseur et hauteur des nouveaux murs) : le panneau n'apparaît que pendant le tracé d'un mur, et il se masque dès qu'un élément ou un mur est sélectionné.
 - Refus des murs superposés : un tracé qui se confond avec un mur existant n'est pas créé, et une notification « Mur déjà existant à cet endroit : tracé refusé » s'affiche. Le même contrôle s'applique en 2D et en 3D.
+- Alertes de superposition (avertissements, sans blocage) : portes et fenêtres qui se chevauchent, sur le même mur ou au coin de deux murs ; trémies qui chevauchent une ouverture, un mur, un appareil ou une autre trémie, y compris une ouverture d'un autre niveau relié ; escaliers qui se chevauchent entre eux ; trémies qui se chevauchent entre elles sur un niveau commun. Ces alertes apparaissent dans le panneau Alertes et les éléments concernés sont signalés.
 - Placement des tableaux électriques, sous-tableaux, prises, interrupteurs, luminaires et boîtes de dérivation.
 - Niveaux avec nom, cote et hauteur sous plafond ; ajout d'étages et de sous-sols.
-- Copie possible des murs extérieurs lors de la création d'un niveau et affichage fantôme des niveaux voisins.
+- Copie possible des murs extérieurs lors de la création d'un niveau et affichage fantôme de tous les autres niveaux en 3D (murs transparents de couleur grise, sans interaction).
 - Vues 2D et 3D, avec sélection et réglage des appareils en 3D.
+- Réglage des curseurs au pas près : chaque curseur a des boutons « − » et « + » (maintenir enfoncé pour répéter). Un geste reste une seule étape d'annulation. La hauteur d'un appareil ou d'une trémie se règle en 3D ; la 2D affiche un rappel à la place.
 
 ### Circuits et câblage
 
@@ -44,6 +47,7 @@ Les actions de confirmation et de saisie utilisent une fenêtre de dialogue int�
 - Couleurs par famille : les circuits d'une même famille (éclairage, prises 16 A, prises 20 A, etc.) gardent la teinte de leur famille, avec de légères variations de nuance. Un circuit supplémentaire créé automatiquement reprend donc la couleur de son circuit d'origine.
 - Nombre maximal de points par circuit (NF C 15-100) : éclairage 8 points (10 A, 1,5 mm²) ; prises 16 A 8 points (2,5 mm²) ; prises 20 A classiques 12 points (2,5 mm²) ; prises 20 A plan de travail 6 points (2,5 mm²) ; prises dédiées 1 appareil par circuit. Les survols (plan et boutons de l'onglet Appareillages) affichent ce maximum.
 - Câblage et cheminement calculés automatiquement à partir du plan, des appareils et des trémies.
+- En 3D, pendant le déplacement d'un appareil ou d'un mur, les câbles gardent leur tracé d'origine pour garder la vue fluide ; ils sont recalculés au relâchement de la souris.
 - Associations entre interrupteurs et luminaires. Un interrupteur peut commander des luminaires situés sur un autre circuit : le câble de commande part alors du circuit de l'interrupteur jusqu'à celui du luminaire. Les luminaires ne sont pas déplacés d'un circuit à l'autre.
 - Quand un circuit atteint son nombre maximal de points, un circuit supplémentaire est créé automatiquement pour les points suivants.
 - Prise dédiée : une prise par appareil (lave-linge, lave-vaisselle, sèche-linge, four, plaque de cuisson, chauffe-eau, climatisation, autre). Deux types : prise 20A dédiée (2,5 mm²) et prise 32A dédiée (6 mm²), chacun sur son circuit dédié. L'appareil alimenté est choisi dans l'inspecteur. Le métré les compte à part (« Prise 20A dédiée » et « Prise 32A dédiée »).
@@ -109,6 +113,7 @@ Le niveau affiché (`activeLevelId`) et l'état de l'interface ne font pas parti
 
 - Les contrôles et quantités calculés sont indicatifs. Ils ne remplacent pas la vérification du projet par un électricien ni la validation des règles applicables, notamment NF C 15-100.
 - La montée verticale est prise en compte dans le métré ; elle ne se représente pas comme un segment horizontal en 2D.
-- Une trémie relie directement les niveaux qu'elle dessert ; les liaisons en chaîne entre trémies ne sont pas prises en charge.
+- Une trémie ou un escalier relie l'étage affiché aux niveaux cochés à la création (un seul, plusieurs, ou tous ; l'étage affiché est toujours inclus) ; les liaisons en chaîne entre trémies ne sont pas prises en charge.
+- Les niveaux reliés d'une trémie existante se modifient en la sélectionnant (section « Niveaux reliés » du panneau) : cocher ajoute un niveau, décocher le retire. Le niveau d'origine reste fixe, un niveau ne peut être relié que s'il a un mur à la même position, et une trémie relie au moins deux niveaux.
 - Le point de dérivation d'une trémie reste associé à son mur ; sa hauteur se règle en 3D.
 - Le rendu et les interactions 3D nécessitent un navigateur avec WebGL.

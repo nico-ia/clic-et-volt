@@ -222,6 +222,7 @@ function setPlacementType(type) {
     wallDraft3D = null;
     wallCursor3D = null;
     updateWallPreview3D();
+    syncDefaultSpecs();
     document.querySelectorAll('.place-btn').forEach(btn => {
         btn.classList.remove('tool-active-yellow');
     });
@@ -422,6 +423,18 @@ function derivHeightOf(sh, levelId) {
     const h = sh.derivHeight && sh.derivHeight[levelId];
     const wanted = Number.isFinite(h) ? h : 150;
     return Math.min(wanted, levelCeilingOf(levelId) - DERIV_BOX_H / 2);
+}
+// Montée entre deux boîtes de dérivation : un vrai tube (une THREE.Line reste fine quel que soit le zoom)
+const RISER_RES = {};
+const RISER_RADIUS = 1.8;   // cm
+function riserTube(a, b, mat) {
+    if (!RISER_RES.geo) RISER_RES.geo = markShared(new THREE.CylinderGeometry(1, 1, 1, 8, 1, true));
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const tube = new THREE.Mesh(RISER_RES.geo, mat);
+    tube.position.copy(a).add(b).multiplyScalar(0.5);
+    tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    tube.scale.set(RISER_RADIUS, dir.length(), RISER_RADIUS);
+    return tube;
 }
 
 // Position du point de dérivation le long du mur de la trémie, par niveau (cm) ; par défaut, celle de la trémie
@@ -1366,6 +1379,48 @@ function buildCableNetwork(passage) {
     return result;
 }
 
+// Tronçons, âmes et manchons de même matériau et même ordre de rendu fusionnés en un seul maillage :
+// l'orbite ne coûte plus un appel de dessin par câble
+function mergeCableParts(parts) {
+    const groups = new Map();
+    parts.forEach(p => {
+        p.updateMatrix();
+        const key = p.material.uuid + '|' + p.renderOrder;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(p);
+    });
+    const v = new THREE.Vector3();
+    const n = new THREE.Vector3();
+    groups.forEach(list => {
+        const pos = [];
+        const nor = [];
+        const idx = [];
+        list.forEach(p => {
+            const g = p.geometry;
+            const P = g.attributes.position;
+            const N = g.attributes.normal;
+            const nm = new THREE.Matrix3().getNormalMatrix(p.matrix);
+            const base = pos.length / 3;
+            for (let i = 0; i < P.count; i++) {
+                v.fromBufferAttribute(P, i).applyMatrix4(p.matrix);
+                pos.push(v.x, v.y, v.z);
+                n.fromBufferAttribute(N, i).applyMatrix3(nm).normalize();
+                nor.push(n.x, n.y, n.z);
+            }
+            const ia = g.index.array;
+            for (let i = 0; i < ia.length; i++) idx.push(ia[i] + base);
+        });
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+        geo.setIndex(idx);
+        const mesh = new THREE.Mesh(geo, list[0].material);
+        mesh.renderOrder = list[0].renderOrder;
+        threeScene.add(mesh);
+        wallMeshes3D.push(mesh);
+    });
+}
+
 // Rendu : une gaine par tronçon (cylindres partagés), coudes en manchons sphériques, âmes colorées à l'intérieur
 function renderCableNetwork(cx, cy) {
     const net = getCableNetwork();
@@ -1435,7 +1490,8 @@ function renderCableNetwork(cx, cy) {
             ? { color: hex }
             : { color: hex, transparent: true, opacity: 0.9, depthWrite: false })));
     };
-    const add = (mesh) => { mesh.userData.shared = true; threeScene.add(mesh); wallMeshes3D.push(mesh); };
+    const parts = [];
+    const add = (mesh) => parts.push(mesh);
     const Y = new THREE.Vector3(0, 1, 0);
     const joints = new Map();
 
@@ -1527,6 +1583,7 @@ function renderCableNetwork(cx, cy) {
         s.renderOrder = j.focused ? 3 : 2;
         add(s);
     });
+    mergeCableParts(parts);
     return net;
 }
 
@@ -1543,9 +1600,9 @@ function toggleGhostLevels() {
 // Mis en cache par données ; pendant un glissement on garde le dernier résultat (le calcul est trop lourd à chaque image).
 const _ghostNetCache = new Map();
 function ghostCableNetwork(levelId) {
-    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
+    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts, !!projectData.roomCrossing]);
     const hit = _ghostNetCache.get(levelId);
-    if (hit && (hit.sig === sig || dragging3DElementId)) return hit.net;
+    if (hit && (hit.sig === sig || layoutDragging3D())) return hit.net;
     const saved = activeLevelId;
     let net = null;
     try {
@@ -1573,20 +1630,21 @@ function build3DScene() {
         selectedHighlightMesh = null;
     }
 
+    // niveau actif vide : pas de retour anticipé, sinon les fantômes des autres niveaux disparaissent
     if (wallsOn().length === 0) {
         selected3DId = null;
         syncElementInspectors();
         updateCircuitsUI();
-        return;
     }
 
     const { cx, cy } = scene3DCentre();
     // étendue réelle des murs du niveau (pour la taille du sol)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    wallsOn().forEach(w => {
+    sceneFrameWalls().forEach(w => {
         minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
         maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
     });
+    if (!isFinite(minX)) { minX = minY = maxX = maxY = 0; }
 
     const floorWidth = (maxX - minX) + 400;
     const floorDepth = (maxY - minY) + 400;
@@ -1635,8 +1693,8 @@ function build3DScene() {
                 const height = w.height || 250;
                 const geo = new THREE.BoxGeometry(w.thickness || 10, height, length);
                 // même couleur que les murs réels, plus transparente
-                const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.12, depthWrite: false }));
-                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x0f766e, transparent: true, opacity: 0.5 }));
+                const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.22, depthWrite: false }));
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xcbd5e1, transparent: true, opacity: 0.8 }));
                 ghost.add(edges);
                 ghost.position.set((x1 + x2) / 2, dy + height / 2, (z1 + z2) / 2);
                 ghost.rotation.y = -Math.atan2(z2 - z1, x2 - x1) + Math.PI / 2;
@@ -1799,9 +1857,7 @@ function build3DScene() {
             // câble de la boîte de ce niveau jusqu'à la boîte de l'autre niveau (même trémie)
             const y0 = derivation.position.y;
             const y1 = dy + derivHeightOf(sh, lv);
-            const riser = new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(derivation.position.x, y0, derivation.position.z), new THREE.Vector3(derivation.position.x, y1, derivation.position.z)]),
-                new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+            const riser = riserTube(new THREE.Vector3(derivation.position.x, y0, derivation.position.z), new THREE.Vector3(derivation.position.x, y1, derivation.position.z), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
             threeScene.add(riser);
             wallMeshes3D.push(riser);
         });
@@ -1824,13 +1880,15 @@ function build3DScene() {
         const wallMat = new THREE.MeshStandardMaterial({
             color: 0x0f766e,
             transparent: true,
-            opacity: 0.52,
+            opacity: 0.22,
             roughness: 0.8,
             metalness: 0,
             depthWrite: false,
             side: THREE.DoubleSide
         });
         const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+        // arêtes : même lecture que les murs fantômes des autres étages
+        wallMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(wallGeo), new THREE.LineBasicMaterial({ color: 0x2dd4bf, transparent: true, opacity: 0.8 })));
         // Ordre fixe : les murs transparents sont dessinés après les autres transparents, quel que soit l'angle de vue
         // (sinon le tri par distance de Three.js change d'ordre pendant la rotation et fait scintiller les appareils)
         wallMesh.renderOrder = 5;
@@ -2229,10 +2287,16 @@ let wallCursor3D = null;    // point courant, aimanté
 let wallPreview3D = null;   // trait de prévisualisation dans la scène
 
 // Centre de la scène 3D : même repère que celui des murs, escaliers et trémies
+// murs servant au cadrage 3D : ceux du niveau affiché, sinon ceux du projet (niveau actif vide)
+function sceneFrameWalls() {
+    const own = wallsOn();
+    return own.length ? own : (projectData.walls || []);
+}
+
 function scene3DCentre() {
     if (wallCentreLock3D) return wallCentreLock3D;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    wallsOn().forEach(w => {
+    sceneFrameWalls().forEach(w => {
         minX = Math.min(minX, w.x1, w.x2); minY = Math.min(minY, w.y1, w.y2);
         maxX = Math.max(maxX, w.x1, w.x2); maxY = Math.max(maxY, w.y1, w.y2);
     });
@@ -2358,6 +2422,7 @@ function on3DPointerDown(e) {
                 });
                 const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
                 const links = askShaftLevels();
+                if (!links) return;
                 saveStateToUndo();
                 if (!projectData.stairs) projectData.stairs = [];
                 projectData.stairs.push({ id: 'st_' + Date.now(), levelId: activeLevelId, levelIds: links,
@@ -2439,7 +2504,8 @@ function on3DPointerDown(e) {
                     if (activePlacementType === 'shaft') {
                         // trémie posée en 3D : même réglage de liaison que la 2D (liste « Relier à »)
                         const links = askShaftLevels();
-                        projectData.shafts.push({ id: 'sh_' + Date.now(), levelId: activeLevelId, levelIds: links, wallId: wall.id, distanceFromStart: distanceCm, side, size: 40 });
+                        if (!links) return;
+                        projectData.shafts.push({ id: 'sh_' + Date.now(), levelIds: links, wallId: wall.id, distanceFromStart: distanceCm, side, size: 40 });
                         renderLevelSelector();
                         showNotification('Trémie placée sur le mur', 'success');
                         build3DScene();
@@ -2502,6 +2568,7 @@ function on3DPointerDown(e) {
             while (target.parent && target.parent !== threeScene) target = target.parent;
             if (target.userData && target.userData.id) {
                 const targetId = target.userData.id;
+                setSelectedWalls([]);   // un mur sélectionné ne reste pas ouvert quand un autre élément est choisi
                 select3DElement(targetId, target);
                 if ((projectData.shafts || []).some(s => s.id === targetId)) {
                     build3DScene();   // volume de sélection visible dès le clic
@@ -2774,11 +2841,14 @@ function endWallDrag3D() {
 function on3DPointerUp(e) {
     if (wallDrag3D) { endWallDrag3D(); return; }
     if (dragging3DElementId) {
+        const moved = drag3DMoved;
         dragging3DElementId = null;
         if (threeControls) {
             threeControls.enabled = true;
             threeControls.update();
         }
+        // le câblage n'a pas suivi le glissement : il est recalculé pour la position finale
+        if (moved) build3DScene();
     }
 }
 
@@ -2848,9 +2918,8 @@ function addGhostShaft3D(sh, cx, cy) {
     // montée entre les boîtes des niveaux reliés
     if (boxes.length > 1) {
         const ys = boxes.map(bx => bx.y);
-        const riser = add(new THREE.Line(
-            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(boxes[0].x, Math.min(...ys), boxes[0].z), new THREE.Vector3(boxes[0].x, Math.max(...ys), boxes[0].z)]),
-            new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4, depthWrite: false })));
+        const riser = add(riserTube(new THREE.Vector3(boxes[0].x, Math.min(...ys), boxes[0].z), new THREE.Vector3(boxes[0].x, Math.max(...ys), boxes[0].z),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6, depthWrite: false })));
         riser.renderOrder = 4;
     }
 }
@@ -3283,8 +3352,12 @@ function addCollisionHighlights() {
 // ---------- Cache du réseau de gaines ----------
 // Réseau de gaines mis en cache tant que le projet ne change pas
 let _cableCache = { sig: null, net: null };
+// Pendant un glissement 3D (appareil, ouverture, trémie ou mur) le réseau garde sa forme d'avant le glissement :
+// il est recalculé une fois au relâchement, au lieu d'être refait à chaque image
+function layoutDragging3D() { return !!dragging3DElementId || !!wallDrag3D; }
 function getCableNetwork() {
     ensureCircuitAssignment();
+    if (layoutDragging3D() && _cableCache.net) { cableStats = _cableCache.net; return _cableCache.net; }
     // Le niveau affiché fait partie de la clé : changer de niveau change le réseau calculé
     const sig = JSON.stringify([activeLevelId, projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts, !!projectData.roomCrossing]);
     if (_cableCache.sig !== sig) _cableCache = { sig, net: computeCableNetwork() };

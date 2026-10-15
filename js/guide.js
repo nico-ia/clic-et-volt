@@ -51,12 +51,27 @@
         window: `<rect x="-30" y="-4" width="60" height="8" fill="#020617"/>
                  <rect x="-30" y="-4" width="60" height="8" fill="none" stroke="#22d3ee" stroke-width="2"/>
                  <line x1="-30" y1="0" x2="30" y2="0" stroke="#22d3ee" stroke-width="2"/>`,
-        // trémie (ambre) : carré en pointillés, point de dérivation
-        shaft: `<rect x="-20" y="-20" width="40" height="40" fill="rgba(251,191,36,0.3)" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6 4"/>`,
-        // sous-tableau (cyan clair) : même forme que le plan, avec l'éclair
-        subpanel: `<rect x="-1" y="-10" width="9" height="20" fill="#f8fafc" stroke="#67e8f9" stroke-width="1.6"/>
-                   <path d="M-1,0 H8" stroke="#67e8f9" stroke-width="0.9"/>
-                   <polygon class="g-bolt" points="2,-6 5,-3 3.5,-3 5,0 1.5,3 3,3 1,6" fill="#67e8f9"/>`
+        // prise commandée (orange clair) : prise 16 A avec un point
+        outletSwitched: `<path d="M-1,-6 V6" stroke="#fb923c" stroke-width="1.2"/>
+                         <path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#fb923c" stroke-width="1.3"/>
+                         <path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#fb923c" stroke-width="1.1"/>
+                         <circle cx="1" cy="2.5" r="1.6" fill="#fb923c"/>`,
+        // bouton de sonnette (rose) et sonnerie (fuchsia) : ondes sonores
+        doorbellButton: `<path d="M-1,0 H5" stroke="#f472b6" stroke-width="1.2"/>
+                         <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#f472b6" stroke-width="1.2"/>
+                         <circle cx="8.5" cy="0" r="1.2" fill="#f472b6"/>`,
+        doorbellChime: `<circle r="5" fill="#f8fafc" stroke="#e879f9" stroke-width="2"/>
+                        <path d="M6.12,-5.15 A8,8 0 0 1 6.12,5.15 M8.41,-7.09 A11,11 0 0 1 8.41,7.09" fill="none" stroke="#e879f9" stroke-width="1.2"/>`,
+        // commande de volet (indigo) : flèches monter / descendre ; moteur (indigo) : boîtier à deux axes
+        shutterControl: `<path d="M-1,0 H5" stroke="#818cf8" stroke-width="1.8"/>
+                         <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#818cf8" stroke-width="1.2"/>
+                         <path d="M8.5,-2.4 L7.4,-0.9 H9.6 Z M8.5,2.4 L7.4,0.9 H9.6 Z" fill="#818cf8"/>`,
+        shutterMotor: `<rect x="-7" y="-5" width="14" height="10" rx="2" fill="#f8fafc" stroke="#6366f1" stroke-width="2"/>
+                       <path d="M-4,-2 H4 M-4,2 H4" stroke="#0f172a" stroke-width="1.2"/>`,
+        // sous-tableau (cyan clair) : même forme que le plan (coffret, deux rangées de modules, éclair)
+        subpanel: `<rect x="-1" y="-12" width="9" height="24" fill="#f8fafc" stroke="#67e8f9" stroke-width="1.6"/>
+                   <path d="M-1,-6 H8 M-1,6 H8" stroke="#67e8f9" stroke-width="0.9"/>
+                   <polygon class="g-bolt" points="2.2,-2.6 5.1,-0.3 3.5,-0.3 5.1,2.6 1.9,0.3 3.5,0.3" fill="#67e8f9"/>`
     };
 
     // ---------- Animations (SVG, animées en CSS) ----------
@@ -129,22 +144,46 @@
         ${sym(S.ceiling, 240, 120, 0, 2.2)}
         <text class="g-lbl" x="160" y="172">Le câble de commande relie les deux</text>`);
 
+    // Prise commandée, sonnette, volet : chaque commande et sa charge sur le même mur, les trois couples s'enchaînent
+    const animControlled = () => svg(`
+        <line x1="20" y1="40" x2="300" y2="40" stroke="#334155" stroke-width="8"/>
+        <g class="g-circ c1">
+            ${sym(S.switchSimple, 26, 44, 90, 2.4)}${sym(S.outletSwitched, 78, 44, 90, 2.4)}
+            <path d="M26 80 V96 H78 V66" fill="none" stroke="#fb923c" stroke-width="2.5" stroke-dasharray="5 4"/>
+            <text class="g-lbl" x="52" y="118">Prise commandée</text>
+            <text class="g-lbl" x="52" y="132" style="font-size:10px">interrupteur → prise</text>
+        </g>
+        <g class="g-circ c2">
+            ${sym(S.doorbellButton, 134, 44, 90, 2.4)}${sym(S.doorbellChime, 186, 44, 90, 1.8)}
+            <path d="M134 80 V96 H186 V62" fill="none" stroke="#e879f9" stroke-width="2.5" stroke-dasharray="5 4"/>
+            <text class="g-lbl" x="160" y="118">Sonnette</text>
+            <text class="g-lbl" x="160" y="132" style="font-size:10px">bouton → sonnerie</text>
+        </g>
+        <g class="g-circ c3">
+            ${sym(S.shutterControl, 242, 44, 90, 2.4)}${sym(S.shutterMotor, 294, 44, 90, 2.4)}
+            <path d="M242 80 V96 H294 V66" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-dasharray="5 4"/>
+            <text class="g-lbl" x="268" y="118">Volet roulant</text>
+            <text class="g-lbl" x="268" y="132" style="font-size:10px">commande → moteur</text>
+        </g>
+        <text class="g-lbl" x="160" y="166">Câblages simplifiés : fils réels non montrés</text>`);
+
     const animLevels = () => svg(`
         <rect x="90" y="50" width="140" height="56" rx="8" fill="#1e293b" stroke="#475569" stroke-width="2"/>
         <text class="g-lvl g-lvl-a" x="160" y="86">RDC</text>
         <text class="g-lvl g-lvl-b" x="160" y="86">Sous-sol</text>
         <text class="g-lbl" x="160" y="140">Nom, cote, puis « Créer le niveau »</text>`);
 
-    // Trémie : carré ambre sur les deux niveaux, point de dérivation à chaque étage
+    // Trémie en coupe : la colonne blanche part du bas du RDC et monte jusqu'au haut de l'étage
     const animShaft = () => svg(`
-        <rect x="30" y="30" width="260" height="50" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
-        <rect x="30" y="110" width="260" height="50" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
-        <text class="g-lbl" x="60" y="48">Étage</text>
-        <text class="g-lbl" x="60" y="128">RDC</text>
-        <g class="g-shaftpulse">${sym(S.shaft, 160, 90)}</g>
+        <rect x="30" y="26" width="260" height="56" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
+        <rect x="30" y="98" width="260" height="56" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
+        <rect x="30" y="82" width="260" height="16" fill="#334155"/>
+        <rect class="g-shaftpulse" x="140" y="26" width="40" height="128" fill="rgba(248,250,252,0.6)" stroke="#f8fafc" stroke-width="2"/>
         <circle cx="160" cy="55" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
-        <circle cx="160" cy="135" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
-        <text class="g-lbl" x="160" y="175">La trémie relie les deux étages</text>`);
+        <circle cx="160" cy="125" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+        <text class="g-lbl" x="48" y="46" style="text-anchor:start">Étage</text>
+        <text class="g-lbl" x="48" y="126" style="text-anchor:start">RDC</text>
+        <text class="g-lbl" x="160" y="172">La trémie traverse tous les étages reliés</text>`);
 
     // Escalier : marches violettes (même couleur que le plan), montée visible
     const animStair = () => svg(`
@@ -156,14 +195,20 @@
         <text class="g-lbl" x="160" y="30">Montée de l'escalier</text>
         <text class="g-lbl" x="160" y="170">Il relie deux niveaux, comme la trémie</text>`);
 
+    // Alerte réelle : une prise placée dans une porte, bouton « Aller ↗ » sur la carte, puis la prise sort de la porte
     const animAlert = () => svg(`
-        <rect x="16" y="26" width="288" height="98" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
-        <text x="32" y="48" class="g-warn" style="font-size:11px">▲ Trémie chevauche une porte : à déplacer</text>
-        <text class="g-lbl" x="32" y="66" style="text-anchor:start">Déplacez la trémie depuis l'onglet</text>
-        <text class="g-lbl" x="32" y="80" style="text-anchor:start">Ouvertures, hors de la porte</text>
-        <rect class="g-btnpress" x="222" y="96" width="66" height="18" rx="5"/>
-        <text class="g-lbl" x="255" y="109">Aller ↗</text>
-        <text class="g-lbl" x="160" y="150">Cliquez « Aller ↗ » : l'élément est sélectionné</text>`);
+        <rect x="16" y="8" width="288" height="80" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+        <text x="24" y="26" class="g-warn" style="font-size:9.5px;text-anchor:start">▲ Prise 16 A placé(e) dans une porte : à déplacer</text>
+        <text class="g-lbl" x="24" y="42" style="font-size:9.5px;text-anchor:start">Sélectionnez-la et déplacez-la hors de la porte</text>
+        <text class="g-lbl" x="24" y="55" style="font-size:9.5px;text-anchor:start">ou fenêtre (glisser, ou flèches ← →).</text>
+        <rect class="g-btnpress" x="222" y="64" width="66" height="16" rx="5"/>
+        <text class="g-lbl" x="255" y="75">Aller ↗</text>
+        <line x1="20" y1="130" x2="300" y2="130" stroke="#334155" stroke-width="8"/>
+        <rect x="140" y="126" width="60" height="8" fill="#0f172a"/>
+        <text class="g-lbl" x="206" y="122" style="text-anchor:start;font-size:10px">Porte</text>
+        <circle class="g-bolt" cx="170" cy="140" r="17" fill="none" stroke="#ef4444" stroke-width="2"/>
+        ${sym(S.outlet16, 170, 130, 90, 2.6)}
+        <text class="g-lbl" x="160" y="172">Cliquez « Aller ↗ » : l'élément est sélectionné</text>`);
 
     // ---------- Partie 2 : vue 3D ----------
     // Vue 3D : barre du haut, boîte à outils et élément sélectionné à gauche, bâtiment au centre, « Placement & contrôles » à droite
@@ -213,9 +258,9 @@
         <rect x="20" y="30" width="130" height="120" rx="4" fill="none" stroke="#475569" stroke-width="2"/>
         <rect x="170" y="30" width="130" height="120" rx="4" fill="none" stroke="#475569" stroke-width="2"/>
         <line x1="160" y1="30" x2="160" y2="150" stroke="#334155" stroke-width="8"/>
-        <path class="g-wall-draw" d="M62 100 V60 H236 V100 H247" fill="none" stroke="#e879f9" stroke-width="3" stroke-linejoin="round"/>
+        <path class="g-wall-draw" d="M50 60 V42 H258 V74" fill="none" stroke="#e879f9" stroke-width="3" stroke-linejoin="round"/>
         <g class="g-pop p1">${sym(S.panel, 40, 100, 0, 2.2)}</g>
-        <g class="g-pop p2">${sym(S.subpanel, 250, 100, 0, 2.4)}</g>
+        <g class="g-pop p2">${sym(S.subpanel, 250, 100, 0, 2.2)}</g>
         <text class="g-lbl" x="85" y="170">Tableau principal</text>
         <text class="g-lbl" x="235" y="170">Sous-tableau</text>
         <text class="g-lbl" x="160" y="18">Câble entre tableaux (fuchsia)</text>`);
@@ -254,17 +299,17 @@
         <text class="g-lbl" x="160" y="160">Basculer de l'autre côté du mur</text>
         <text class="g-lbl" x="160" y="174">Le changement se voit tout de suite en 3D</text>`);
 
-    // Trémie : colonne ambre entre deux étages, boîte blanche de dérivation (réglage « Hauteur au sol » de la trémie)
+    // Colonne montante en coupe : la colonne blanche va du bas du RDC au haut de l'étage, une boîte blanche par étage à 1,50 m du sol
     const animRiser = () => svg(`
-        <rect x="30" y="12" width="260" height="44" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
-        <rect x="30" y="100" width="260" height="44" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
-        <text class="g-lbl" x="50" y="38" style="text-anchor:start">Étage</text>
-        <text class="g-lbl" x="50" y="126" style="text-anchor:start">RDC</text>
-        <g class="g-shaftpulse">${sym(S.shaft, 160, 78)}</g>
-        <rect x="153" y="27" width="14" height="14" rx="2" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
-        <rect x="153" y="115" width="14" height="14" rx="2" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
-        <text class="g-lbl" x="160" y="164">Une boîte blanche de dérivation par étage relié</text>
-        <text class="g-lbl" x="160" y="176">Hauteur par défaut : 1,50 m du sol</text>`);
+        <rect x="30" y="10" width="260" height="66" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
+        <rect x="30" y="90" width="260" height="66" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
+        <rect x="30" y="76" width="260" height="14" fill="#334155"/>
+        <rect class="g-shaftpulse" x="140" y="10" width="40" height="146" fill="rgba(248,250,252,0.6)" stroke="#f8fafc" stroke-width="2"/>
+        <rect x="153" y="30" width="14" height="14" rx="2" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+        <rect x="153" y="110" width="14" height="14" rx="2" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+        <text class="g-lbl" x="48" y="47" style="text-anchor:start">Étage</text>
+        <text class="g-lbl" x="48" y="127" style="text-anchor:start">RDC</text>
+        <text class="g-lbl" x="160" y="172">Boîte blanche : 1,50 m du sol, à chaque étage relié</text>`);
 
     // ---------- Partie 3 : métré et contrôles ----------
     // Onglets du haut : le troisième s'allume, puis le tableau apparaît
@@ -372,7 +417,7 @@
                  'Le luminaire peut être sur un autre circuit que l\'interrupteur : le câble de commande part alors du circuit de l\'interrupteur jusqu\'à celui du luminaire.'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'switch_simple', pulse: '#btn-2d-place-switch_simple' },
           retenir: 'Un va-et-vient se pose toujours par deux.' },
-        { part: 'Plan 2D', title: 'Prise commandée, sonnette et volet', anim: animControl,
+        { part: 'Plan 2D', title: 'Prise commandée, sonnette et volet', anim: animControlled,
           text: ['Prise commandée : un interrupteur la coupe ou la rétablit, comme un luminaire. Reliez-la dans « Modifier les associations ».',
                  'Sonnette : posez le « Bouton de sonnette » et la « Sonnerie ». Le bouton fait sonner la sonnerie.',
                  'Volet roulant : la « Commande de volet roulant » monte ou descend le « Moteur de volet roulant ». Le moteur est alimenté par le circuit des prises.',
@@ -387,8 +432,8 @@
           essayer: { mode: '2d', pulse: '#btn-add-level' },
           retenir: 'Chaque élément appartient à un seul niveau.' },
         { part: 'Plan 2D', title: 'Trémie et escalier', anim: animShaft,
-          text: ['La trémie (ouverture dans le plancher) se pose sur un mur et relie deux niveaux.',
-                 'Choisissez l\'étage à relier, puis cliquez sur le mur.',
+          text: ['La trémie (ouverture dans le plancher) se pose sur un mur et relie plusieurs niveaux.',
+                 'Cochez les étages à relier, puis cliquez sur le mur.',
                  'L\'escalier relie aussi deux niveaux : posez-le sur le plan, puis réglez sa largeur et sa rotation.'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'shaft', pulse: '#btn-2d-place-shaft' },
           retenir: 'Les câbles passent par la trémie pour rejoindre l\'autre étage.' },
@@ -457,7 +502,7 @@
         { part: 'Vue 3D et câblage', title: 'Trémie et point de dérivation', anim: animRiser,
           text: ['La trémie (ouverture dans le plancher) laisse passer les câbles entre les étages.',
                  'La boîte blanche de dérivation (boîte où se rejoignent les câbles) est placée à 1,50 m du sol par défaut, à chaque étage relié.',
-                 'Pour la changer, sélectionnez la trémie et réglez « Hauteur au sol ».'],
+                 'Pour la changer, sélectionnez la trémie et réglez « Hauteur au sol boîte ».'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'shaft', pulse: '#btn-2d-place-shaft' },
           retenir: 'La boîte de dérivation se règle depuis la trémie, pas depuis la boîte.' },
 
