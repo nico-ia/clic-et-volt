@@ -1451,6 +1451,7 @@ function draw2DEquipment() {
         ctx2D.globalAlpha = 0.85;
         const deviceDiscs = electricalOn().map(el => ({ c: getElCoords(el), R: isDedicatedOutlet(el) ? 14 : 12 }));
         const ctlColors = switchedOutletCableColors(net);
+        const linkCableColors = controlCableColors(net, null);
         // Le cheminement bas et le cheminement haut ont les mêmes coordonnées en plan : on les décale
         // de part et d'autre de l'axe pour que les deux restent visibles (haut : trait plein, bas : pointillé).
         net.segments.forEach(s => {
@@ -1468,7 +1469,8 @@ function draw2DEquipment() {
             // câble de liaison seul : masqué tant qu'aucun circuit ni éclairage n'est sélectionné, ou s'il est retiré du circuit
             if (feederSeg && !circs.length && (!focusMode || feederOff)) return;
             const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && ((s.cids || []).includes(focusCircuit.id) || onFeeder));
-            const focusColor = hasLinkFocus ? '#facc15' : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
+            const linkColor = (s.links || []).map(id => linkCableColors.get(id)).find(Boolean);
+            const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
             ctx2D.globalAlpha = focusMode ? (focusHit ? 1 : 0.16) : 0.85;
             ctx2D.lineWidth = focusMode && focusHit ? 5 : 3;
             const pieces = cableOutsideDevices2D({ x: s.a.x + ox, y: s.a.y + oy }, { x: s.b.x + ox, y: s.b.y + oy }, deviceDiscs);

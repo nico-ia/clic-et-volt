@@ -1325,19 +1325,22 @@ function controlTargetsOf(net) {
     });
     return map;
 }
-// Câble de commande vers une prise commandée : couleur du circuit de cette prise (même couleur que la prise et son interrupteur)
-function switchedOutletCableColors(net) {
+// Câble de commande : couleur du circuit de la charge pilotée (même couleur que la charge et sa commande).
+// loadTypes : types de charge à prendre en compte, ou null pour toutes.
+function controlCableColors(net, loadTypes) {
     const byId = new Map(projectData.electrical.map(el => [el.id, el]));
     const map = new Map();
     (net && net.controlLinks || []).forEach(link => {
         link.lightIds.forEach(id => {
             const load = byId.get(id);
-            const c = load && load.type === 'outlet_switched' ? circuitOf(load) : null;
+            const c = load && (!loadTypes || loadTypes.includes(load.type)) ? circuitOf(load) : null;
             if (c) map.set(controlCableLinkId(link.switchId, id), circuitColor(c));
         });
     });
     return map;
 }
+// Câble de commande vers une prise commandée : couleur du circuit de cette prise
+function switchedOutletCableColors(net) { return controlCableColors(net, ['outlet_switched']); }
 // Couleur d'un appareil = couleur de son circuit, comme pour les prises. Une commande prend celle de la charge
 // qu'elle pilote, ou, sans liaison, celle du circuit par défaut de cette charge. targets : controlTargetsOf, ou null.
 function deviceCircuitOf(el, targets) {
