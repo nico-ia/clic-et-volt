@@ -1471,20 +1471,23 @@ function renderCableNetwork(cx, cy) {
         CABLE_RES.mats = {};
     }
     const matFor = k => CABLE_RES.mats[k] || (CABLE_RES.mats[k] = markShared(new THREE.MeshBasicMaterial({ color: colors[k] || 0xffffff })));
+    const ctlHexOf = cid => (typeof cid === 'string' && cid.startsWith('ctl:') ? cid.slice(4) : null);
     const conduitFor = cid => {
         if (!cid) return CABLE_RES.conduitMat;
-        const circuit = projectData.circuits.find(c => c.id === cid);
-        if (!circuit) return CABLE_RES.conduitMat;
-        const hex = circuitColor(circuit);
+        const ctlHex = ctlHexOf(cid);
+        const circuit = ctlHex ? null : projectData.circuits.find(c => c.id === cid);
+        if (!ctlHex && !circuit) return CABLE_RES.conduitMat;
+        const hex = ctlHex || circuitColor(circuit);
         return CABLE_RES.circMats[hex] || (CABLE_RES.circMats[hex] = markShared(new THREE.MeshBasicMaterial({
             color: hex, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide
         })));
     };
     const hiFor = (cid, core) => {
         if (cid === FEEDER_CID) return core ? CABLE_RES.feederCore : CABLE_RES.feederConduit;
-        const circuit = cid && projectData.circuits.find(c => c.id === cid);
-        if (!circuit) return core ? CABLE_RES.highlightCore : CABLE_RES.highlightConduit;
-        const hex = circuitColor(circuit);
+        const ctlHex = ctlHexOf(cid);
+        const circuit = !ctlHex && cid && projectData.circuits.find(c => c.id === cid);
+        if (!ctlHex && !circuit) return core ? CABLE_RES.highlightCore : CABLE_RES.highlightConduit;
+        const hex = ctlHex || circuitColor(circuit);
         const key = (core ? 'c' : 'g') + hex;
         return CABLE_RES.hiMats[key] || (CABLE_RES.hiMats[key] = markShared(new THREE.MeshBasicMaterial(core
             ? { color: hex }
@@ -1494,6 +1497,7 @@ function renderCableNetwork(cx, cy) {
     const add = (mesh) => parts.push(mesh);
     const Y = new THREE.Vector3(0, 1, 0);
     const joints = new Map();
+    const ctlColors = switchedOutletCableColors(net);
 
     net.segments.forEach(seg => {
         const isLinkHighlighted = (seg.links || []).some(id => selectedLinkIds.has(id));
@@ -1516,6 +1520,9 @@ function renderCableNetwork(cx, cy) {
             groups.get(cid).push(...bundle);
         });
         if (!groups.size) groups.set(null, []);
+        // commande vers une prise commandée : tube supplémentaire à la couleur de la prise (sans fils, ceux-ci restent dans leur circuit)
+        [...new Set((seg.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id)))]
+            .forEach(hex => groups.set('ctl:' + hex, []));
         const conduitGroups = [...groups.entries()].filter(([cid]) => !(feederHidden && cid === FEEDER_CID));
         conduitGroups.forEach(([cid, wires], groupIndex) => {
             const R = Math.min(3.2, Math.max(2, 1.8 + 0.22 * wires.length));
@@ -1528,7 +1535,7 @@ function renderCableNetwork(cx, cy) {
                 .addScaledVector(v, Math.sin(angle) * radialOffset);
             const isSelected = selectedCircuitId && cid === selectedCircuitId;
             const isFocused = hasLinkFocus
-                ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid))
+                ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid) || !!ctlHexOf(cid))
                 : (isSelected || (cid === FEEDER_CID && !!selectedCircuitId));
             const cmat = (hasLinkFocus || selectedCircuitId)
                 ? (isFocused ? hiFor(cid, false) : CABLE_RES.dimConduit)
@@ -2072,7 +2079,9 @@ function applianceModel(el) {
     // cylindre dont l'axe est dirigé vers l'avant (+z) ; rF = rayon côté avant, rB = rayon côté mur
     const cylZ = (rF, rB, len, mat, x, y, z) => { const m = new THREE.Mesh(mGeo('cyl', rF, rB, len, 28), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
     const cylY = (rT, rB, len, mat, x, y, z) => { const m = new THREE.Mesh(mGeo('cyl', rT, rB, len, 28), mat); m.position.set(x, y, z); g.add(m); return m; };
-    const accent = EL_COLORS[el.type] ? parseInt(EL_COLORS[el.type].slice(1), 16) : 0x94a3b8;
+    // commande : couleur du circuit de la charge qu'elle pilote (sinon celle du circuit par défaut de sa charge)
+    const accentHex = deviceColor(el, isControl(el) ? controlTargetsOf(getCableNetwork()) : null) || EL_COLORS[el.type];
+    const accent = accentHex ? parseInt(accentHex.slice(1), 16) : 0x94a3b8;
     const white = mMat(0xf8fafc, { rough: 0.35 });
     const ivory = mMat(0xe2e8f0, { rough: 0.45 });
     const dark = mMat(0x0f172a, { rough: 0.6 });

@@ -150,19 +150,19 @@
                         <!-- Escalier sélectionné : mêmes réglages et même ordre qu'en 3D -->
                         <div id="stair-inspector" class="hidden space-y-2 pt-1">
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-[11px] text-slate-300">Largeur</span>
+                                <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Largeur</span>
                                 <input id="stair-width" type="range" min="60" max="150" step="5" value="90" oninput="setStairProp('width', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
-                                <span id="stair-width-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                                <span id="stair-width-val" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-[11px] text-slate-300">Longueur</span>
+                                <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Longueur</span>
                                 <input id="stair-length" type="range" min="150" max="600" step="10" value="300" oninput="setStairProp('length', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
-                                <span id="stair-length-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                                <span id="stair-length-val" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-[11px] text-slate-300">Rotation</span>
+                                <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Rotation</span>
                                 <input id="stair-angle" type="range" min="0" max="360" step="5" value="0" oninput="setStairProp('angle', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
-                                <span id="stair-angle-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                                <span id="stair-angle-val" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                             </div>
                         </div>
                         <div id="lighting-associations-2d" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
@@ -217,12 +217,12 @@
                         <div id="inspector-thickness-container" class="flex items-center gap-2 text-xs text-slate-300">
                             <span class="w-20 shrink-0">Épaisseur</span>
                             <input type="range" id="inspector-thickness" min="5" max="50" step="5" value="10" oninput="updateSelectedWallProp('thickness', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
-                            <span id="inspector-thickness-val" class="w-12 shrink-0 text-right text-slate-300">10 cm</span>
+                            <span id="inspector-thickness-val" class="w-12 shrink-0 text-left text-slate-300">10 cm</span>
                         </div>
                         <div id="inspector-height-container" class="flex items-center gap-2 text-xs text-slate-300">
                             <span id="inspector-height-label" class="w-20 shrink-0">Hauteur</span>
                             <input type="range" id="inspector-height" min="200" max="400" step="10" value="250" oninput="updateSelectedWallProp('height', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
-                            <span id="inspector-height-val" class="w-12 shrink-0 text-right text-slate-300">2.50 m</span>
+                            <span id="inspector-height-val" class="w-12 shrink-0 text-left text-slate-300">2.50 m</span>
                         </div>
                     </div>
 
@@ -235,12 +235,12 @@
                         <div class="flex items-center gap-2">
                             <span id="inspector-thickness-label" class="w-24 shrink-0 text-xs text-slate-400">Épaisseur</span>
                             <input type="range" id="input-thickness" min="5" max="50" step="5" value="10" oninput="updateWallSpec('thickness', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
-                            <span id="val-thickness" class="w-14 shrink-0 text-right text-xs text-slate-200">10 cm</span>
+                            <span id="val-thickness" class="w-12 shrink-0 text-left text-xs text-slate-200">10 cm</span>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="w-24 shrink-0 text-xs text-slate-400">Hauteur</span>
                             <input type="range" id="input-height" min="200" max="400" step="10" value="250" oninput="updateWallSpec('height', this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
-                            <span id="val-height" class="w-14 shrink-0 text-right text-xs text-slate-200">2.50 m</span>
+                            <span id="val-height" class="w-12 shrink-0 text-left text-xs text-slate-200">2.50 m</span>
                         </div>
                         </div>
                     </details>
@@ -251,9 +251,9 @@
                             <div class="text-sm font-semibold text-white">Trémie + boîte de dérivation</div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="w-28 shrink-0 text-[11px] text-slate-300">Emprise trémie</span>
+                            <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Emprise trémie</span>
                             <input id="shaft-size" type="range" min="20" max="120" step="5" value="40" oninput="setShaftSize(this.value)" onchange="shaftUndoPending = false" class="flex-1 min-w-0">
-                            <span id="shaft-size-val" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                            <span id="shaft-size-val" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                         </div>
                         <div class="space-y-1">
                             <div class="text-[11px] text-slate-300">Niveaux reliés</div>
@@ -472,19 +472,19 @@
 
                         <div id="stair-inspector-3d" class="hidden space-y-2 pt-1">
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-[11px] text-slate-300">Largeur</span>
+                                <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Largeur</span>
                                 <input id="stair-width-3d" type="range" min="60" max="150" step="5" value="90" oninput="setStairProp('width', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
-                                <span id="stair-width-val-3d" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                                <span id="stair-width-val-3d" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-[11px] text-slate-300">Longueur</span>
+                                <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Longueur</span>
                                 <input id="stair-length-3d" type="range" min="150" max="600" step="10" value="300" oninput="setStairProp('length', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
-                                <span id="stair-length-val-3d" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                                <span id="stair-length-val-3d" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-[11px] text-slate-300">Rotation</span>
+                                <span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">Rotation</span>
                                 <input id="stair-angle-3d" type="range" min="0" max="360" step="5" value="0" oninput="setStairProp('angle', this.value)" onchange="stairUndoPending = false" class="flex-1 min-w-0">
-                                <span id="stair-angle-val-3d" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>
+                                <span id="stair-angle-val-3d" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>
                             </div>
                         </div>
                         <div id="lighting-associations" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5 text-[11px]" aria-live="polite"></div>
@@ -510,17 +510,17 @@
 
                         <div id="position-distance-container" class="space-y-1 pt-1">
                             <div class="flex items-center gap-2">
-                                <span class="w-28 shrink-0 text-xs text-slate-300">Distance au départ</span>
+                                <span class="w-24 shrink-0 text-xs text-slate-300">Distance au départ</span>
                                 <input type="range" id="inspector-distance-input" min="0" max="500" step="1" value="0" oninput="updateSelected3DDistance(this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
-                                <span id="inspector-distance-val" class="w-14 shrink-0 text-right text-xs text-slate-200">0 cm</span>
+                                <span id="inspector-distance-val" class="w-12 shrink-0 text-left text-xs text-slate-200">0 cm</span>
                             </div>
                         </div>
 
                         <div id="height-control-container" class="space-y-1 pt-1 hidden">
                             <div class="flex items-center gap-2">
-                                <span id="height-control-label" class="w-28 shrink-0 text-xs text-slate-300">Hauteur au sol</span>
+                                <span id="height-control-label" class="w-24 shrink-0 text-xs text-slate-300">Hauteur au sol</span>
                                 <input type="range" id="inspector-height-3d-input" min="10" max="380" step="5" value="110" oninput="updateSelected3DHeight(this.value)" class="flex-1 min-w-0 accent-emerald-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
-                                <span id="inspector-height-3d-val" class="w-14 shrink-0 text-right text-xs text-slate-200">1.10 m</span>
+                                <span id="inspector-height-3d-val" class="w-12 shrink-0 text-left text-xs text-slate-200">1.10 m</span>
                             </div>
                         </div>
                         <div id="circuit-select-container" class="space-y-1 pt-1 hidden">

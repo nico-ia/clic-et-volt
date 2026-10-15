@@ -15,25 +15,44 @@ let projectData = {
     stairs: [],
     electrical: [],
     circuits: [
-        { id: 'c_lighting', name: 'Éclairage 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5 },
-        { id: 'c_outlets', name: 'Prises de courant 16A', type: 'outlets', maxPoints: 8, breakerRating: 16, wireSection: 2.5 },
+        { id: 'c_lighting', name: 'Éclairage 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#facc15' },
+        { id: 'c_outlets', name: 'Prises de courant 16A', type: 'outlets', maxPoints: 8, breakerRating: 16, wireSection: 2.5, color: '#f97316' },
         classicOutlet20Circuit(),
-        { id: 'c_kitchen', name: 'Prises 20A plan de travail', type: 'specialized', maxPoints: 6, breakerRating: 20, wireSection: 2.5 },
-        ...dedicatedCircuitDefs()
+        { id: 'c_kitchen', name: 'Prises 20A plan de travail', type: 'specialized', maxPoints: 6, breakerRating: 20, wireSection: 2.5, color: '#ec4899' },
+        ...dedicatedCircuitDefs(),
+        doorbellCircuitDef(),
+        daafCircuitDef(),
+        shutterCircuitDef()
     ],
     annotations: []
 };
 
 // Prises 20 A classiques : 12 points max en 2,5 mm² / 20 A
 function classicOutlet20Circuit() {
-    return { id: 'c_outlets20', name: 'Prises 20A', type: 'specialized', maxPoints: 12, breakerRating: 20, wireSection: 2.5 };
+    return { id: 'c_outlets20', name: 'Prises 20A', type: 'specialized', maxPoints: 12, breakerRating: 20, wireSection: 2.5, color: '#ef4444' };
+}
+
+// Sonnerie : circuit à part, distinct de l'éclairage
+function doorbellCircuitDef() {
+    return { id: 'c_doorbell', name: 'Sonnerie 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#34d399' };
+}
+
+// DAAF : circuit à part, distinct de l'éclairage
+function daafCircuitDef() {
+    return { id: 'c_daaf', name: 'DAAF 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#94a3b8' };
+}
+
+// Volets roulants : moteurs et commandes sur un circuit à part (et non sur les prises)
+function shutterCircuitDef() {
+    // 9e circuit : hors de la palette (sinon il reprendrait le jaune de l'éclairage)
+    return { id: 'c_shutters', name: 'Volets 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#6366f1' };
 }
 
 // Circuits dédiés (une prise par circuit) : 20 A en 2,5 mm² ou 32 A en 6 mm²
 function dedicatedCircuitDefs() {
     return [
-        { id: 'c_dedicated20', name: 'Circuit dédié 20A', type: 'specialized', maxPoints: 1, breakerRating: 20, wireSection: 2.5 },
-        { id: 'c_dedicated32', name: 'Circuit dédié 32A', type: 'specialized', maxPoints: 1, breakerRating: 32, wireSection: 6.0 }
+        { id: 'c_dedicated20', name: 'Circuit dédié 20A', type: 'specialized', maxPoints: 1, breakerRating: 20, wireSection: 2.5, color: '#a78bfa' },
+        { id: 'c_dedicated32', name: 'Circuit dédié 32A', type: 'specialized', maxPoints: 1, breakerRating: 32, wireSection: 6.0, color: '#38bdf8' }
     ];
 }
 
@@ -201,20 +220,20 @@ window.addEventListener('DOMContentLoaded', () => {
 // =====================================================================
 //  SIDEBARS : repli au clic + redimensionnement à la souris
 // =====================================================================
-const SIDEBAR_MIN = 180, SIDEBAR_DEFAULT = 300;
+const SIDEBAR_MIN = 180, SIDEBAR_DEFAULT = 340;
 const SIDEBARS = [];
 
 function sidebarMax() { return Math.max(SIDEBAR_MIN + 40, Math.min(640, Math.round(window.innerWidth * 0.45))); }
 
 function readSidebarPrefs() {
-    try { return JSON.parse(localStorage.getItem('clic_and_volt_sidebars_v3') || '{}') || {}; } catch (e) { return {}; }
+    try { return JSON.parse(localStorage.getItem('clic_and_volt_sidebars_v4') || '{}') || {}; } catch (e) { return {}; }
 }
 
 function saveSidebarPrefs() {
     try {
         const prefs = {};
         SIDEBARS.forEach(sb => { prefs[sb.key] = { width: sb.width, collapsed: sb.collapsed }; });
-        localStorage.setItem('clic_and_volt_sidebars_v3', JSON.stringify(prefs));
+        localStorage.setItem('clic_and_volt_sidebars_v4', JSON.stringify(prefs));
     } catch (e) { /* stockage indisponible : on ignore */ }
 }
 
@@ -1241,9 +1260,9 @@ const CONTROL_LOADS = {
     doorbell_button: ['doorbell_chime'], shutter_control: ['shutter_motor']
 };
 const DEFAULT_CIRCUIT_BY_TYPE = {
-    light_ceiling: 'c_lighting', light_spot: 'c_lighting', smoke_detector: 'c_lighting', wall_light: 'c_lighting',
+    light_ceiling: 'c_lighting', light_spot: 'c_lighting', smoke_detector: 'c_daaf', wall_light: 'c_lighting',
     outlet_16a: 'c_outlets', outlet_20a: 'c_kitchen', outlet_20a_classic: 'c_outlets20', outlet_dedicated_20: 'c_dedicated20', outlet_dedicated_32: 'c_dedicated32',
-    outlet_switched: 'c_outlets', doorbell_chime: 'c_lighting', shutter_motor: 'c_outlets'
+    outlet_switched: 'c_outlets', doorbell_chime: 'c_doorbell', shutter_motor: 'c_shutters', shutter_control: 'c_shutters'
 };
 const CIRCUIT_POINT_LIMITS = { c_lighting: 8, c_outlets: 8, c_outlets20: 12, c_kitchen: 6, c_dedicated20: 1, c_dedicated32: 1 };
 // Appareils proposés pour une prise dédiée (libellé affiché dans l'inspecteur)
@@ -1289,6 +1308,52 @@ function isLightingControl(el) {
 function isControl(el) { return el.type in CONTROL_LOADS; }
 function isControlledLoad(el) { return CONTROLLED_LOAD_TYPES.includes(el.type); }
 function canControl(sw, load) { return isControl(sw) && CONTROL_LOADS[sw.type].includes(load.type); }
+// Commande -> première charge qu'elle pilote (liaison manuelle ou automatique), pour lui donner la couleur de son circuit
+function controlTargetsOf(net) {
+    const byId = new Map(projectData.electrical.map(el => [el.id, el]));
+    const map = new Map();
+    const pick = (sw, loadId) => {
+        const load = byId.get(loadId);
+        if (load && canControl(sw, load) && !map.has(sw.id)) map.set(sw.id, load);
+    };
+    projectData.electrical.filter(isControl).forEach(sw => {
+        (Array.isArray(sw.controlledLightIds) ? sw.controlledLightIds : []).forEach(id => pick(sw, id));
+    });
+    (net && net.controlLinks || []).forEach(link => {
+        const sw = byId.get(link.switchId);
+        if (sw) link.lightIds.forEach(id => pick(sw, id));
+    });
+    return map;
+}
+// Câble de commande vers une prise commandée : couleur du circuit de cette prise (même couleur que la prise et son interrupteur)
+function switchedOutletCableColors(net) {
+    const byId = new Map(projectData.electrical.map(el => [el.id, el]));
+    const map = new Map();
+    (net && net.controlLinks || []).forEach(link => {
+        link.lightIds.forEach(id => {
+            const load = byId.get(id);
+            const c = load && load.type === 'outlet_switched' ? circuitOf(load) : null;
+            if (c) map.set(controlCableLinkId(link.switchId, id), circuitColor(c));
+        });
+    });
+    return map;
+}
+// Couleur d'un appareil = couleur de son circuit, comme pour les prises. Une commande prend celle de la charge
+// qu'elle pilote, ou, sans liaison, celle du circuit par défaut de cette charge. targets : controlTargetsOf, ou null.
+function deviceCircuitOf(el, targets) {
+    if (isControl(el)) {
+        const load = targets && targets.get(el.id);
+        return load ? circuitOf(load) : defaultCircuitOfType(CONTROL_LOADS[el.type][0]);
+    }
+    return isCircuitPoint(el) ? circuitOf(el) : null;
+}
+function deviceColor(el, targets) {
+    const circ = deviceCircuitOf(el, targets);
+    return circ ? circuitColor(circ) : null;
+}
+function defaultCircuitOfType(type) {
+    return projectData.circuits.find(c => c.id === DEFAULT_CIRCUIT_BY_TYPE[type]) || null;
+}
 // Aide affichée quand l'appareil sélectionné n'a encore aucun partenaire compatible
 function compatibleLoadsHint(sw) { return CONTROL_LOADS[sw.type].map(t => ELEMENT_LABELS[t].toLowerCase()).join(', '); }
 function compatibleControlsHint(load) {
@@ -1324,7 +1389,7 @@ function dedicatedApplianceOf(el) { return DEDICATED_APPLIANCE_LABELS[el.applian
 // Clignotement des appareils en collision (plan 2D et vue 3D)
 // Élément sélectionné depuis un circuit : son repère clignote pour qu'on sache qu'il est sélectionné
 function selectionBlinkNeeded() {
-    if (selectedCircuitId && selected3DId) return true;
+    if (selectedCircuitId) return true;
     // porte, fenêtre, trémie ou escalier sélectionné : son cadre clignote comme celui des appareils
     return !!selected3DId && (projectData.openings.some(o => o.id === selected3DId)
         || (projectData.shafts || []).some(s => s.id === selected3DId)
@@ -1447,7 +1512,7 @@ function ensureCircuitAssignment() {
             if (!c) {
                 let n = 2;
                 while (byId(F.id + '_x' + n)) n++;
-                c = { id: F.id + '_x' + n, name: F.name, type: F.type, maxPoints: CIRCUIT_POINT_LIMITS[F.id] !== undefined ? CIRCUIT_POINT_LIMITS[F.id] : F.maxPoints, breakerRating: F.breakerRating, wireSection: F.wireSection, color: familyShadeColor(F, chain.length), auto: true, baseId: F.id };
+                c = { id: F.id + '_x' + n, name: F.name, type: F.type, maxPoints: CIRCUIT_POINT_LIMITS[F.id] !== undefined ? CIRCUIT_POINT_LIMITS[F.id] : F.maxPoints, breakerRating: F.breakerRating, wireSection: F.wireSection, color: freeFamilyShade(F, chain.length, null), auto: true, baseId: F.id };
                 circuits.splice(circuits.indexOf(chain[chain.length - 1]) + 1, 0, c);
                 chain.push(c);
                 count.set(c.id, 0);
@@ -1482,11 +1547,12 @@ function ensureCircuitAssignment() {
         });
         kept.slice(1).forEach((c, i) => {
             c.name = F.name + ' (' + (i + 2) + ')';
-            c.color = familyShadeColor(F, i + 1);
+            c.color = freeFamilyShade(F, i + 1, c);
         });
         assigned.forEach((cid, id) => next.set(id, cid));
     });
 
+    ensureDistinctCircuitColors();
     AUTO_ASSIGN.map = next;
     const notify = AUTO_ASSIGN.sig !== null && created.length;
     AUTO_ASSIGN.sig = sigOf();
@@ -1531,13 +1597,35 @@ function familyShadeColor(root, k) {
 }
 
 // Première couleur libre : palette d'abord, puis teintes réparties (angle d'or) pour qu'aucun circuit ne partage sa couleur
-function nextCircuitColor() {
-    const used = new Set((projectData.circuits || []).map(c => c.color));
+function usedCircuitColors(self) {
+    return new Set((projectData.circuits || []).filter(c => c !== self).map(c => c.color));
+}
+function nextCircuitColor(taken) {
+    const used = taken || usedCircuitColors(null);
     for (let i = 0; i < 400; i++) {
         const col = i < CIRCUIT_PALETTE.length ? CIRCUIT_PALETTE[i] : hslToHex(((i - CIRCUIT_PALETTE.length) * 137.508 + 20) % 360, 68, i % 2 ? 62 : 52);
         if (!used.has(col)) return col;
     }
     return '#94a3b8';
+}
+
+// Circuit de famille supplémentaire : première nuance voisine qui n'est prise par aucun autre circuit (self : circuit concerné, exclu)
+function freeFamilyShade(root, k, self) {
+    const used = usedCircuitColors(self);
+    for (let j = Math.max(1, k); j < Math.max(1, k) + 400; j++) {
+        const col = familyShadeColor(root, j);
+        if (!used.has(col)) return col;
+    }
+    return nextCircuitColor(used);
+}
+
+// Deux circuits ne partagent jamais une couleur : le premier garde la sienne, le suivant en reçoit une libre
+function ensureDistinctCircuitColors() {
+    const seen = new Set();
+    (projectData.circuits || []).forEach(c => {
+        if (!c.color || seen.has(c.color)) c.color = nextCircuitColor(seen);
+        seen.add(c.color);
+    });
 }
 
 function circuitColor(c) {
@@ -1588,7 +1676,7 @@ function ensureProjectDefaults() {
         ];
     }
     // circuits dédiés ajoutés aux fichiers enregistrés avant leur création
-    [classicOutlet20Circuit(), ...dedicatedCircuitDefs()].forEach(d => { if (!projectData.circuits.some(c => c.id === d.id)) projectData.circuits.push(d); });
+    [classicOutlet20Circuit(), doorbellCircuitDef(), daafCircuitDef(), shutterCircuitDef(), ...dedicatedCircuitDefs()].forEach(d => { if (!projectData.circuits.some(c => c.id === d.id)) projectData.circuits.push(d); });
     projectData.circuits.forEach(c => {
         if (c.id === 'c_kitchen') c.name = 'Prises 20A plan de travail';
         if (c.id === 'c_lighting') {
@@ -1602,9 +1690,13 @@ function ensureProjectDefaults() {
             el.type = 'outlet_16a';
             if (el.circuitId === 'c_lighting') delete el.circuitId;
         }
+        // sonneries et DAAF enregistrés sur l'éclairage : ils passent sur leur propre circuit
+        if (el.type === 'doorbell_chime' && el.circuitId === 'c_lighting') delete el.circuitId;
+        if (el.type === 'smoke_detector' && el.circuitId === 'c_lighting') delete el.circuitId;
+        // moteurs et commandes de volet enregistrés sur les prises : ils passent sur le circuit des volets
+        if ((el.type === 'shutter_motor' || el.type === 'shutter_control') && el.circuitId === 'c_outlets') delete el.circuitId;
     });
-    projectData.circuits.forEach(c => { if (!c.color) c.color = nextCircuitColor(); });
-    delete projectData.wires;
+    ensureDistinctCircuitColors();
     // répartition recalculée dès le chargement : pas d'affichage « tout sur le premier circuit » avant le premier calcul
     ensureCircuitAssignment();
 }
@@ -1657,6 +1749,7 @@ function collidingElementIds() {
     computeShaftCollisions().forEach(c => { ids.add(c.shaft.id); ids.add(c.other.id); });
     computeDeviceOverlaps().forEach(c => { ids.add(c.a.id); ids.add(c.b.id); });
     computeStairCollisions().forEach(c => { ids.add(c.stair.id); ids.add(c.other.id); });
+    computeOutletGangs().overflow.forEach(id => ids.add(id));
     return ids;
 }
 
@@ -1900,6 +1993,10 @@ function snapOutletDistance(type, wallId, dist, side, height, excludeId) {
 
 function computeOutletGangs() {
     const sizeOf = new Map();
+    // prises en trop : une 5e prise collée à un groupe déjà complet (4 max)
+    const overflow = new Set();
+    // membres de chaque groupe (ids), indexés par l'id de chaque prise du groupe
+    const groupOf = new Map();
     const tally = {};
     GANGABLE_OUTLETS.forEach(type => { tally[type] = { 1: 0, 2: 0, 3: 0, 4: 0 }; });
     const buckets = new Map();
@@ -1917,18 +2014,29 @@ function computeOutletGangs() {
         let cluster = [];
         const close = () => {
             if (!cluster.length) return;
-            cluster.forEach(it => sizeOf.set(it.el.id, cluster.length));
-            tally[cluster[0].el.type][cluster.length]++;
+            const n = cluster.length;
+            const ids = cluster.map(it => it.el.id);
+            cluster.forEach(it => {
+                sizeOf.set(it.el.id, n);
+                groupOf.set(it.el.id, ids);
+            });
+            tally[cluster[0].el.type][n]++;
             cluster = [];
         };
         items.forEach(it => {
             const last = cluster[cluster.length - 1];
-            if (last && it.dist - last.dist <= GANG_MAX_GAP_CM && Math.abs(it.h - last.h) <= 5 && cluster.length < 4) cluster.push(it);
-            else { close(); cluster.push(it); }
+            if (last && it.dist - last.dist <= GANG_MAX_GAP_CM && Math.abs(it.h - last.h) <= 5) {
+                if (cluster.length < 4) { cluster.push(it); return; }
+                // groupe complet : la prise en trop et les quatre voisines sont signalées
+                overflow.add(it.el.id);
+                cluster.forEach(c => overflow.add(c.el.id));
+            }
+            close();
+            cluster.push(it);
         });
         close();
     });
-    return { sizeOf, tally };
+    return { sizeOf, tally, overflow, groupOf };
 }
 
 // Réseau de câblage de chaque niveau (le métré couvre tout le projet, pas seulement le niveau affiché)
@@ -1988,6 +2096,7 @@ function computeCircuitReport() {
         else if (shaftFeedFor(activeLevelId).reason) addAlert('Cet étage n\'est relié au tableau par aucune trémie : ses appareils ne sont pas alimentés.', { tab: 'ouvertures', hint: 'Placez une trémie qui relie cet étage au tableau de l’autre niveau, depuis l’onglet Ouvertures.' });
     }
     if (panels.length > 1) addAlert('Plusieurs tableaux : seul le premier est alimenté.', { tab: 'appareillage', hint: 'Gardez un seul tableau : supprimez les autres depuis l’onglet Appareillages.' });
+    if (computeOutletGangs().overflow.size) addAlert('Plus de 4 prises groupées : une quadruple au maximum, les prises en trop sont en rouge.', { tab: 'appareillage', hint: 'Éloignez la prise en trop d’au moins 15 cm du groupe, ou retirez-la depuis l’onglet Appareillages.' });
     // le réseau câblé est calculé pour l'étage affiché : ses alertes portent son nom
     if (net.unrouted > 0) {
         const target = { tab: 'appareillage', hint: projectData.roomCrossing
@@ -2005,7 +2114,15 @@ function computeCircuitReport() {
     const countType = t => projectData.electrical.filter(el => el.type === t).length;
     if (nSw > 0 && nLi + nOutSw === 0) addAlert('Interrupteur(s) sans luminaire à commander.', { tab: 'appareillage', hint: 'Ajoutez un plafonnier, une applique ou une prise commandée depuis l’onglet Appareillages.' });
     if (nLi > 0 && nSw === 0) addAlert('Luminaire(s) sans interrupteur de commande.', { tab: 'appareillage', hint: 'Ajoutez un interrupteur depuis l’onglet Appareillages.' });
-    if (nOutSw > 0 && nSw === 0) addAlert('Prise commandée sans interrupteur de commande.', { tab: 'appareillage', hint: 'Ajoutez un interrupteur depuis l’onglet Appareillages.' });
+    // chaque prise commandée doit être reliée à une commande : liaison manuelle (tout le projet) ou automatique (étage affiché)
+    electricalOn().filter(el => el.type === 'outlet_switched').forEach(el => {
+        const linkedByHand = projectData.electrical.some(sw => isControl(sw) && canControl(sw, el) &&
+            Array.isArray(sw.controlledLightIds) && sw.controlledLightIds.includes(el.id));
+        const linkedAuto = (net.controlLinks || []).some(link => link.lightIds.includes(el.id));
+        if (!linkedByHand && !linkedAuto) {
+            addAlert(levelPrefix(el.levelId) + electricalDisplayName(el) + ' non reliée à un interrupteur de commande.', { tab: 'appareillage', elId: el.id, hint: 'Ajoutez un interrupteur, ou reliez manuellement la prise à une commande depuis l’onglet Appareillages.' });
+        }
+    });
     if (countType('doorbell_button') > 0 && countType('doorbell_chime') === 0) addAlert('Bouton de sonnette sans sonnerie.', { tab: 'appareillage', hint: 'Ajoutez une sonnerie depuis l’onglet Appareillages.' });
     if (countType('doorbell_chime') > 0 && countType('doorbell_button') === 0) addAlert('Sonnerie sans bouton de sonnette.', { tab: 'appareillage', hint: 'Ajoutez un bouton de sonnette depuis l’onglet Appareillages.' });
     if (countType('shutter_control') > 0 && countType('shutter_motor') === 0) addAlert('Commande de volet sans moteur.', { tab: 'appareillage', hint: 'Ajoutez un moteur de volet roulant depuis l’onglet Appareillages.' });
@@ -3343,9 +3460,9 @@ function initOpeningControls() {
         box.innerHTML = '<div data-op-title class="text-xs font-semibold text-slate-200"></div>' +
             OPENING_ROWS.map(([prop, label]) =>
                 '<div data-op-row="' + prop + '" class="flex items-center gap-2">' +
-                '<span class="w-28 shrink-0 text-[11px] text-slate-300">' + label + '</span>' +
+                '<span class="w-[6.5rem] shrink-0 text-[11px] text-slate-300">' + label + '</span>' +
                 '<input type="range" step="1" data-op-range="' + prop + '" oninput="setSelectedOpeningProp(\'' + prop + '\', this.value)" class="flex-1 min-w-0 bg-slate-800 rounded-lg h-1.5 cursor-pointer">' +
-                '<span data-op-val="' + prop + '" class="w-14 shrink-0 text-right text-[11px] text-slate-200"></span>' +
+                '<span data-op-val="' + prop + '" class="w-12 shrink-0 text-left text-[11px] text-slate-200"></span>' +
                 '</div>').join('');
     });
 }
@@ -3438,8 +3555,8 @@ function setSelectedOpeningProp(prop, raw) {
 
 window.addEventListener('DOMContentLoaded', initOpeningControls);
 
-// Molette « − / + » à côté de chaque curseur : même effet qu'un glissement (input pendant le réglage, change au relâchement, donc un seul pas d'annulation)
-const STEPPER_BTN = 'shrink-0 w-5 h-5 flex items-center justify-center rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs leading-none select-none';
+// Flèches ▲ ▼ à droite de chaque curseur : même effet qu'un glissement (input pendant le réglage, change au relâchement, donc un seul pas d'annulation)
+const STEPPER_BTN = 'shrink-0 w-4 h-3 flex items-center justify-center rounded-sm bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-[8px] leading-none select-none';
 function stepRange(input, dir) {
     if (dir > 0) input.stepUp(); else input.stepDown();
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -3483,10 +3600,13 @@ function enhanceRangeInput(input) {
         });
         return b;
     };
-    const minus = makeBtn('−', -1, 'Diminuer');
-    const plus = makeBtn('+', 1, 'Augmenter');
+    const minus = makeBtn('▼', -1, 'Diminuer');
+    const plus = makeBtn('▲', 1, 'Augmenter');
+    const arrows = document.createElement('div');
+    arrows.className = 'flex flex-col gap-0.5 shrink-0';
+    arrows.append(plus, minus);
     input.parentNode.insertBefore(wrap, input);
-    wrap.append(minus, input, plus);
+    wrap.append(input, arrows);
 }
 function enhanceRangeInputs(root) {
     if (root.matches && root.matches('input[type="range"]')) enhanceRangeInput(root);
@@ -3881,6 +4001,167 @@ async function savePlanPng(mode) {
     }
 }
 
+// Familles de la légende du plan imprimé (l'ordre suit celui du Métré)
+const PRINT_LEGEND_GROUPS = [
+    ['Prises', t => t.startsWith('outlet_')],
+    ['Interrupteurs et commandes', t => t.startsWith('switch_') || ['motion_timer', 'doorbell_button', 'shutter_control'].includes(t)],
+    ['Éclairage', t => ['light_ceiling', 'light_spot', 'wall_light'].includes(t)],
+    ['Autres appareils', t => ['smoke_detector', 'doorbell_chime', 'shutter_motor'].includes(t)],
+    ['Tableaux', t => ['panel', 'subpanel'].includes(t)]
+];
+
+// Seules les entrées présentes sur le niveau affiché sont listées, avec leur nombre
+function buildPrintLegend() {
+    const rep = computeCircuitReport();
+    const rank = t => { const i = BOM_DEVICE_ORDER.indexOf(t); return i < 0 ? 99 : i; };
+    const lines = rep.countLines.slice().sort((x, y) => rank(x.type) - rank(y.type) || (x.gang || 0) - (y.gang || 0));
+    const groups = PRINT_LEGEND_GROUPS.map(([title, test]) => ({
+        title,
+        items: lines.filter(l => test(l.type)).map(l => ({ label: l.label, count: l.count, type: l.type, gang: l.gang || 1 }))
+    }));
+    const doors = openingsOn().filter(o => o.type === 'door_single').length;
+    const wins = openingsOn().filter(o => o.type === 'window_std').length;
+    const shafts = shaftsOn().length;
+    groups.push({
+        title: 'Ouvertures et trémie',
+        items: [
+            doors && { label: 'Porte simple', count: doors, kind: 'door', gang: 1 },
+            wins && { label: 'Fenêtre', count: wins, kind: 'window', gang: 1 },
+            shafts && { label: 'Trémie', count: shafts, kind: 'shaft', gang: 1 }
+        ].filter(Boolean)
+    });
+    return groups.filter(g => g.items.length);
+}
+
+// Glyphes des ouvertures et de la trémie (même couleurs que le plan)
+function drawLegendOpening(ctx, kind, cx, cy, fs) {
+    const w = fs * 1.2, th = fs * 0.4;
+    const x0 = cx - w / 2;
+    ctx.save();
+    ctx.lineWidth = Math.max(1.5, fs * 0.1);
+    if (kind === 'shaft') {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.fillRect(cx - fs * 0.5, cy - fs * 0.45, fs, fs * 0.9);
+        ctx.strokeRect(cx - fs * 0.5, cy - fs * 0.45, fs, fs * 0.9);
+    } else {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(x0, cy - th / 2, w, th);
+        ctx.strokeStyle = kind === 'door' ? '#b07a4a' : '#3b82f6';
+        if (kind === 'door') {                                  // vantail ouvert, pivot à gauche
+            ctx.beginPath();
+            ctx.moveTo(x0 + w, cy);
+            ctx.arc(x0, cy, w, 0, -Math.PI / 2, true);
+            ctx.stroke();
+        } else {                                                // fenêtre : double trait
+            ctx.beginPath();
+            ctx.moveTo(x0, cy);
+            ctx.lineTo(x0 + w, cy);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+// Symbole réel de l'appli (drawElementSymbol2D), dessiné à l'échelle de la légende.
+// L'élément fictif n'a ni mur ni circuit : il est dessiné à l'origine, face vers la droite, puis pivoté
+// pour que le mur soit en bas et la face avant vers le haut, comme sur la légende de référence.
+// Les copies d'un groupe se suivent le long du mur (axe x).
+function drawLegendDevice(ctx, type, n, cx, cy, fs) {
+    const s = fs * (type === 'panel' || type === 'subpanel' ? 0.04 : 0.085);
+    // pas du groupe = pas réel du plan (13 cm, une unité de dessin = 1 cm)
+    const step = 13 * s;
+    const x0 = cx;
+    const el = { id: '__legend__', type, x: 0, y: 0, z: 0, wallId: null, side: 1, legendOnly: true };
+    const prevCtx = ctx2D, prevGangs = _gangSizes2D;
+    ctx2D = ctx;
+    _gangSizes2D = new Map([[el.id, n]]);
+    try {
+        for (let i = 0; i < n; i++) {
+            ctx.save();
+            ctx.translate(x0 + i * step, cy);
+            ctx.rotate(-Math.PI / 2);
+            ctx.scale(s, s);
+            ctx.translate(-3, 0);
+            drawElementSymbol2D(el);
+            ctx.restore();
+        }
+    } finally {
+        ctx2D = prevCtx;
+        _gangSizes2D = prevGangs;
+    }
+    // groupe de prises : un seul liseré autour, comme sur le plan (rayon d'anneau = 3.4 + 4)
+    if (n > 1 && type.startsWith('outlet_')) {
+        const R = 7.4 * s;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x0 - R, cy - R, (n - 1) * step + 2 * R, 2 * R, R);
+        ctx.lineWidth = 2.2 * s;
+        ctx.strokeStyle = deviceColor({ type }, null) || EL_COLORS[type] || '#94a3b8';
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// Un symbole par prise d'un groupe (double = 2 symboles côte à côte)
+function drawLegendSymbol(ctx, item, cx, cy, fs) {
+    if (item.kind) drawLegendOpening(ctx, item.kind, cx, cy, fs);
+    else drawLegendDevice(ctx, item.type, item.gang || 1, cx, cy, fs);
+}
+
+
+// Met la légende en page (réduit la police si une ligne déborde) ; draw(ctx, x, y) la dessine
+function measurePrintLegend(ctx, legend, width, cols, baseFs) {
+    const colGap = Math.round(baseFs * 1.2);
+    const colW = (width - (cols - 1) * colGap) / cols;
+    let need = 0;
+    ctx.font = 'bold ' + baseFs + 'px Arial, sans-serif';
+    legend.forEach(g => {
+        need = Math.max(need, ctx.measureText(g.title).width);
+        g.items.forEach(it => {
+            ctx.font = baseFs + 'px Arial, sans-serif';
+            need = Math.max(need, baseFs * 4 + ctx.measureText(it.label).width + baseFs * 1.5 + ctx.measureText(String(it.count)).width);
+        });
+    });
+    const fs = need > colW ? Math.max(10, Math.floor(baseFs * colW / need)) : baseFs;
+    const lineH = Math.round(fs * 1.7), headH = Math.round(fs * 2), blockGap = Math.round(fs * 1.2);
+    const colH = new Array(cols).fill(0);
+    const placed = legend.map(g => {
+        const c = colH.indexOf(Math.min(...colH));
+        const p = { g, x: c * (colW + colGap), y: colH[c] };
+        colH[c] += headH + g.items.length * lineH + blockGap;
+        return p;
+    });
+    return {
+        height: Math.max(0, Math.max(...colH) - blockGap),
+        draw(target, x0, y0) {
+            target.save();
+            target.fillStyle = '#0f172a';
+            target.textBaseline = 'middle';
+            placed.forEach(({ g, x, y }) => {
+                const gx = x0 + x, gy = y0 + y;
+                target.font = 'bold ' + fs + 'px Arial, sans-serif';
+                target.textAlign = 'left';
+                target.fillText(g.title, gx, gy + headH / 2);
+                g.items.forEach((it, i) => {
+                    const cy = gy + headH + i * lineH + lineH / 2;
+                    drawLegendSymbol(target, it, gx + fs * 1.6, cy, fs);
+                    target.fillStyle = '#0f172a';
+                    target.font = fs + 'px Arial, sans-serif';
+                    target.textAlign = 'left';
+                    // un groupe de prises s'étale sur plus de place : le libellé est décalé d'autant
+                    const nGang = it.kind ? 1 : (it.gang || 1);
+                    target.fillText(it.label, gx + Math.max(fs * 4, fs * (1.6 + (nGang - 1) * 1.1 + 1.1)), cy);
+                    target.font = 'bold ' + fs + 'px Arial, sans-serif';
+                    target.textAlign = 'right';
+                    target.fillText(String(it.count), gx + colW, cy);
+                });
+            });
+            target.restore();
+        }
+    };
+}
+
 function printPlan(mode) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -3890,12 +4171,14 @@ function printPlan(mode) {
     try {
         const imageUrl = capturePlanImage(mode);
         if (!imageUrl) throw new Error('La vue à imprimer est vide.');
+        // la légende n'accompagne que le plan 2D (la 3D n'a pas d'appareillage à lire)
+        const legend = mode === '2d' ? buildPrintLegend() : null;
         const title = mode === '3d' ? 'Plan 3D' : 'Plan 2D';
         printWindow.document.open();
         printWindow.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>' + title +
             ' — Clic & Volt</title><style id="print-style">@page{size:landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}</style></head><body><div class="toolbar"><h1>Clic & Volt — ' +
-            title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select>' + '<span style="font-weight:600">Recadrage (%) :</span> <label>Haut <input id="crop-t" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Bas <input id="crop-b" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Gauche <input id="crop-l" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Droite <input id="crop-r" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <button id="crop-reset" type="button">Réinitialiser le cadrage</button>' + '<button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><div id="stage"><img class="plan" id="plan" alt="' +
-            title + '"><div id="crop-box"><i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i></div></div><img id="plan-print" alt="' + title + '">' +
+            title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select>' + '<span style="font-weight:600">Recadrage (%) :</span> <label>Haut <input id="crop-t" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Bas <input id="crop-b" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Gauche <input id="crop-l" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Droite <input id="crop-r" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <button id="crop-reset" type="button">Réinitialiser le cadrage</button>' + '<button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><div id="preview-row"><div id="stage"><img class="plan" id="plan" alt="' +
+            title + '"><div id="crop-box"><i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i></div></div><div id="plan-sheet"><img id="plan-preview" alt="' + title + ' avec légende"></div></div><img id="plan-print" alt="' + title + '">' +
             '<style>' +
             '#stage{position:relative;margin:0 auto;background:#fff;overflow:hidden;user-select:none;box-shadow:0 0 0 1px #94a3b8,0 4px 12px rgba(0,0,0,.2);aspect-ratio:297/210;width:min(100%,calc((100vh - 38mm) * 297 / 210));height:auto}' +
             '#stage.portrait{aspect-ratio:210/297;width:min(100%,calc((100vh - 38mm) * 210 / 297))}#stage .plan{height:100%;width:100%}' +
@@ -3905,8 +4188,15 @@ function printPlan(mode) {
             '#crop-box i[data-h=ne]{right:-6px;top:-6px;cursor:nesw-resize}#crop-box i[data-h=sw]{left:-6px;bottom:-6px;cursor:nesw-resize}' +
             '#crop-box i[data-h=n]{left:50%;top:-6px;margin-left:-6px;cursor:ns-resize}#crop-box i[data-h=s]{left:50%;bottom:-6px;margin-left:-6px;cursor:ns-resize}' +
             '#crop-box i[data-h=e]{right:-6px;top:50%;margin-top:-6px;cursor:ew-resize}#crop-box i[data-h=w]{left:-6px;top:50%;margin-top:-6px;cursor:ew-resize}' +
+            '#preview-row{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:flex-start}' +
+            '#plan-sheet{display:none;position:relative;margin:0 auto;background:#fff;box-shadow:0 0 0 1px #94a3b8,0 4px 12px rgba(0,0,0,.2);aspect-ratio:297/210;width:min(100%,calc((100vh - 38mm) * 297 / 210));height:auto}' +
+            '#plan-sheet.portrait{aspect-ratio:210/297;width:min(100%,calc((100vh - 38mm) * 210 / 297))}' +
+            '#preview-row.legend #plan-sheet{display:block}' +
+            // zone imprimable : marges de 10 mm (pourcentages de la largeur pour left/right, de la hauteur pour top/bottom)
+            '#plan-preview{position:absolute;top:4.762%;left:3.367%;width:93.266%;height:90.476%;object-fit:contain}' +
+            '#plan-sheet.portrait #plan-preview{top:3.367%;left:4.762%;width:90.476%;height:93.266%}' +
             '#plan-print{display:none;width:100%;height:calc(100vh - 38mm);object-fit:contain}' +
-            '@media print{#stage{display:none!important}#plan-print{display:block!important;height:calc(100vh - 20mm)}}' +
+            '@media print{#preview-row{display:none!important}#plan-print{display:block!important;height:calc(100vh - 20mm)}}' +
             '</style></body></html>');
         printWindow.document.close();
         const image = printWindow.document.getElementById('plan');
@@ -3922,6 +4212,7 @@ function printPlan(mode) {
         orientation.addEventListener('change', () => {
             // La feuille affichée suit l'orientation choisie (A4 portrait ou paysage)
             printWindow.document.getElementById('stage').classList.toggle('portrait', orientation.value === 'portrait');
+            printWindow.document.getElementById('plan-sheet').classList.toggle('portrait', orientation.value === 'portrait');
             // Changer d'orientation remet le cadrage à zéro
             printWindow.document.getElementById('crop-reset').click();
             printWindow.document.getElementById('print-style').textContent =
@@ -3969,6 +4260,7 @@ function printPlan(mode) {
             crop.t = clamp(t, 0, MAX_CROP);
             crop.b = clamp(b, 0, Math.min(MAX_CROP, 1 - MIN_SIZE - crop.t));
             drawBox();
+            refreshPreview();
         };
         cropInputs.forEach(input => input.addEventListener('change', () => {
             const v = i => (parseFloat(cropInputs[i].value) || 0) / 100;
@@ -4002,24 +4294,53 @@ function printPlan(mode) {
             crop.l = L; crop.r = 1 - Rt; crop.t = T; crop.b = 1 - B;
             drawBox();
         };
-        const endDrag = () => { drag = null; };
+        const endDrag = () => { drag = null; refreshPreview(); };
         box.addEventListener('pointerdown', e => startDrag(e, 'move'));
         box.addEventListener('pointermove', onMove);
         box.addEventListener('pointerup', endDrag);
         box.addEventListener('pointercancel', endDrag);
         box.querySelectorAll('i').forEach(h => h.addEventListener('pointerdown', e => startDrag(e, h.dataset.h)));
         window.addEventListener('resize', drawBox);
-        image.addEventListener('load', drawBox);
+        image.addEventListener('load', () => { drawBox(); refreshPreview(); });
         // Découpe la zone choisie : ce sont ces pixels qui partent à l'impression
         const printCropped = () => {
             const nw = image.naturalWidth, nh = image.naturalHeight;
             const sx = Math.round(nw * crop.l), sy = Math.round(nh * crop.t);
             const cw = Math.round(nw * (1 - crop.l - crop.r)), ch = Math.round(nh * (1 - crop.t - crop.b));
             const out = doc.createElement('canvas');
-            out.width = cw;
-            out.height = ch;
-            out.getContext('2d').drawImage(image, sx, sy, cw, ch, 0, 0, cw, ch);
+            const landscape = doc.getElementById('orientation').value !== 'portrait';
+            let W = cw, H = ch, layout = null, gap = 0;
+            if (legend) {
+                const baseFs = Math.max(16, Math.round(cw / 55));
+                gap = Math.round(baseFs * 1.5);
+                const measureCtx = doc.createElement('canvas').getContext('2d');
+                if (landscape) {
+                    // colonne à droite en paysage
+                    const colW = Math.round(cw * 0.26);
+                    layout = measurePrintLegend(measureCtx, legend, colW, 1, baseFs);
+                    W = cw + gap + colW;
+                    H = Math.max(ch, layout.height);
+                } else {
+                    // bandeau en bas en portrait, sur 3 colonnes
+                    layout = measurePrintLegend(measureCtx, legend, cw, 3, baseFs);
+                    H = ch + gap + layout.height;
+                }
+            }
+            out.width = W;
+            out.height = H;
+            const ctx = out.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, W, H);
+            ctx.drawImage(image, sx, sy, cw, ch, 0, 0, cw, ch);
+            if (layout) layout.draw(ctx, landscape ? cw + gap : 0, landscape ? 0 : ch + gap);
             return out.toDataURL('image/png');
+        };
+        // Aperçu : l'image composée (plan recadré + légende), mise à jour à chaque recadrage
+        const previewRow = doc.getElementById('preview-row');
+        const planPreview = doc.getElementById('plan-preview');
+        previewRow.classList.toggle('legend', !!legend);
+        const refreshPreview = () => {
+            if (legend && image.naturalWidth) planPreview.src = printCropped();
         };
         image.src = imageUrl;
         showNotification('Choisissez l’orientation dans la fenêtre ouverte, puis imprimez ou enregistrez en PDF.', 'info');

@@ -113,9 +113,9 @@ body:not(.theme-light) #el-inspector-2d .text-slate-300, body:not(.theme-light) 
 #wall-inspector .text-emerald-400, #inspector-3d .text-emerald-400 { font-weight: 500 !important; }
 /* Lignes de réglage : une seule ligne, valeur à droite sans retour */
 #wall-inspector [id$="-container"].flex > span:first-child { width: 4.5rem !important; }
-#wall-inspector [id$="-container"].flex > span:last-child { width: auto !important; min-width: 3.25rem; white-space: nowrap; text-align: right; }
+#wall-inspector [id$="-container"].flex > span:last-child { width: auto !important; min-width: 3.25rem; white-space: nowrap; text-align: left; }
 #inspector-3d .flex.items-center.gap-2 > span:first-child,
-#shaft-inspector .flex.items-center.gap-2 > span:first-child { width: 7rem; flex-shrink: 0; }
+#shaft-inspector .flex.items-center.gap-2 > span:first-child { width: 6.5rem; flex-shrink: 0; }
 body:not(.theme-light) #inspector-3d [data-op-row] > div:first-child,
 body:not(.theme-light) #shared-inspector-slot-3d [data-op-row] > div:first-child { font-size: 11px !important; color: #cbd5e1; }
 body.sb-dragging { cursor: col-resize !important; user-select: none; }
