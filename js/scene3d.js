@@ -183,8 +183,7 @@ function updatePlaceGhost3D(e) {
                 const wallLen = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
                 const distToPt = Math.hypot(hitPt.x - (wall.x1 - cx), hitPt.z - (wall.y1 - cy));
                 const distanceCm = Math.round(Math.max(10, Math.min(wallLen - 10, distToPt)));
-                const localHit = m.worldToLocal(hitPt.clone());
-                const side = localHit.x >= 0 ? 1 : -1;
+                const side = wallSideOf(hitPt.x, hitPt.z, wall.x1 - cx, wall.y1 - cy, wall.x2 - cx, wall.y2 - cy);
                 ghost = { id: '__ghost', levelId: activeLevelId, type, wallId: wall.id, distanceFromStart: distanceCm, side,
                     height: defaultHeightFor(type) };
                 if (type === 'shaft') { ghost.size = 40; ghost.levelIds = [activeLevelId]; }
@@ -319,6 +318,10 @@ const CABLE_CFG = {
 // câble de liaison tableau → sous-tableau : identifiant réservé (hors circuits) et couleur de mise en évidence
 const FEEDER_CID = '_feeder';
 const FEEDER_COLOR = '#e879f9';
+// opacité de la gaine mise en surbrillance : assez transparente pour laisser voir les fils
+const CONDUIT_FOCUS_OPACITY = 0.45;
+// rayon d'une âme de fil (unités monde) ; les fils occupent toute la section utile de la gaine
+const CORE_R = 0.24;
 // le câble de liaison est listé comme un circuit (sans appareils) : le pseudo-circuit permet de le sélectionner
 const FEEDER_CIRCUIT = { id: FEEDER_CID, name: 'Câble entre tableaux', type: 'feeder', color: FEEDER_COLOR };
 function circuitById(id) {
@@ -354,6 +357,63 @@ function disposeSceneObject(o) {
         if (c.geometry && !isShared(c.geometry)) c.geometry.dispose();
         if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => { if (!isShared(m)) m.dispose(); });
     });
+}
+
+// Côté d'un mur (+1 / -1) où se trouve un point, mesuré sur la normale du tracé (même convention que l'ancien mesh pivoté)
+function wallSideOf(hitX, hitZ, wx1, wz1, wx2, wz2) {
+    const dx = wx2 - wx1, dz = wz2 - wz1;
+    return ((hitX - (wx1 + wx2) / 2) * dz - (hitZ - (wz1 + wz2) / 2) * dx) >= 0 ? 1 : -1;
+}
+
+// Contour en plan d'un mur (4 coins). À une jonction avec un seul autre mur, le coin est une coupe à 45° :
+// les deux murs se rejoignent sur leur épaisseur au lieu de se chevaucher par leur axe.
+// Extrémité libre, jonction multiple ou murs alignés : coupe perpendiculaire.
+function mitredWallOutline(w, levelWalls, cx, cy) {
+    const A = { x: w.x1 - cx, z: w.y1 - cy };
+    const B = { x: w.x2 - cx, z: w.y2 - cy };
+    const h = (w.thickness || 10) / 2;
+    const L = Math.hypot(B.x - A.x, B.z - A.z) || 1;
+    const u = { x: (B.x - A.x) / L, z: (B.z - A.z) / L };
+    const n = { x: u.z, z: -u.x };
+    const flat = (J, side) => ({ x: J.x + side * h * n.x, z: J.z + side * h * n.z });
+    const ends = o => [{ x: o.x1 - cx, z: o.y1 - cy }, { x: o.x2 - cx, z: o.y2 - cy }];
+    const near = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 1;
+    const unit = v => { const l = Math.hypot(v.x, v.z) || 1; return { x: v.x / l, z: v.z / l }; };
+    const cornerAt = (J, uBody, side) => {
+        const touching = levelWalls.filter(o => o.id !== w.id && ends(o).some(p => near(p, J)));
+        if (touching.length !== 1) return flat(J, side);
+        const other = ends(touching[0]).find(p => !near(p, J));
+        if (!other) return flat(J, side);
+        const uo = unit({ x: other.x - J.x, z: other.z - J.z });
+        const no = { x: uo.z, z: -uo.x };
+        const ho = (touching[0].thickness || 10) / 2;
+        // s1 : côté de ce mur où se trouve l'autre mur ; s2 : côté de l'autre mur où se trouve ce mur
+        const s1 = Math.sign(n.x * uo.x + n.z * uo.z);
+        const s2 = Math.sign(no.x * uBody.x + no.z * uBody.z);
+        if (!s1 || !s2) return flat(J, side);
+        const tau = side === s1 ? s2 : -s2;
+        const det = n.x * no.z - n.z * no.x;
+        if (Math.abs(det) < 1e-6) return flat(J, side);
+        const ey = side * h, fy = tau * ho;
+        const P = { x: J.x + (ey * no.z - n.z * fy) / det, z: J.z + (n.x * fy - no.x * ey) / det };
+        // angle très aigu : la coupe s'allongerait démesurément
+        if (Math.hypot(P.x - J.x, P.z - J.z) > 6 * Math.max(h, ho)) return flat(J, side);
+        return P;
+    };
+    return [
+        cornerAt(A, u, 1),
+        cornerAt(B, { x: -u.x, z: -u.z }, 1),
+        cornerAt(B, { x: -u.x, z: -u.z }, -1),
+        cornerAt(A, u, -1)
+    ];
+}
+
+// Volume d'un mur : extrusion du contour en plan sur la hauteur du mur (repère de la scène, sans transformation de mesh)
+function wallSolidGeometry(outline, height) {
+    const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, -p.z)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);
+    return geo;
 }
 
 // Emprise d'une ouverture sur son mur : position, demi-largeur, hauteurs d'allège et de linteau
@@ -1132,8 +1192,18 @@ function buildCableNetwork(passage) {
     };
 
     // 10. Organisation des liaisons : appareils → unités à alimenter
-    const std = ['red', 'blue', 'green-yellow'];
-    const ret = ['orange', 'blue', 'green-yellow'];
+    // Couleurs des conducteurs (NF C 15-100) : phase rouge, neutre bleu clair, terre vert/jaune ; retour de lampe orange,
+    // commande de bouton poussoir / sonnette noire, commande de volet grise
+    // Schéma va-et-vient : l'interrupteur ne reçoit que la phase et ne renvoie qu'un fil de commande ;
+    // neutre et terre vont directement du tableau à la charge, sans passer par l'interrupteur
+    const std = ['red', 'neutral', 'green-yellow'];
+    const ret = ['orange'];
+    const commandWires = sw => {
+        if (sw.type === 'switch_pushbutton' || sw.type === 'doorbell_button') return ['black'];
+        if (sw.type === 'shutter_control') return ['grey'];
+        return ret;
+    };
+    const supplyWires = ['neutral', 'green-yellow'];
     const alive = wired.filter(el => R.get(el.id));
     const switches = alive.filter(isControl);
     const lights = alive.filter(isControlledLoad);
@@ -1193,10 +1263,10 @@ function buildCableNetwork(passage) {
         const fallbackId = sw.type === 'shutter_control' ? DEFAULT_CIRCUIT_BY_TYPE.shutter_motor : DEFAULT_CIRCUIT_BY_TYPE.light_ceiling;
         const c = ls.length ? circuitOf(ls[0]) : projectData.circuits.find(x => x.id === fallbackId);
         const cid = c ? c.id : null;
-        units.push({ cid, entry: sw, members: ls.filter(l => circuitIdOf(l) === cid), wires: std });
+        units.push({ cid, entry: sw, members: ls.filter(l => circuitIdOf(l) === cid), wires: ['red'], memberWires: commandWires(sw) });
         ls.filter(l => circuitIdOf(l) !== cid).forEach(l => {
             units.push({ cid: circuitIdOf(l), entry: l, members: [], wires: std });
-            crossControl.push({ sw, light: l, cid });
+            crossControl.push({ sw, light: l, cid, wires: commandWires(sw) });
         });
     });
     lights.filter(l => !taken.has(l.id)).forEach(l => {
@@ -1320,8 +1390,9 @@ function buildCableNetwork(passage) {
             countServed(entryNode.boxId);
             if (cid) result.circuitRuns[cid] = Math.max(result.circuitRuns[cid] || 0, entryNode.depth);
             u.members.forEach(mb => {
-                const l2 = addLink(u.entry, mb, ret, cid);
+                const l2 = addLink(u.entry, mb, u.memberWires || ret, cid);
                 if (l2 === null) { result.unrouted++; return; }
+                if (addLink(panel, mb, supplyWires, cid) === null) result.unrouted++;
                 entryNode.deg++;
                 const mn = { el: mb, deg: 1, depth: entryNode.depth + l2 + 60, boxId: entryNode.boxId };
                 tree.push(mn);
@@ -1332,8 +1403,20 @@ function buildCableNetwork(passage) {
     });
 
     // commande des lampes d'un autre circuit (hors arbre : elles ne servent pas de point de branchement)
-    crossControl.forEach(({ sw, light, cid }) => {
-        if (addLink(sw, light, ret, cid) === null) result.unrouted++;
+    crossControl.forEach(({ sw, light, cid, wires }) => {
+        if (addLink(sw, light, wires, cid) === null) result.unrouted++;
+    });
+
+    // navettes : deux va-et-vient qui commandent la même lampe sont reliés par deux fils violets
+    const navettePairs = new Set();
+    lights.forEach(light => {
+        const pair = switches.filter(sw => sw.type === 'switch_va_et_vient' && ctrl.get(sw.id).includes(light));
+        for (let k = 0; k + 1 < pair.length; k++) {
+            const pk = [pair[k].id, pair[k + 1].id].sort().join('~');
+            if (navettePairs.has(pk)) continue;
+            navettePairs.add(pk);
+            if (addLink(pair[k], pair[k + 1], ['violet', 'violet'], circuitIdOf(light)) === null) result.unrouted++;
+        }
     });
 
     // raccordement : tableau de cet étage → point de dérivation (la gaine vers les autres niveaux)
@@ -1454,7 +1537,8 @@ function renderCableNetwork(cx, cy) {
             }));
     }
 
-    const colors = { 'red': 0xef4444, 'blue': 0x3b82f6, 'green-yellow': 0x22c55e, 'violet': 0x8b5cf6, 'orange': 0xf97316 };
+    // teintes séparées : rouge profond, orange franc, violet foncé, bleu clair (sans teinte proche entre elles)
+    const colors = { 'red': 0xdc2626, 'neutral': 0x7dd3fc, 'black': 0x1f2937, 'grey': 0x9ca3af, 'orange': 0xff8c00, 'violet': 0x8b5cf6 };
     if (!CABLE_RES.cyl) {
         CABLE_RES.cyl = markShared(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true));
         CABLE_RES.core = markShared(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true));
@@ -1462,15 +1546,34 @@ function renderCableNetwork(cx, cy) {
         CABLE_RES.conduitMat = markShared(new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
         CABLE_RES.circMats = {};
         CABLE_RES.hiMats = {};
-        CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.9, depthWrite: false }));
+        CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
         CABLE_RES.dimConduit = markShared(new THREE.MeshBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.035, depthWrite: false }));
-        CABLE_RES.highlightCore = markShared(new THREE.MeshBasicMaterial({ color: 0xfef08a }));
         CABLE_RES.dimCore = markShared(new THREE.MeshBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.08, depthWrite: false }));
-        CABLE_RES.feederConduit = markShared(new THREE.MeshBasicMaterial({ color: FEEDER_COLOR, transparent: true, opacity: 0.9, depthWrite: false }));
-        CABLE_RES.feederCore = markShared(new THREE.MeshBasicMaterial({ color: FEEDER_COLOR }));
+        CABLE_RES.feederConduit = markShared(new THREE.MeshBasicMaterial({ color: FEEDER_COLOR, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
         CABLE_RES.mats = {};
     }
-    const matFor = k => CABLE_RES.mats[k] || (CABLE_RES.mats[k] = markShared(new THREE.MeshBasicMaterial({ color: colors[k] || 0xffffff })));
+    // terre vert/jaune : rayures diagonales (la texture se répète sans couture)
+    const earthStripeTexture = () => {
+        if (CABLE_RES.earthTex) return CABLE_RES.earthTex;
+        const cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        const g = cv.getContext('2d');
+        g.fillStyle = '#22c55e';
+        g.fillRect(0, 0, 64, 64);
+        g.fillStyle = '#facc15';
+        for (let x = -64; x < 128; x += 32) {
+            g.beginPath();
+            g.moveTo(x, 0); g.lineTo(x + 16, 0); g.lineTo(x + 80, 64); g.lineTo(x + 64, 64);
+            g.closePath(); g.fill();
+        }
+        const tex = new THREE.CanvasTexture(cv);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(1, 4);
+        return CABLE_RES.earthTex = markShared(tex);
+    };
+    const matFor = k => CABLE_RES.mats[k] || (CABLE_RES.mats[k] = markShared(k === 'green-yellow'
+        ? new THREE.MeshBasicMaterial({ map: earthStripeTexture() })
+        : new THREE.MeshBasicMaterial({ color: colors[k] || 0xffffff })));
     const ctlHexOf = cid => (typeof cid === 'string' && cid.startsWith('ctl:') ? cid.slice(4) : null);
     const conduitFor = cid => {
         if (!cid) return CABLE_RES.conduitMat;
@@ -1482,113 +1585,202 @@ function renderCableNetwork(cx, cy) {
             color: hex, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide
         })));
     };
-    const hiFor = (cid, core) => {
-        if (cid === FEEDER_CID) return core ? CABLE_RES.feederCore : CABLE_RES.feederConduit;
+    const hiFor = cid => {
+        if (cid === FEEDER_CID) return CABLE_RES.feederConduit;
         const ctlHex = ctlHexOf(cid);
         const circuit = !ctlHex && cid && projectData.circuits.find(c => c.id === cid);
-        if (!ctlHex && !circuit) return core ? CABLE_RES.highlightCore : CABLE_RES.highlightConduit;
+        if (!ctlHex && !circuit) return CABLE_RES.highlightConduit;
         const hex = ctlHex || circuitColor(circuit);
-        const key = (core ? 'c' : 'g') + hex;
-        return CABLE_RES.hiMats[key] || (CABLE_RES.hiMats[key] = markShared(new THREE.MeshBasicMaterial(core
-            ? { color: hex }
-            : { color: hex, transparent: true, opacity: 0.9, depthWrite: false })));
+        const key = 'g' + hex;
+        return CABLE_RES.hiMats[key] || (CABLE_RES.hiMats[key] = markShared(new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false })));
     };
     const parts = [];
     const add = (mesh) => parts.push(mesh);
     const Y = new THREE.Vector3(0, 1, 0);
-    const joints = new Map();
     const ctlColors = switchedOutletCableColors(net);
+    const WIRE_ORDER = ['red', 'neutral', 'green-yellow', 'orange', 'violet', 'black', 'grey'];
+    const wireRank = c => { const i = WIRE_ORDER.indexOf(c); return i < 0 ? WIRE_ORDER.length : i; };
+    const gKeyOf = cid => (cid === null || cid === undefined) ? '_' : String(cid);
+    const nodeKeyOf = p => p.x.toFixed(2) + '|' + p.y.toFixed(2) + '|' + p.z.toFixed(2);
+    const groupRadius = n => Math.min(3.2, Math.max(2, 1.8 + 0.22 * n));
+    // fils identifi?s par couleur et rang (rouge#0, rouge#1...) : un m?me fil garde sa place d'un tron?on ? l'autre
+    const wireKeysOf = cols => {
+        const occ = new Map();
+        return cols.slice()
+            .sort((x, y) => wireRank(x) - wireRank(y))
+            .map(col => {
+                const o = occ.get(col) || 0;
+                occ.set(col, o + 1);
+                return { key: col + '#' + o, colour: col, sortKey: wireRank(col) * 100 + o };
+            });
+    };
+    // spirale de Vogel : fils r?partis quasi uniform?ment sur toute la section utile de la gaine
+    const wireLayout = (n, R) => {
+        if (n <= 1) return [[0, 0]];
+        const rMax = Math.max(CORE_R, R - CORE_R - 0.08);
+        const golden = Math.PI * (3 - Math.sqrt(5));
+        return Array.from({ length: n }, (_, k) => {
+            const r = rMax * Math.sqrt((k + 0.5) / n);
+            const ang = k * golden;
+            return [Math.cos(ang) * r, Math.sin(ang) * r];
+        });
+    };
+    // cylindre entre deux points du monde (axe Y de la g?om?trie orient? de p vers q)
+    const strut = (p, q, radius, mat, order, isTube) => {
+        const d = q.clone().sub(p);
+        const L = d.length();
+        if (L < 1e-4) return;
+        const m = new THREE.Mesh(isTube ? CABLE_RES.cyl : CABLE_RES.core, mat);
+        m.position.copy(p).add(q).multiplyScalar(0.5);
+        m.quaternion.setFromUnitVectors(Y, d.normalize());
+        m.scale.set(radius, L, radius);
+        m.renderOrder = order;
+        add(m);
+    };
 
+    // 1) tron?ons et leurs groupes (un groupe = un circuit, ou un tube de commande sans fils)
+    const segs = [];
     net.segments.forEach(seg => {
-        const isLinkHighlighted = (seg.links || []).some(id => selectedLinkIds.has(id));
         const a = new THREE.Vector3(seg.a.x - cx, seg.a.z, seg.a.y - cy);
         const b = new THREE.Vector3(seg.b.x - cx, seg.b.z, seg.b.y - cy);
         const dir = b.clone().sub(a);
         const len = dir.length();
         if (len < 0.1) return;
         dir.normalize();
-        const q = new THREE.Quaternion().setFromUnitVectors(Y, dir);
-        const mid = a.clone().lerp(b, 0.5);
-        const ref = Math.abs(dir.y) < 0.9 ? Y : new THREE.Vector3(1, 0, 0);
-        const u = new THREE.Vector3().crossVectors(dir, ref).normalize();
-        const v = new THREE.Vector3().crossVectors(dir, u).normalize();
-
         const groups = new Map();
         (seg.cables || []).forEach((bundle, i) => {
             const cid = (seg.cids || [])[i] || null;
-            if (!groups.has(cid)) groups.set(cid, []);
-            groups.get(cid).push(...bundle);
+            const k = gKeyOf(cid);
+            if (!groups.has(k)) groups.set(k, { cid, wires: [] });
+            groups.get(k).wires.push(...bundle);
         });
-        if (!groups.size) groups.set(null, []);
-        // commande vers une prise commandée : tube supplémentaire à la couleur de la prise (sans fils, ceux-ci restent dans leur circuit)
+        if (!groups.size) groups.set('_', { cid: null, wires: [] });
+        // commande vers une prise command?e : tube suppl?mentaire ? la couleur de la prise (sans fils, ceux-ci restent dans leur circuit)
         [...new Set((seg.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id)))]
-            .forEach(hex => groups.set('ctl:' + hex, []));
-        const conduitGroups = [...groups.entries()].filter(([cid]) => !(feederHidden && cid === FEEDER_CID));
-        conduitGroups.forEach(([cid, wires], groupIndex) => {
-            const R = Math.min(3.2, Math.max(2, 1.8 + 0.22 * wires.length));
-            const radialOffset = conduitGroups.length > 1
-                ? (1.15 * R) / Math.sin(Math.PI / conduitGroups.length)
-                : 0;
-            const angle = (groupIndex / conduitGroups.length) * Math.PI * 2;
-            const offset = new THREE.Vector3()
-                .addScaledVector(u, Math.cos(angle) * radialOffset)
-                .addScaledVector(v, Math.sin(angle) * radialOffset);
+            .forEach(hex => groups.set('ctl:' + hex, { cid: 'ctl:' + hex, wires: [] }));
+        const kept = new Map([...groups].filter(([, g]) => !(feederHidden && g.cid === FEEDER_CID)));
+        segs.push({ a, b, dir, groups: kept, links: seg.links || [] });
+    });
+
+    // 2) n?uds : extr?mit?s partag?es par les tron?ons ; chaque n?ud calcule une seule disposition
+    const nodes = new Map();
+    const nodeAt = p => {
+        const k = nodeKeyOf(p);
+        if (!nodes.has(k)) nodes.set(k, { p: p.clone(), dirs: [], groups: new Map() });
+        return nodes.get(k);
+    };
+    segs.forEach(s => {
+        [[s.a, s.dir], [s.b, s.dir.clone().negate()]].forEach(([p, d]) => {
+            const n = nodeAt(p);
+            n.dirs.push(d);
+            s.groups.forEach((g, gk) => {
+                if (!n.groups.has(gk)) n.groups.set(gk, { cid: g.cid, slots: new Map(), dirs: [] });
+                const ng = n.groups.get(gk);
+                ng.dirs.push(d);
+                wireKeysOf(g.wires).forEach(w => ng.slots.set(w.key, w));
+            });
+        });
+    });
+
+    // rep?re de la section au n?ud : normale = bissectrice des deux tron?ons (plan de coupe en onglet)
+    const nodeFrame = dirs => {
+        let N;
+        if (dirs.length === 1) N = dirs[0].clone();
+        else {
+            let best = null;
+            for (let i = 0; i < dirs.length; i++) {
+                for (let j = i + 1; j < dirs.length; j++) {
+                    const dot = dirs[i].dot(dirs[j]);
+                    if (!best || dot < best.dot) best = { i, j, dot };
+                }
+            }
+            N = dirs[best.i].clone().sub(dirs[best.j]);
+            if (N.lengthSq() < 1e-6) N = dirs[best.i].clone();
+        }
+        N.normalize();
+        const U = Math.abs(N.y) < 0.9
+            ? Y.clone().addScaledVector(N, -Y.dot(N)).normalize()
+            : new THREE.Vector3(1, 0, 0).addScaledVector(N, -N.x).normalize();
+        const V = new THREE.Vector3().crossVectors(N, U).normalize();
+        return { U, V };
+    };
+    // d?calages (gaine et fils) de chaque groupe ? chaque n?ud, relatifs au n?ud
+    const nodeOffsets = new Map();
+    nodes.forEach((n, nk) => {
+        const { U, V } = nodeFrame(n.dirs);
+        const gl = [...n.groups].sort(([x], [y]) => x.localeCompare(y));
+        const Rmax = Math.max(...gl.map(([, g]) => groupRadius(g.slots.size)));
+        const off = new Map();
+        gl.forEach(([gk, g], gi) => {
+            const R = groupRadius(g.slots.size);
+            const radial = gl.length > 1 ? (1.15 * Rmax) / Math.sin(Math.PI / gl.length) : 0;
+            const angle = (gi / gl.length) * Math.PI * 2;
+            const tube = new THREE.Vector3()
+                .addScaledVector(U, Math.cos(angle) * radial)
+                .addScaledVector(V, Math.sin(angle) * radial);
+            const slots = [...g.slots.values()].sort((x, y) => x.sortKey - y.sortKey).slice(0, 18);
+            const layout = wireLayout(slots.length, R);
+            const wires = new Map();
+            slots.forEach((w, i) => wires.set(w.key, tube.clone()
+                .addScaledVector(U, layout[i][0])
+                .addScaledVector(V, layout[i][1])));
+            off.set(gk, { R, tube, wires });
+        });
+        nodeOffsets.set(nk, off);
+    });
+
+    // 3) rendu : chaque tron?on relie les points calcul?s ? ses deux n?uds
+    const sphereNote = new Map();
+    const noteSphere = (nk, gk, mat, focused) => {
+        const k = nk + '|' + gk;
+        const cur = sphereNote.get(k);
+        if (!cur) { sphereNote.set(k, { nk, gk, mat, focused }); return; }
+        if (focused && !cur.focused) { cur.mat = mat; cur.focused = true; return; }
+        if (!focused && !cur.focused && cur.mat !== mat && !selectedCircuitId && !hasLinkFocus) cur.mat = CABLE_RES.conduitMat;
+    };
+    segs.forEach(s => {
+        const isLinkHighlighted = s.links.some(id => selectedLinkIds.has(id));
+        const ka = nodeKeyOf(s.a);
+        const kb = nodeKeyOf(s.b);
+        s.groups.forEach((g, gk) => {
+            const cid = g.cid;
+            const A = nodeOffsets.get(ka).get(gk);
+            const B = nodeOffsets.get(kb).get(gk);
+            const R = Math.max(A.R, B.R);
             const isSelected = selectedCircuitId && cid === selectedCircuitId;
             const isFocused = hasLinkFocus
                 ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid) || !!ctlHexOf(cid))
                 : (isSelected || (cid === FEEDER_CID && !!selectedCircuitId));
             const cmat = (hasLinkFocus || selectedCircuitId)
-                ? (isFocused ? hiFor(cid, false) : CABLE_RES.dimConduit)
+                ? (isFocused ? hiFor(cid) : CABLE_RES.dimConduit)
                 : conduitFor(cid);
-            const tube = new THREE.Mesh(CABLE_RES.cyl, cmat);
-            tube.position.copy(mid).add(offset);
-            tube.quaternion.copy(q);
-            tube.scale.set(R, len, R);
-            tube.renderOrder = isFocused ? 3 : 2;
-            add(tube);
+            const order = isFocused ? 3 : 2;
+            strut(s.a.clone().add(A.tube), s.b.clone().add(B.tube), R, cmat, order, true);
+            noteSphere(ka, gk, cmat, isFocused);
+            noteSphere(kb, gk, cmat, isFocused);
 
-            wires.slice(0, 18).forEach((col, i) => {
-                const wireOffset = new THREE.Vector3();
-                if (wires.length > 1) {
-                    const inner = i < 6;
-                    const idx = inner ? i : i - 6;
-                    const n = inner ? Math.min(wires.length, 6) : wires.length - 6;
-                    const rad = R * (inner ? 0.35 : 0.62);
-                    const ang = (idx / n) * Math.PI * 2;
-                    wireOffset.addScaledVector(u, Math.cos(ang) * rad).addScaledVector(v, Math.sin(ang) * rad);
-                }
-                const coreMat = (hasLinkFocus || selectedCircuitId)
-                    ? (isFocused ? hiFor(cid, true) : CABLE_RES.dimCore)
-                    : matFor(col);
-                const core = new THREE.Mesh(CABLE_RES.core, coreMat);
-                core.renderOrder = isFocused ? 3 : 2;
-                core.position.copy(mid).add(offset).add(wireOffset);
-                core.quaternion.copy(q);
-                core.scale.set(0.6, len, 0.6);
-                add(core);
-            });
-
-            [[a, dir.clone()], [b, dir.clone().negate()]].forEach(([p, d]) => {
-                const jp = p.clone().add(offset);
-                const k = (cid || '_') + '|' + jp.x.toFixed(1) + '|' + jp.y.toFixed(1) + '|' + jp.z.toFixed(1);
-                if (!joints.has(k)) joints.set(k, { pos: jp, dirs: [], R: 0, mat: cmat, focused: isFocused });
-                const j = joints.get(k);
-                if ((selectedCircuitId || hasLinkFocus) && isFocused && !j.focused) { j.mat = cmat; j.focused = true; }
-                if (!selectedCircuitId && !hasLinkFocus && j.mat !== cmat) j.mat = CABLE_RES.conduitMat;
-                j.dirs.push(d);
-                j.R = Math.max(j.R, R);
+            wireKeysOf(g.wires).forEach(w => {
+                const pa = A.wires.get(w.key);
+                const pb = B.wires.get(w.key);
+                if (!pa || !pb) return;
+                const coreMat = (hasLinkFocus || selectedCircuitId) && !isFocused
+                    ? CABLE_RES.dimCore
+                    : matFor(w.colour);
+                strut(s.a.clone().add(pa), s.b.clone().add(pb), CORE_R, coreMat, order, false);
             });
         });
     });
 
-    // Manchons : coudes, dérivations et extrémités (rien sur un tronçon droit)
-    joints.forEach(j => {
-        if (j.dirs.length === 2 && j.dirs[0].dot(j.dirs[1]) < -0.999) return;
-        const s = new THREE.Mesh(CABLE_RES.sph, j.mat);
-        s.position.copy(j.pos);
-        s.scale.set(j.R, j.R, j.R);
-        s.renderOrder = j.focused ? 3 : 2;
-        add(s);
+    // manchons : coudes, d?rivations et extr?mit?s de groupe (rien l? o? un groupe passe tout droit)
+    sphereNote.forEach(({ nk, gk, mat, focused }) => {
+        const ng = nodes.get(nk).groups.get(gk);
+        if (ng.dirs.length === 2 && ng.dirs[0].dot(ng.dirs[1]) < -0.999) return;
+        const off = nodeOffsets.get(nk).get(gk);
+        const sph = new THREE.Mesh(CABLE_RES.sph, mat);
+        sph.position.copy(nodes.get(nk).p).add(off.tube);
+        sph.scale.set(off.R, off.R, off.R);
+        sph.renderOrder = focused ? 3 : 2;
+        add(sph);
     });
     mergeCableParts(parts);
     return net;
@@ -1873,17 +2065,10 @@ function build3DScene() {
     // Escaliers : marches pleines de la marche basse à la marche haute, emprise au sol, zone cliquable
     stairsOn().forEach(st => addStair3D(st, cx, cy));
 
-    wallsOn().forEach(w => {
-        const x1 = w.x1 - cx;
-        const z1 = w.y1 - cy;
-        const x2 = w.x2 - cx;
-        const z2 = w.y2 - cy;
-
-        const length = Math.hypot(x2 - x1, z2 - z1);
+    const levelWalls = wallsOn();
+    levelWalls.forEach(w => {
         const height = w.height || 250;
-        const thickness = w.thickness || 10;
-
-        const wallGeo = new THREE.BoxGeometry(thickness, height, length);
+        const wallGeo = wallSolidGeometry(mitredWallOutline(w, levelWalls, cx, cy), height);
         const wallMat = new THREE.MeshStandardMaterial({
             color: 0x0f766e,
             transparent: true,
@@ -1899,14 +2084,6 @@ function build3DScene() {
         // Ordre fixe : les murs transparents sont dessinés après les autres transparents, quel que soit l'angle de vue
         // (sinon le tri par distance de Three.js change d'ordre pendant la rotation et fait scintiller les appareils)
         wallMesh.renderOrder = 5;
-
-        const midX = (x1 + x2) / 2;
-        const midZ = (z1 + z2) / 2;
-        wallMesh.position.set(midX, height / 2, midZ);
-
-        const angle = Math.atan2(z2 - z1, x2 - x1);
-        wallMesh.rotation.y = -angle + Math.PI / 2;
-        
         wallMesh.userData = { type: 'wall', id: w.id };
         threeScene.add(wallMesh);
         wallMeshes3D.push(wallMesh);
@@ -2505,8 +2682,7 @@ function on3DPointerDown(e) {
                     const distToPt = Math.hypot(hitPt.x - wx1, hitPt.z - wz1);
                     const distanceCm = Math.round(Math.max(10, Math.min(wallLen - 10, distToPt)));
 
-                    const localHit = hitWallMesh.worldToLocal(hitPt.clone());
-                    const side = localHit.x >= 0 ? 1 : -1;
+                    const side = wallSideOf(hitPt.x, hitPt.z, wx1, wz1, wx2, wz2);
 
                     if (sameSpotBlocker(activePlacementType, activeLevelId, wall.id, distanceCm)) { refuseSameSpot(); return; }
                     saveStateToUndo();
