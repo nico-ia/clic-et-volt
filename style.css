@@ -130,6 +130,7 @@ body.theme-light .text-rose-300,
 body.theme-light .text-rose-400 { color: #be123c !important; }
 body.theme-light .text-amber-200,
 body.theme-light .text-amber-200\/90 { color: #92400e !important; }
+body.theme-light .text-amber-100 { color: #78350f !important; }
 body.theme-light .text-violet-400 { color: #6d28d9 !important; }
 body.theme-light .text-cyan-400 { color: #0e7490 !important; }
 body.theme-light .hover\:text-emerald-300:hover { color: #047857 !important; }

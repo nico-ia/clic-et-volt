@@ -5,7 +5,7 @@
 function init3DScene() {
     const container = document.getElementById('three-container');
     threeScene = new THREE.Scene();
-    threeScene.background = new THREE.Color(currentTheme === 'light' ? 0xe2e8f0 : 0x020617);
+    threeScene.background = new THREE.Color(currentTheme === 'light' ? '#e2e8f0' : '#020617');
 
     threeCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
     threeCamera.position.set(0, 500, 600);
@@ -22,10 +22,10 @@ function init3DScene() {
     threeControls.minDistance = 3;   // zoom avant très proche de l'élément
     threeControls.maxDistance = 3000;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    const ambientLight = new THREE.AmbientLight('#ffffff', 0.75);
     threeScene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    const dirLight = new THREE.DirectionalLight('#ffffff', 0.85);
     dirLight.position.set(400, 800, 400);
     threeScene.add(dirLight);
 
@@ -122,7 +122,7 @@ function makeGhostGroup3D(group, blocked) {
         o.material.transparent = true;
         o.material.opacity = 0.7;
         o.material.depthWrite = false;
-        if (blocked && o.material.color) o.material.color.set(0xef4444);
+        if (blocked && o.material.color) o.material.color.set('#ef4444');
     });
     group.userData = {};
     return group;
@@ -131,7 +131,7 @@ function makeGhostGroup3D(group, blocked) {
 // Couleur qui se détache de celle donnée (noir sur couleur claire, blanc sur couleur sombre)
 function contrastHex3D(css) {
     const c = new THREE.Color(css);
-    return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) > 0.6 ? 0x0f172a : 0xffffff;
+    return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) > 0.6 ? '#0f172a' : '#ffffff';
 }
 
 // Trémie fantôme : colonne translucide (même emprise et même hauteur que la vraie trémie)
@@ -142,9 +142,9 @@ function createShaftGhost3D(sh, cx, cy) {
     const s = sh.size || 40;
     const group = new THREE.Group();
     const pos = new THREE.Vector3(sp.x - cx, span.base + span.height / 2, sp.y - cy);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: 0xf8fafc }));
+    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: '#f8fafc' }));
     box.position.copy(pos);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0xf8fafc }));
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: '#f8fafc' }));
     edges.position.copy(pos);
     group.add(box, edges);
     return group;
@@ -1192,7 +1192,7 @@ function buildCableNetwork(passage) {
     };
 
     // 10. Organisation des liaisons : appareils → unités à alimenter
-    // Couleurs des conducteurs (NF C 15-100) : phase rouge, neutre bleu clair, terre vert/jaune ; retour de lampe orange,
+    // Couleurs des conducteurs (NF C 15-100) : phase rouge, neutre bleu, terre vert/jaune ; retour de lampe orange,
     // commande de bouton poussoir / sonnette noire, commande de volet grise
     // Schéma va-et-vient : l'interrupteur ne reçoit que la phase et ne renvoie qu'un fil de commande ;
     // neutre et terre vont directement du tableau à la charge, sans passer par l'interrupteur
@@ -1537,43 +1537,22 @@ function renderCableNetwork(cx, cy) {
             }));
     }
 
-    // teintes séparées : rouge profond, orange franc, violet foncé, bleu clair (sans teinte proche entre elles)
-    const colors = { 'red': 0xdc2626, 'neutral': 0x7dd3fc, 'black': 0x1f2937, 'grey': 0x9ca3af, 'orange': 0xff8c00, 'violet': 0x8b5cf6 };
+    // teintes séparées : rouge profond, orange franc, violet foncé, bleu franc, vert (sans teinte proche entre elles)
+    const colors = { 'red': '#dc2626', 'neutral': '#2563eb', 'green-yellow': '#018d14', 'black': '#1f2937', 'grey': '#9ca3af', 'orange': '#ff8c00', 'violet': '#5e439c' };
     if (!CABLE_RES.cyl) {
         CABLE_RES.cyl = markShared(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true));
         CABLE_RES.core = markShared(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true));
         CABLE_RES.sph = markShared(new THREE.SphereGeometry(1, 12, 10));
-        CABLE_RES.conduitMat = markShared(new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
+        CABLE_RES.conduitMat = markShared(new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
         CABLE_RES.circMats = {};
         CABLE_RES.hiMats = {};
-        CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
-        CABLE_RES.dimConduit = markShared(new THREE.MeshBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.035, depthWrite: false }));
-        CABLE_RES.dimCore = markShared(new THREE.MeshBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.08, depthWrite: false }));
+        CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: '#facc15', transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
+        CABLE_RES.dimConduit = markShared(new THREE.MeshBasicMaterial({ color: '#64748b', transparent: true, opacity: 0.035, depthWrite: false }));
+        CABLE_RES.dimCore = markShared(new THREE.MeshBasicMaterial({ color: '#475569', transparent: true, opacity: 0.08, depthWrite: false }));
         CABLE_RES.feederConduit = markShared(new THREE.MeshBasicMaterial({ color: FEEDER_COLOR, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
         CABLE_RES.mats = {};
     }
-    // terre vert/jaune : rayures diagonales (la texture se répète sans couture)
-    const earthStripeTexture = () => {
-        if (CABLE_RES.earthTex) return CABLE_RES.earthTex;
-        const cv = document.createElement('canvas');
-        cv.width = 64; cv.height = 64;
-        const g = cv.getContext('2d');
-        g.fillStyle = '#22c55e';
-        g.fillRect(0, 0, 64, 64);
-        g.fillStyle = '#facc15';
-        for (let x = -64; x < 128; x += 32) {
-            g.beginPath();
-            g.moveTo(x, 0); g.lineTo(x + 16, 0); g.lineTo(x + 80, 64); g.lineTo(x + 64, 64);
-            g.closePath(); g.fill();
-        }
-        const tex = new THREE.CanvasTexture(cv);
-        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(1, 4);
-        return CABLE_RES.earthTex = markShared(tex);
-    };
-    const matFor = k => CABLE_RES.mats[k] || (CABLE_RES.mats[k] = markShared(k === 'green-yellow'
-        ? new THREE.MeshBasicMaterial({ map: earthStripeTexture() })
-        : new THREE.MeshBasicMaterial({ color: colors[k] || 0xffffff })));
+    const matFor = k => CABLE_RES.mats[k] || (CABLE_RES.mats[k] = markShared(new THREE.MeshBasicMaterial({ color: colors[k] || '#ffffff' })));
     const ctlHexOf = cid => (typeof cid === 'string' && cid.startsWith('ctl:') ? cid.slice(4) : null);
     const conduitFor = cid => {
         if (!cid) return CABLE_RES.conduitMat;
@@ -1853,7 +1832,7 @@ function build3DScene() {
     if (threeControls) threeControls.maxDistance = Math.max(500, planDiagonal * 3);
     const floorGeo = new THREE.PlaneGeometry(floorWidth, floorDepth);
     // sol translucide : on voit les étages et les gaines à travers ; ordre de dessin fixe (comme les murs)
-    const floorMat = new THREE.MeshStandardMaterial({ color: currentTheme === 'light' ? 0xf8fafc : 0x1e293b, roughness: 0.8, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
+    const floorMat = new THREE.MeshStandardMaterial({ color: currentTheme === 'light' ? '#f8fafc' : '#1e293b', roughness: 0.8, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.renderOrder = 1;
     floorMesh.rotation.x = -Math.PI / 2;
@@ -1868,7 +1847,7 @@ function build3DScene() {
         const gridSize = Math.max(floorWidth, floorDepth);
         const divisions = Math.min(400, Math.max(2, Math.round(gridSize / 50)));
         const dark = currentTheme !== 'light';
-        const grid = new THREE.GridHelper(gridSize, divisions, dark ? 0x94a3b8 : 0x475569, dark ? 0x475569 : 0x94a3b8);
+        const grid = new THREE.GridHelper(gridSize, divisions, dark ? '#94a3b8' : '#475569', dark ? '#475569' : '#94a3b8');
         grid.position.set(0, 0.5, 0);
         grid.material.transparent = true;
         grid.material.opacity = 0.7;
@@ -1892,8 +1871,8 @@ function build3DScene() {
                 const height = w.height || 250;
                 const geo = new THREE.BoxGeometry(w.thickness || 10, height, length);
                 // même couleur que les murs réels, plus transparente
-                const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.22, depthWrite: false }));
-                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xcbd5e1, transparent: true, opacity: 0.8 }));
+                const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#94a3b8', transparent: true, opacity: 0.22, depthWrite: false }));
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: '#cbd5e1', transparent: true, opacity: 0.8 }));
                 ghost.add(edges);
                 ghost.position.set((x1 + x2) / 2, dy + height / 2, (z1 + z2) / 2);
                 ghost.rotation.y = -Math.atan2(z2 - z1, x2 - x1) + Math.PI / 2;
@@ -1976,7 +1955,7 @@ function build3DScene() {
         const s = sh.size || 40;
         const frame = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
-            new THREE.LineBasicMaterial({ color: 0xf8fafc }));
+            new THREE.LineBasicMaterial({ color: '#f8fafc' }));
         const sp = shaftPos2D(sh) || { x: w.x1 + (w.x2 - w.x1) * d / len, y: w.y1 + (w.y2 - w.y1) * d / len };
         frame.position.set(sp.x - cx, 1, sp.y - cy);
         frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
@@ -1986,7 +1965,7 @@ function build3DScene() {
         const span = shaftSpan3D(sh);
         const column = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
-            new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.85 }));
+            new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.85 }));
         column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
         column.userData.shaftId = sh.id;
         threeScene.add(column);
@@ -2003,7 +1982,7 @@ function build3DScene() {
         // trémie sélectionnée : volume blanc translucide dans la colonne (en plus du cadre de sélection)
         if (sh.id === selected3DId) {
             const sel = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
-                new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.3, depthWrite: false }));
+                new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.3, depthWrite: false }));
             sel.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
             sel.renderOrder = 5;
             threeScene.add(sel);
@@ -2035,7 +2014,7 @@ function build3DScene() {
         wallMeshes3D.push(label);
         // point de dérivation : chaque niveau relié prend ses circuits à ce point de la gaine (hauteur 1,50 m)
         // boîte : 10 cm d'épaisseur (perpendiculaire au mur) et 14 cm de long, orientée comme le mur
-        const derivation = new THREE.Mesh(new THREE.BoxGeometry(10, DERIV_BOX_H, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        const derivation = new THREE.Mesh(new THREE.BoxGeometry(10, DERIV_BOX_H, 14), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
         // même remède que pour les appareils : la boîte est posée à 1,5 cm de la face du mur (pas sur l'axe de la paroi
         // transparente) et son ordre de dessin est fixe, sinon le tri des transparents la fait scintiller
         // la boîte est collée à la face du mur, côté pièce de la trémie (jamais dans le mur)
@@ -2056,7 +2035,7 @@ function build3DScene() {
             // câble de la boîte de ce niveau jusqu'à la boîte de l'autre niveau (même trémie)
             const y0 = derivation.position.y;
             const y1 = dy + derivHeightOf(sh, lv);
-            const riser = riserTube(new THREE.Vector3(derivation.position.x, y0, derivation.position.z), new THREE.Vector3(derivation.position.x, y1, derivation.position.z), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+            const riser = riserTube(new THREE.Vector3(derivation.position.x, y0, derivation.position.z), new THREE.Vector3(derivation.position.x, y1, derivation.position.z), new THREE.MeshBasicMaterial({ color: '#38bdf8' }));
             threeScene.add(riser);
             wallMeshes3D.push(riser);
         });
@@ -2070,7 +2049,7 @@ function build3DScene() {
         const height = w.height || 250;
         const wallGeo = wallSolidGeometry(mitredWallOutline(w, levelWalls, cx, cy), height);
         const wallMat = new THREE.MeshStandardMaterial({
-            color: 0x0f766e,
+            color: '#0f766e',
             transparent: true,
             opacity: 0.22,
             roughness: 0.8,
@@ -2080,7 +2059,7 @@ function build3DScene() {
         });
         const wallMesh = new THREE.Mesh(wallGeo, wallMat);
         // arêtes : même lecture que les murs fantômes des autres étages
-        wallMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(wallGeo), new THREE.LineBasicMaterial({ color: 0x2dd4bf, transparent: true, opacity: 0.8 })));
+        wallMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(wallGeo), new THREE.LineBasicMaterial({ color: '#2dd4bf', transparent: true, opacity: 0.8 })));
         // Ordre fixe : les murs transparents sont dessinés après les autres transparents, quel que soit l'angle de vue
         // (sinon le tri par distance de Three.js change d'ordre pendant la rotation et fait scintiller les appareils)
         wallMesh.renderOrder = 5;
@@ -2151,8 +2130,8 @@ function createOpeningMesh3D(op, wall, cx, cy) {
         group.position.set(posX, doorHeight / 2, posZ);
         group.rotation.y = -angle;
 
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
-        const panelMat = new THREE.MeshStandardMaterial({ color: 0xb07a4a, roughness: 0.3 });
+        const frameMat = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.5 });
+        const panelMat = new THREE.MeshStandardMaterial({ color: '#b07a4a', roughness: 0.3 });
 
         const postGeo = new THREE.BoxGeometry(6, doorHeight, wallThickness + 4);
         const leftPost = new THREE.Mesh(postGeo, frameMat);
@@ -2190,8 +2169,8 @@ function createOpeningMesh3D(op, wall, cx, cy) {
         group.position.set(posX, centerY, posZ);
         group.rotation.y = -angle;
 
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
-        const glassMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0x60a5fa, emissiveIntensity: 0.6, transparent: true, opacity: 0.8, roughness: 0.1 });
+        const frameMat = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.5 });
+        const glassMat = new THREE.MeshStandardMaterial({ color: '#93c5fd', emissive: '#60a5fa', emissiveIntensity: 0.6, transparent: true, opacity: 0.8, roughness: 0.1 });
 
         // Cadre à quatre montants (pas de pavé plein) : le vitrage reste visible.
         const frameDepth = wallThickness + 2;
@@ -2258,11 +2237,11 @@ function applianceModel(el) {
     const cylY = (rT, rB, len, mat, x, y, z) => { const m = new THREE.Mesh(mGeo('cyl', rT, rB, len, 28), mat); m.position.set(x, y, z); g.add(m); return m; };
     // commande : couleur du circuit de la charge qu'elle pilote (sinon celle du circuit par défaut de sa charge)
     const accentHex = deviceColor(el, isControl(el) ? controlTargetsOf(getCableNetwork()) : null) || EL_COLORS[el.type];
-    const accent = accentHex ? parseInt(accentHex.slice(1), 16) : 0x94a3b8;
-    const white = mMat(0xf8fafc, { rough: 0.35 });
-    const ivory = mMat(0xe2e8f0, { rough: 0.45 });
-    const dark = mMat(0x0f172a, { rough: 0.6 });
-    const metal = mMat(0xcbd5e1, { rough: 0.25, metal: 0.8 });
+    const accent = accentHex || '#94a3b8';
+    const white = mMat('#f8fafc', { rough: 0.35 });
+    const ivory = mMat('#e2e8f0', { rough: 0.45 });
+    const dark = mMat('#0f172a', { rough: 0.6 });
+    const metal = mMat('#cbd5e1', { rough: 0.25, metal: 0.8 });
     const accentMat = mMat(accent, { rough: 0.4 });
 
     if (el.type === 'outlet_16a' || el.type === 'outlet_20a' || el.type === 'outlet_20a_classic' || el.type === 'outlet_switched') {
@@ -2335,21 +2314,21 @@ function applianceModel(el) {
         box(12, 12, 1.2, white, 0, 0, -0.4);
         box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
         cylZ(3.8, 4.4, 2.0, white, 0, 0, 1.2);
-        cylZ(2.4, 2.4, 0.4, mMat(0x93c5fd, { rough: 0.2 }), 0, 0, 2.3);
+        cylZ(2.4, 2.4, 0.4, mMat('#93c5fd', { rough: 0.2 }), 0, 0, 2.3);
     } else if (el.type === 'wall_light') {
         // applique : platine ronde, bras, vasque ouverte vers le haut, ampoule
         cylZ(4.8, 5.0, 1.4, metal, 0, 0, -0.3);
-        cylZ(1.0, 1.0, 7.0, mMat(0x64748b, { rough: 0.3, metal: 0.7 }), 0, 0, 3.7);
-        const bowl = new THREE.Mesh(mGeo('sph', 6.2, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat(0xfff7ed, { rough: 0.3, emissive: 0xfde68a, emissiveIntensity: 0.35, double: true }));
+        cylZ(1.0, 1.0, 7.0, mMat('#64748b', { rough: 0.3, metal: 0.7 }), 0, 0, 3.7);
+        const bowl = new THREE.Mesh(mGeo('sph', 6.2, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat('#fff7ed', { rough: 0.3, emissive: '#fde68a', emissiveIntensity: 0.35, double: true }));
         bowl.position.set(0, 2.2, 10.5);
         g.add(bowl);
-        const bulb = new THREE.Mesh(mGeo('sph', 2.5, 16, 12), mMat(0xfde047, { emissive: 0xfde047, emissiveIntensity: 1 }));
+        const bulb = new THREE.Mesh(mGeo('sph', 2.5, 16, 12), mMat('#fde047', { emissive: '#fde047', emissiveIntensity: 1 }));
         bulb.position.set(0, 1.2, 10.5);
         g.add(bulb);
     } else if (el.type === 'light_spot') {
         // spot encastré : collerette affleurante et verre ambré
         cylY(5.4, 5.4, 1.0, white, 0, 0.5, 0);
-        cylY(3.9, 3.9, 0.8, mMat(0xfffbeb, { rough: 0.2, emissive: 0xfde68a, emissiveIntensity: 0.6 }), 0, -0.3, 0);
+        cylY(3.9, 3.9, 0.8, mMat('#fffbeb', { rough: 0.2, emissive: '#fde68a', emissiveIntensity: 0.6 }), 0, -0.3, 0);
     } else if (el.type === 'smoke_detector') {
         // DAAF : boîtier rond plat, grille et voyant LED
         cylY(6.2, 6.2, 3.0, white, 0, 1.2, 0);
@@ -2358,8 +2337,8 @@ function applianceModel(el) {
     } else if (el.type === 'light_ceiling') {
         // plafonnier : rosace au plafond, couronne, diffuseur en demi-sphère opaline
         cylY(5.0, 5.0, 1.0, white, 0, 4.7, 0);
-        cylY(12.8, 12.8, 0.9, mMat(0xd4a017, { rough: 0.3, metal: 0.6 }), 0, 4.1, 0);
-        const dome = new THREE.Mesh(mGeo('sph', 12.4, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat(0xfffbeb, { rough: 0.2, emissive: 0xfde68a, emissiveIntensity: 0.55, opacity: 0.93, double: true }));
+        cylY(12.8, 12.8, 0.9, mMat('#d4a017', { rough: 0.3, metal: 0.6 }), 0, 4.1, 0);
+        const dome = new THREE.Mesh(mGeo('sph', 12.4, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat('#fffbeb', { rough: 0.2, emissive: '#fde68a', emissiveIntensity: 0.55, opacity: 0.93, double: true }));
         dome.position.set(0, 3.9, 0);
         g.add(dome);
     } else if (el.type === 'junction_box') {
@@ -2370,30 +2349,30 @@ function applianceModel(el) {
     } else if (el.type === 'subpanel') {
         // sous-tableau : petit coffret, porte fumée, deux rangées de modules
         const W = 30, H = 40;
-        box(W, H, 6, mMat(0xe5e7eb, { rough: 0.5 }), 0, 0, 2);
-        box(W - 4, H - 4, 0.5, mMat(0x1f2937, { rough: 0.8 }), 0, 0, 5.1);
-        const modMat = mMat(0xf1f5f9, { rough: 0.4 });
-        const toggle = mMat(0x111827, { rough: 0.6 });
+        box(W, H, 6, mMat('#e5e7eb', { rough: 0.5 }), 0, 0, 2);
+        box(W - 4, H - 4, 0.5, mMat('#1f2937', { rough: 0.8 }), 0, 0, 5.1);
+        const modMat = mMat('#f1f5f9', { rough: 0.4 });
+        const toggle = mMat('#111827', { rough: 0.6 });
         [9, -9].forEach(y => {
-            box(W - 8, 3, 0.5, mMat(0x94a3b8, { rough: 0.3, metal: 0.7 }), 0, y, 5.5);
+            box(W - 8, 3, 0.5, mMat('#94a3b8', { rough: 0.3, metal: 0.7 }), 0, y, 5.5);
             for (let i = 0; i < 6; i++) {
                 const x = -9 + i * 3.6;
                 box(3, 6, 4, modMat, x, y, 7.2);
                 box(0.7, 1.5, 0.9, toggle, x, y + 1.2, 9.6);
             }
         });
-        box(W - 3, H - 3, 0.5, mMat(0x0f172a, { opacity: 0.32, rough: 0.2 }), 0, 0, 10.4);
+        box(W - 3, H - 3, 0.5, mMat('#0f172a', { opacity: 0.32, rough: 0.2 }), 0, 0, 10.4);
         box(W - 3, 2, 0.7, accentMat, 0, H / 2 - 3.2, 10.8);
     } else if (el.type === 'panel') {
         // tableau : coffret, porte fumée, trois rangées de modules (différentiel + disjoncteurs)
         const W = 42, H = 56;
-        box(W, H, 7, mMat(0xe5e7eb, { rough: 0.5 }), 0, 0, 2.5);
-        box(W - 5, H - 5, 0.5, mMat(0x1f2937, { rough: 0.8 }), 0, 0, 6.1);
-        const rail = mMat(0x94a3b8, { rough: 0.3, metal: 0.7 });
-        const modMat = mMat(0xf1f5f9, { rough: 0.4 });
-        const toggle = mMat(0x111827, { rough: 0.6 });
-        const diffMat = mMat(0xcbd5e1, { rough: 0.4 });
-        const test = mMat(0x2563eb, { rough: 0.4 });
+        box(W, H, 7, mMat('#e5e7eb', { rough: 0.5 }), 0, 0, 2.5);
+        box(W - 5, H - 5, 0.5, mMat('#1f2937', { rough: 0.8 }), 0, 0, 6.1);
+        const rail = mMat('#94a3b8', { rough: 0.3, metal: 0.7 });
+        const modMat = mMat('#f1f5f9', { rough: 0.4 });
+        const toggle = mMat('#111827', { rough: 0.6 });
+        const diffMat = mMat('#cbd5e1', { rough: 0.4 });
+        const test = mMat('#2563eb', { rough: 0.4 });
         const x0 = -11.65;
         [16, 0, -16].forEach((y, row) => {
             box(28, 3.2, 0.5, rail, 0, y, 6.5);
@@ -2406,7 +2385,7 @@ function applianceModel(el) {
                 box(0.8, 1.8, 1.0, toggle, x, y + ((i + row) % 3 === 0 ? -1.5 : 1.5), 11.0);
             }
         });
-        box(W - 3, H - 3, 0.5, mMat(0x0f172a, { opacity: 0.32, rough: 0.2 }), 0, 0, 12.4);   // porte fumée
+        box(W - 3, H - 3, 0.5, mMat('#0f172a', { opacity: 0.32, rough: 0.2 }), 0, 0, 12.4);   // porte fumée
         box(W - 3, 2.6, 0.7, accentMat, 0, H / 2 - 4.2, 12.8);                            // bandeau de couleur
         box(0.9, 5, 1.0, metal, W / 2 - 3.5, 0, 13.0);                                    // poignée
     } else {
@@ -2542,7 +2521,7 @@ function updateWallPreview3D() {
         new THREE.Vector3(wallDraft3D.x - cx, 5, wallDraft3D.y - cy),
         new THREE.Vector3(wallCursor3D.x - cx, 5, wallCursor3D.y - cy)
     ];
-    wallPreview3D = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+    wallPreview3D = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#38bdf8' }));
     wallPreview3D.renderOrder = 10;
     threeScene.add(wallPreview3D);
 }
@@ -3053,7 +3032,7 @@ function addGhostOpening3D(op, dy, cx, cy) {
     const p = w && openingPos2D(op);
     if (!p) return;
     const b = openingBox(op, w);
-    const color = b.isDoor ? 0xb07a4a : 0x93c5fd;
+    const color = b.isDoor ? '#b07a4a' : '#93c5fd';
     const geo = new THREE.BoxGeometry(p.th + 1, Math.max(1, b.z1 - b.z0), 2 * b.half);
     const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false }));
     mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 })));
@@ -3074,7 +3053,7 @@ function addGhostShaft3D(sh, cx, cy) {
     const span = shaftSpan3D(sh);
     const base = span.base;
     const add = obj => { threeScene.add(obj); wallMeshes3D.push(obj); return obj; };
-    const colMat = new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.35, depthWrite: false });
+    const colMat = new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.35, depthWrite: false });
     const frame = add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)), colMat));
     frame.position.set(p.x - cx, base + 1, p.y - cy);
     frame.renderOrder = 3;
@@ -3083,7 +3062,7 @@ function addGhostShaft3D(sh, cx, cy) {
     const column = add(new THREE.LineSegments(new THREE.EdgesGeometry(colGeo), colMat));
     column.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     column.renderOrder = 3;
-    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.05, depthWrite: false })));
+    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.05, depthWrite: false })));
     fill.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     fill.renderOrder = 2;
     // boîtes de dérivation de chaque niveau relié, comme en réel (même taille, même position dans la gaine)
@@ -3093,8 +3072,8 @@ function addGhostShaft3D(sh, cx, cy) {
         if (!dp) return;
         const geo = new THREE.BoxGeometry(10, DERIV_BOX_H, 14);
         const y = elevOf(lv) - elevOf(activeLevelId) + derivHeightOf(sh, lv);
-        const box = add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })));
-        box.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.35 })));
+        const box = add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.18, depthWrite: false })));
+        box.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.35 })));
         box.position.set(dp.x - cx, y, dp.y - cy);
         box.rotation.y = -dp.angle + Math.PI / 2;
         box.renderOrder = 4;
@@ -3104,7 +3083,7 @@ function addGhostShaft3D(sh, cx, cy) {
     if (boxes.length > 1) {
         const ys = boxes.map(bx => bx.y);
         const riser = add(riserTube(new THREE.Vector3(boxes[0].x, Math.min(...ys), boxes[0].z), new THREE.Vector3(boxes[0].x, Math.max(...ys), boxes[0].z),
-            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6, depthWrite: false })));
+            new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.6, depthWrite: false })));
         riser.renderOrder = 4;
     }
 }
@@ -3130,7 +3109,7 @@ function addStair3D(st, cx, cy, ghost = false) {
     group.position.set(st.x - cx, base, st.y - cy);
     group.rotation.y = -(st.angleDeg || 0) * Math.PI / 180;
     group.userData = { type: 'stair', id: st.id };
-    const stepMat = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.7, metalness: 0, transparent: true, opacity: ghost ? 0.25 : 0.85, depthWrite: !ghost });
+    const stepMat = new THREE.MeshStandardMaterial({ color: '#8b5cf6', roughness: 0.7, metalness: 0, transparent: true, opacity: ghost ? 0.25 : 0.85, depthWrite: !ghost });
     for (let i = 0; i < n; i++) {
         const h = (i + 1) * H / n;
         const step = new THREE.Mesh(new THREE.BoxGeometry(L / n, h, W), stepMat);
@@ -3140,7 +3119,7 @@ function addStair3D(st, cx, cy, ghost = false) {
     // contour de l'emprise au sol : repère même quand les marches sont cachées
     const footprint = new THREE.LineSegments(
         new THREE.EdgesGeometry(new THREE.BoxGeometry(L, 1, W)),
-        new THREE.LineBasicMaterial({ color: 0x8b5cf6 }));
+        new THREE.LineBasicMaterial({ color: '#8b5cf6' }));
     footprint.position.set(0, 0.5, 0);
     group.add(footprint);
     // zone invisible sur toute la montée : permet de cliquer l'escalier et de le glisser
@@ -3276,7 +3255,7 @@ function updateSelectionHighlight(obj) {
     // escalier : le cadre suit le groupe (et non la zone cliquable seule) ; matrices à jour avant calcul
     const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
     target.updateWorldMatrix(true, true);
-    selectedHighlightMesh = new THREE.BoxHelper(target, 0xf8fafc);
+    selectedHighlightMesh = new THREE.BoxHelper(target, '#f8fafc');
     threeScene.add(selectedHighlightMesh);
 }
 
@@ -3389,7 +3368,7 @@ function addWallSelectionHighlights() {
             const w = projectData.walls.find(x => x.id === id);
             if (!w) return;
             [[w.x1, w.y1], [w.x2, w.y2]].forEach(([px, py]) => {
-                const h = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false }));
+                const h = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: '#38bdf8', depthTest: false }));
                 h.position.set(px - cx, 6, py - cy);
                 h.renderOrder = 13;
                 threeScene.add(h);
@@ -3400,7 +3379,7 @@ function addWallSelectionHighlights() {
     clickableWalls3D.forEach(m => {
         if (!m.userData || !selectedWallIds.includes(m.userData.id)) return;
         m.updateWorldMatrix(true, true);
-        const helper = new THREE.BoxHelper(m, 0x38bdf8);
+        const helper = new THREE.BoxHelper(m, '#38bdf8');
         helper.material.depthTest = false;
         helper.renderOrder = 12;
         helper.userData.shared = false;
@@ -3513,7 +3492,7 @@ function addCollisionHighlights() {
         const pad = 8;
         const fill = new THREE.Mesh(
             new THREE.BoxGeometry(size.x + pad * 2, size.y + pad * 2, size.z + pad * 2),
-            new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false })
+            new THREE.MeshBasicMaterial({ color: '#ef4444', transparent: true, opacity: 0.4, depthTest: false, depthWrite: false })
         );
         fill.position.copy(centre);
         fill.renderOrder = 11;
@@ -3523,7 +3502,7 @@ function addCollisionHighlights() {
         threeScene.add(fill);
         wallMeshes3D.push(fill);
 
-        const helper = new THREE.BoxHelper(target, 0xef4444);
+        const helper = new THREE.BoxHelper(target, '#ef4444');
         helper.material.depthTest = false;
         helper.renderOrder = 12;
         helper.userData.shared = false;

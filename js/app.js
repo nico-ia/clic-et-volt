@@ -353,7 +353,7 @@ function applyTheme() {
             : '<i class="fa-solid fa-moon"></i> <span class="hidden min-[1536px]:inline">Sombre</span>';
         button.title = light ? 'Passer au thème sombre' : 'Passer au thème clair';
     }
-    if (threeScene) threeScene.background = new THREE.Color(light ? 0xe2e8f0 : 0x020617);
+    if (threeScene) threeScene.background = new THREE.Color(light ? '#e2e8f0' : '#020617');
     redraw2D();
 }
 
@@ -1411,7 +1411,7 @@ function startCollisionBlink() {
             if (selectedHighlightMesh && selectedHighlightMesh.material) selectedHighlightMesh.material.color.set(blinkOn ? contrastHex3D('#f8fafc') : '#f8fafc');
             // trémie sélectionnée : sa colonne et son cadre alternent avec un contraste (la couleur jaune seule se voyait mal)
             if (selected3DId) wallMeshes3D.forEach(m => {
-                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(0xf8fafc) : 0xf8fafc);
+                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D('#f8fafc') : '#f8fafc');
             });
         } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded())) {
             redraw2D();
