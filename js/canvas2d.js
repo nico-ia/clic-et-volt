@@ -1473,7 +1473,7 @@ function draw2DEquipment() {
             // couleur du lien sélectionné uniquement (un tronçon partagé peut porter aussi d'autres commandes)
             const linkColor = (s.links || []).filter(id => selectedLinkIds.has(id)).map(id => linkCableColors.get(id)).find(Boolean);
             const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
-            ctx2D.lineWidth = focusMode && focusHit ? 5 : 3;
+            ctx2D.lineWidth = focusMode && focusHit ? 2.4 : 1.4;
             const nx = -dy / len, ny = dx / len;
             // trace le tronçon décalé de `shift` perpendiculairement à sa direction ; faux si rien à tracer
             const strokeRun = (shift) => {
