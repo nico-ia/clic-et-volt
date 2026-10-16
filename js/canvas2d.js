@@ -968,7 +968,7 @@ function drawElementSymbol2D(el) {
     const t = el.type;
     // prise d'un circuit sélectionné : son liseré clignote (opacité qui alterne)
     const circHot = !isPrintRendering && !!ringCirc && ringCirc.id === selectedCircuitId;
-    const LW = el.legendOnly ? 1 : 0.6;                      // traits fins sur le plan
+    const LW = el.legendOnly ? 0.5 : 0.6;                    // traits fins sur le plan et sur la légende
     const line = (x1, y1, x2, y2, w, color) => {
         ctx2D.beginPath();
         ctx2D.moveTo(x1, y1);
@@ -1257,7 +1257,8 @@ function drawElementSymbol2D(el) {
     }
     ctx2D.restore();
 
-    if (textAt) {                                                   // calibre (10 / 16 / 20 / 32), hors du symbole, dans sa couleur
+    // calibre (10 / 16 / 20 / 32), hors du symbole, dans sa couleur. Absent de la légende : le libellé porte déjà l'ampérage, et le chiffre chevauche les lignes voisines
+    if (textAt && !el.legendOnly) {
         const fx = Math.cos(ang), fy = Math.sin(ang);
         ctx2D.save();
         ctx2D.fillStyle = col;
@@ -1446,9 +1447,9 @@ function draw2DEquipment() {
             ? circuitById(selectedCircuitId)
             : null;
         const focusMode = hasLinkFocus || !!focusCircuit;
-        const dimColor = currentTheme === 'light' ? '#94a3b8' : '#64748b';
+        // câbles hors focus : couleur pâle pleine (pas de transparence, sinon les croisements se mélangent)
+        const dimColor = currentTheme === 'light' ? '#d5dde8' : '#2f3e52';
         ctx2D.lineCap = 'round';
-        ctx2D.globalAlpha = 0.85;
         const deviceDiscs = electricalOn().map(el => ({ c: getElCoords(el), R: isDedicatedOutlet(el) ? 14 : 12 }));
         const ctlColors = switchedOutletCableColors(net);
         const linkCableColors = controlCableColors(net, null);
@@ -1469,16 +1470,26 @@ function draw2DEquipment() {
             // câble de liaison seul : masqué tant qu'aucun circuit ni éclairage n'est sélectionné, ou s'il est retiré du circuit
             if (feederSeg && !circs.length && (!focusMode || feederOff)) return;
             const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && ((s.cids || []).includes(focusCircuit.id) || onFeeder));
-            const linkColor = (s.links || []).map(id => linkCableColors.get(id)).find(Boolean);
+            // couleur du lien sélectionné uniquement (un tronçon partagé peut porter aussi d'autres commandes)
+            const linkColor = (s.links || []).filter(id => selectedLinkIds.has(id)).map(id => linkCableColors.get(id)).find(Boolean);
             const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
-            ctx2D.globalAlpha = focusMode ? (focusHit ? 1 : 0.16) : 0.85;
             ctx2D.lineWidth = focusMode && focusHit ? 5 : 3;
-            const pieces = cableOutsideDevices2D({ x: s.a.x + ox, y: s.a.y + oy }, { x: s.b.x + ox, y: s.b.y + oy }, deviceDiscs);
-            if (!pieces.length) return;
-            ctx2D.beginPath();
-            pieces.forEach(([p, q]) => { ctx2D.moveTo(p.x, p.y); ctx2D.lineTo(q.x, q.y); });
+            const nx = -dy / len, ny = dx / len;
+            // trace le tronçon décalé de `shift` perpendiculairement à sa direction ; faux si rien à tracer
+            const strokeRun = (shift) => {
+                const pieces = cableOutsideDevices2D(
+                    { x: s.a.x + ox + nx * shift, y: s.a.y + oy + ny * shift },
+                    { x: s.b.x + ox + nx * shift, y: s.b.y + oy + ny * shift },
+                    deviceDiscs);
+                if (!pieces.length) return false;
+                ctx2D.beginPath();
+                pieces.forEach(([p, q]) => { ctx2D.moveTo(p.x, p.y); ctx2D.lineTo(q.x, q.y); });
+                return true;
+            };
+            if (!strokeRun(0)) return;
             // couleurs du tronçon : circuits qui le traversent, plus la couleur des commandes vers une prise commandée
-            const bandColors = focusMode ? [] : [...new Set([...circs.map(c => circuitColor(c)), ...(s.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id))])];
+            // (triées pour garder le même ordre d'un tronçon à l'autre)
+            const bandColors = focusMode ? [] : [...new Set([...circs.map(c => circuitColor(c)), ...(s.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id))])].sort();
             if (focusMode || bandColors.length <= 1) {
                 ctx2D.strokeStyle = focusMode
                     ? (focusHit ? focusColor : dimColor)
@@ -1486,15 +1497,17 @@ function draw2DEquipment() {
                 ctx2D.setLineDash(isLow ? [8, 6] : []);
                 ctx2D.stroke();
             } else {
-                // tronçon partagé : bandes alternées aux couleurs de chaque circuit
-                const n = bandColors.length, seg = isLow ? 5 : 8;
+                // tronçon partagé : une voie par circuit, côte à côte, tracée d'un seul tenant
+                // (chaque couleur garde la même longueur visible, sans rupture aux jonctions)
+                const n = bandColors.length, lane = 3;
+                ctx2D.lineCap = 'butt';
+                ctx2D.setLineDash(isLow ? [8, 6] : []);
                 bandColors.forEach((hex, k) => {
+                    if (!strokeRun((k - (n - 1) / 2) * lane)) return;
                     ctx2D.strokeStyle = hex;
-                    ctx2D.setLineDash([seg, seg * (n - 1)]);
-                    ctx2D.lineDashOffset = -seg * k;
                     ctx2D.stroke();
                 });
-                ctx2D.lineDashOffset = 0;
+                ctx2D.lineCap = 'round';
             }
         });
         ctx2D.setLineDash([]);

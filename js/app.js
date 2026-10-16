@@ -2411,6 +2411,8 @@ function countDerivationBoxes() {
 }
 
 function buildBomRows(rep) {
+    // Comme le CSV de référence : une ligne titre par catégorie, puis les désignations (catégorie laissée vide)
+    const section = (title, lines) => lines.length ? [[title, '', '', ''], ...lines.map(l => ['', l[1], l[2], l[3]])] : [];
     const groups = [];
 
     const openings = [];
@@ -2418,13 +2420,16 @@ function buildBomRows(rep) {
     const wins = projectData.openings.filter(o => o.type === 'window_std').length;
     if (doors) openings.push(['Ouvertures', 'Porte simple', doors, 'u']);
     if (wins) openings.push(['Ouvertures', 'Fenêtre', wins, 'u']);
-    groups.push(openings);
+    groups.push(section('Ouvertures', openings));
 
-    // appareillage : tableau, puis points lumineux, puis interrupteurs, puis prises
+    // appareillage : une catégorie par famille de la légende imprimée (Prises, Interrupteurs…), ordre interne commun
     const rank = t => { const i = BOM_DEVICE_ORDER.indexOf(t); return i < 0 ? 99 : i; };
-    groups.push(rep.countLines.slice()
-        .sort((x, y) => rank(x.type) - rank(y.type) || (x.gang || 0) - (y.gang || 0))
-        .map(line => ['Appareillages', line.label, line.count, 'u']));
+    const appliance = rep.countLines.slice()
+        .sort((x, y) => legendFamilyRank(x.type) - legendFamilyRank(y.type) || rank(x.type) - rank(y.type) || (x.gang || 0) - (y.gang || 0));
+    PRINT_LEGEND_GROUPS.forEach(([family, test]) => {
+        groups.push(section(family, appliance.filter(l => test(l.type)).map(line => [family, line.label, line.count, 'u'])));
+    });
+    groups.push(section('Appareillages', appliance.filter(l => legendFamilyRank(l.type) === 99).map(line => ['Appareillages', line.label, line.count, 'u'])));
 
     const cables = [];
     // boîtes de dérivation : une par étage relié à une trémie (comptées sur chaque niveau, comme dans la 3D)
@@ -2436,7 +2441,7 @@ function buildBomRows(rep) {
     [...rep.sections.entries()].sort((x, y) => x[0] - y[0]).forEach(([sec, m]) =>
         cables.push(['Gaines et câbles', 'Câble 3G' + sec + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
     if (rep.feederM > 0) cables.push(['Gaines et câbles', 'Liaison tableau → sous-tableau, 3G6 mm² (disjoncteur 32 A, marge 10 %)', Math.ceil(rep.feederM * 1.1), 'm']);
-    groups.push(cables);
+    groups.push(section('Gaines et câbles', cables));
 
     const rows = [];
     groups.filter(g => g.length).forEach((g, i) => {
@@ -2481,16 +2486,29 @@ function printReport() {
     const alerts = rep.alerts.length
         ? '<h3 class="rt-title">Alertes</h3><ul class="rt-alerts">' + rep.alerts.map(a => '<li>' + esc(a) + '</li>').join('') + '</ul>'
         : '';
-    const css = '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;padding:16px;background:#fff;color:#0f172a;font:13px Arial,sans-serif}' +
-        '.page{max-width:186mm;margin:0 auto}' +
-        '.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}.toolbar h1{font-size:18px;margin:0 auto 0 0}.toolbar button{font:inherit;padding:6px 12px;cursor:pointer}' +
-        '.rt-title{font-size:14px;margin:18px 0 6px}.rt{width:100%;border-collapse:collapse;margin-bottom:6px}.rt th,.rt td{border:1px solid #94a3b8;padding:5px 8px;text-align:left;vertical-align:top}' +
-        '.rt th{background:#e2e8f0}.rt .num{text-align:right;white-space:nowrap}.rt tr{break-inside:avoid}.rt-warn td{background:#fee2e2}.rt tr.rt-gap td{border:0;background:#fff;padding:0;height:14px}.rt-note,.rt-empty{font-size:11px;color:#475569}.rt-alerts{margin:0;padding-left:18px}.rt-alerts li{margin-bottom:3px}' +
+    // Thème de l'appli (barre slate, accent jaune) à l'écran ; feuille blanche sobre à l'impression
+    const css = '@page{size:A4;margin:12mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        'body{margin:0;padding:0;background:#e2e8f0;color:#0f172a;font:13px Inter,system-ui,Arial,sans-serif}' +
+        '.page{max-width:186mm;margin:24px auto;padding:0 24px 20px;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(15,23,42,.12),0 8px 24px rgba(15,23,42,.10)}' +
+        '.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 -24px 16px;padding:14px 24px;background:#0f172a;color:#f8fafc;border-radius:12px 12px 0 0;border-bottom:3px solid #facc15}' +
+        '.toolbar h1{font-size:17px;font-weight:700;margin:0 auto 0 0;color:#fff}.toolbar h1 small{color:#94a3b8;font-weight:400}' +
+        '.toolbar label{font-size:12px;color:#cbd5e1}.toolbar select{font:inherit;padding:6px 8px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#f8fafc}' +
+        '.toolbar button{font:inherit;font-weight:600;padding:7px 14px;border:0;border-radius:8px;background:#facc15;color:#0f172a;cursor:pointer}.toolbar button:hover{background:#eab308}' +
+        '.rt-title{font-size:13px;margin:22px 0 8px;padding-left:10px;border-left:4px solid #facc15;text-transform:uppercase;letter-spacing:.05em;color:#0f172a}' +
+        '.rt{width:100%;border-collapse:separate;border-spacing:0;margin-bottom:6px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}' +
+        '.rt th,.rt td{padding:6px 10px;text-align:left;vertical-align:top;border-bottom:1px solid #e2e8f0}' +
+        '.rt th{background:#1e293b;color:#f8fafc;font-weight:600;font-size:12px}' +
+        '.rt tbody tr:last-child td{border-bottom:0}' +
+        '.rt .num{text-align:right;white-space:nowrap}.rt tr{break-inside:avoid}' +
+        '.rt-warn td{background:#fef2f2}' +
+        '.rt tr.rt-gap td{border:0;padding:0;height:12px}' +
+        '.rt-note,.rt-empty{font-size:11px;color:#475569}.rt-alerts{margin:0;padding-left:18px}.rt-alerts li{margin-bottom:3px}' +
         '@media print{' +
         'html,body{margin:0 !important;padding:0 !important;background:#fff !important;width:auto !important;overflow:visible !important}' +
-        '.page{max-width:186mm;margin:0 auto;padding:0}' +
-        '.toolbar{margin-bottom:6px}.toolbar h1{font-size:15px}.toolbar button,.toolbar label{display:none}' +
-        'body{font-size:11px}.rt{font-size:10px}.rt th,.rt td{padding:3px 6px}.rt thead{display:table-header-group}' +
+        '.page{max-width:186mm;margin:0 auto;padding:0;box-shadow:none;border-radius:0}' +
+        '.toolbar{margin:0 0 6px;padding:0 0 6px;background:none;color:#0f172a;border:0;border-bottom:1px solid #0f172a;border-radius:0}' +
+        '.toolbar h1{font-size:15px;color:#0f172a}.toolbar h1 small{color:#475569}.toolbar button,.toolbar label{display:none}' +
+        'body{font-size:11px}.rt{font-size:10px}.rt th,.rt td{padding:3px 6px}.rt th{background:#e2e8f0;color:#0f172a}.rt thead{display:table-header-group}' +
         '.rt-title{font-size:12px;margin:10px 0 4px}.rt-note,.rt-empty{font-size:9px}.rt-alerts li{margin-bottom:1px}' +
         '}';
     win.document.open();
@@ -3062,11 +3080,17 @@ function stopPlacement() {
     clearAllSelection();
 }
 
-// Circuit mis en évidence au clic : celui d'un point de circuit, ou celui qu'une boîte de dérivation porte
+// Circuit mis en évidence au clic : celui d'un point de circuit, ou celui qu'une boîte de dérivation porte.
+// Une commande et l'appareil qu'elle pilote ne sélectionnent pas de circuit : seul leur câblage de commande s'affiche.
 function highlightCircuitOf(el) {
     if (!el) return null;
     if (el.type === 'junction_box') return boxCircuitOf(el);
+    if (isControl(el) || isControlledByLink(el)) return null;
     return isCircuitPoint(el) ? circuitOf(el) : null;
+}
+
+function isControlledByLink(el) {
+    return (getCableNetwork().controlLinks || []).some(link => link.lightIds.includes(el.id));
 }
 
 // Circuit d'une boîte de dérivation : celui dont elle porte les câbles (lighting par défaut)
@@ -4013,6 +4037,12 @@ const PRINT_LEGEND_GROUPS = [
     ['Tableaux', t => ['panel', 'subpanel'].includes(t)]
 ];
 
+// Rang de famille d'un appareil dans la légende imprimée (99 = hors légende, en fin de liste)
+function legendFamilyRank(type) {
+    const i = PRINT_LEGEND_GROUPS.findIndex(([, test]) => test(type));
+    return i < 0 ? 99 : i;
+}
+
 // Seules les entrées présentes sur le niveau affiché sont listées, avec leur nombre
 function buildPrintLegend() {
     const rep = computeCircuitReport();
@@ -4070,10 +4100,17 @@ function drawLegendOpening(ctx, kind, cx, cy, fs) {
 // L'élément fictif n'a ni mur ni circuit : il est dessiné à l'origine, face vers la droite, puis pivoté
 // pour que le mur soit en bas et la face avant vers le haut, comme sur la légende de référence.
 // Les copies d'un groupe se suivent le long du mur (axe x).
+// Pas entre copies d'un groupe sur la légende : 16 unités de dessin, pour que les anneaux de prise (rayon 7.4) ne se touchent pas
+const LEGEND_GANG_PITCH = 16;
+const LEGEND_RING_R = 7.4;
+
+function legendScale(type) {
+    return type === 'panel' || type === 'subpanel' ? 0.04 : 0.085;
+}
+
 function drawLegendDevice(ctx, type, n, cx, cy, fs) {
-    const s = fs * (type === 'panel' || type === 'subpanel' ? 0.04 : 0.085);
-    // pas du groupe = pas réel du plan (13 cm, une unité de dessin = 1 cm)
-    const step = 13 * s;
+    const s = fs * legendScale(type);
+    const step = LEGEND_GANG_PITCH * s;
     const x0 = cx;
     const el = { id: '__legend__', type, x: 0, y: 0, z: 0, wallId: null, side: 1, legendOnly: true };
     const prevCtx = ctx2D, prevGangs = _gangSizes2D;
@@ -4095,11 +4132,11 @@ function drawLegendDevice(ctx, type, n, cx, cy, fs) {
     }
     // groupe de prises : un seul liseré autour, comme sur le plan (rayon d'anneau = 3.4 + 4)
     if (n > 1 && type.startsWith('outlet_')) {
-        const R = 7.4 * s;
+        const R = LEGEND_RING_R * s;
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(x0 - R, cy - R, (n - 1) * step + 2 * R, 2 * R, R);
-        ctx.lineWidth = 2.2 * s;
+        ctx.lineWidth = 1.1 * s;
         ctx.strokeStyle = deviceColor({ type }, null) || EL_COLORS[type] || '#94a3b8';
         ctx.stroke();
         ctx.restore();
@@ -4113,6 +4150,15 @@ function drawLegendSymbol(ctx, item, cx, cy, fs) {
 }
 
 
+// Décalage horizontal du libellé depuis le centre du symbole : après le groupe complet (copies + anneau)
+function legendLabelOffset(it, fs) {
+    if (it.kind) return fs * 4;
+    const n = it.gang || 1;
+    const s = fs * legendScale(it.type);
+    const groupRight = fs * 1.6 + (n - 1) * LEGEND_GANG_PITCH * s + LEGEND_RING_R * s;
+    return Math.max(fs * 4, groupRight + fs * 0.6);
+}
+
 // Met la légende en page (réduit la police si une ligne déborde) ; draw(ctx, x, y) la dessine
 function measurePrintLegend(ctx, legend, width, cols, baseFs) {
     const colGap = Math.round(baseFs * 1.2);
@@ -4123,11 +4169,11 @@ function measurePrintLegend(ctx, legend, width, cols, baseFs) {
         need = Math.max(need, ctx.measureText(g.title).width);
         g.items.forEach(it => {
             ctx.font = baseFs + 'px Arial, sans-serif';
-            need = Math.max(need, baseFs * 4 + ctx.measureText(it.label).width + baseFs * 1.5 + ctx.measureText(String(it.count)).width);
+            need = Math.max(need, legendLabelOffset(it, baseFs) + ctx.measureText(it.label).width + baseFs * 1.5 + ctx.measureText(String(it.count)).width);
         });
     });
     const fs = need > colW ? Math.max(10, Math.floor(baseFs * colW / need)) : baseFs;
-    const lineH = Math.round(fs * 1.7), headH = Math.round(fs * 2), blockGap = Math.round(fs * 1.2);
+    const lineH = Math.round(fs * 2), headH = Math.round(fs * 2), blockGap = Math.round(fs * 1.2);
     const colH = new Array(cols).fill(0);
     const placed = legend.map(g => {
         const c = colH.indexOf(Math.min(...colH));
@@ -4143,6 +4189,8 @@ function measurePrintLegend(ctx, legend, width, cols, baseFs) {
             target.textBaseline = 'middle';
             placed.forEach(({ g, x, y }) => {
                 const gx = x0 + x, gy = y0 + y;
+                // libellés alignés sur le groupe le plus large du bloc
+                const labelX = gx + Math.max(...g.items.map(it => legendLabelOffset(it, fs)));
                 target.font = 'bold ' + fs + 'px Arial, sans-serif';
                 target.textAlign = 'left';
                 target.fillText(g.title, gx, gy + headH / 2);
@@ -4152,9 +4200,7 @@ function measurePrintLegend(ctx, legend, width, cols, baseFs) {
                     target.fillStyle = '#0f172a';
                     target.font = fs + 'px Arial, sans-serif';
                     target.textAlign = 'left';
-                    // un groupe de prises s'étale sur plus de place : le libellé est décalé d'autant
-                    const nGang = it.kind ? 1 : (it.gang || 1);
-                    target.fillText(it.label, gx + Math.max(fs * 4, fs * (1.6 + (nGang - 1) * 1.1 + 1.1)), cy);
+                    target.fillText(it.label, labelX, cy);
                     target.font = 'bold ' + fs + 'px Arial, sans-serif';
                     target.textAlign = 'right';
                     target.fillText(String(it.count), gx + colW, cy);
@@ -4183,6 +4229,7 @@ function printPlan(mode) {
             title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select>' + '<span style="font-weight:600">Recadrage (%) :</span> <label>Haut <input id="crop-t" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Bas <input id="crop-b" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Gauche <input id="crop-l" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Droite <input id="crop-r" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <button id="crop-reset" type="button">Réinitialiser le cadrage</button>' + '<button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><div id="preview-row"><div id="stage"><img class="plan" id="plan" alt="' +
             title + '"><div id="crop-box"><i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i></div></div><div id="plan-sheet"><img id="plan-preview" alt="' + title + ' avec légende"></div></div><img id="plan-print" alt="' + title + '">' +
             '<style>' +
+            '@media screen{html,body{background:#e2e8f0}.toolbar{background:#0f172a;color:#f8fafc;margin:0;padding:10px 16px;border-bottom:3px solid #facc15}.toolbar h1{color:#fff;font-size:16px;font-weight:700}.toolbar label,.toolbar span{color:#cbd5e1;font-size:12px;font-weight:500}.toolbar select,.toolbar input{background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:6px}.toolbar button{border:0;border-radius:8px;padding:7px 14px;font-weight:600;background:#334155;color:#f8fafc;cursor:pointer}.toolbar button:hover{background:#475569}.toolbar button:disabled{opacity:.5;cursor:default}#print-button{background:#facc15;color:#0f172a}#print-button:hover{background:#eab308}#print-button:disabled:hover{background:#facc15}#stage,#plan-sheet{border-radius:4px}}' +
             '#stage{position:relative;margin:0 auto;background:#fff;overflow:hidden;user-select:none;box-shadow:0 0 0 1px #94a3b8,0 4px 12px rgba(0,0,0,.2);aspect-ratio:297/210;width:min(100%,calc((100vh - 38mm) * 297 / 210));height:auto}' +
             '#stage.portrait{aspect-ratio:210/297;width:min(100%,calc((100vh - 38mm) * 210 / 297))}#stage .plan{height:100%;width:100%}' +
             '#crop-box{position:absolute;box-sizing:border-box;border:2px dashed #facc15;box-shadow:0 0 0 9999px rgba(15,23,42,.55);cursor:move;touch-action:none}' +
