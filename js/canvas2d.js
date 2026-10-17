@@ -13,6 +13,8 @@ function init2DCanvas() {
     });
 
     canvas2D.addEventListener('mousedown', on2DMouseDown);
+    canvas2D.addEventListener('dblclick', on2DDoubleClick);
+    
     canvas2D.addEventListener('mousemove', on2DMouseMove);
     canvas2D.addEventListener('mouseleave', hidePlanTooltip);
     window.addEventListener('mouseup', on2DMouseUp);
@@ -526,6 +528,25 @@ function on2DMouseDown(e) {
     redraw2D();
 }
 
+// Circuit affiché par un double clic : celui de l'appareil. Au simple clic, une commande ou une charge commandée
+// ne sélectionne pas de circuit (highlightCircuitOf renvoie null) ; ici on prend le circuit de la charge pilotée.
+function circuitForDoubleClick(el) {
+    if (!el) return null;
+    if (el.type === 'junction_box') return boxCircuitOf(el);
+    return deviceCircuitOf(el, controlTargetsOf(getCableNetwork()));
+}
+
+
+// Double clic sur un appareil (outil Sélectionner) : affiche le circuit entier
+function on2DDoubleClick(e) {
+    if (currentTool !== 'select') return;
+    const hit = pickElement2D(worldToCanvasCoords(e.clientX, e.clientY));
+    const el = hit ? electricalOn().find(x => x.id === hit.id) : null;
+    const circ = el ? circuitForDoubleClick(el) : null;
+    if (circ) selectCircuit(circ.id);
+}
+
+
 // ---------- Fantôme de pose (2D) ----------
 // Montre l'élément qui serait posé à la position du curseur, sans le créer.
 // Rouge : il y en a déjà un identique à cet endroit (la pose serait refusée).
@@ -983,10 +1004,16 @@ function drawElementSymbol2D(el) {
     ctx2D.translate(c.x, c.y);
     ctx2D.rotate(ang);
     ctx2D.lineJoin = 'round';
+
     ctx2D.lineCap = 'round';
+    // appareillage du circuit sélectionné : l'appareil lui-même clignote (estompé une phase sur deux)
+    const blinkMember = !isPrintRendering && !el.legendOnly && !!_circuitMembers2D && _circuitMembers2D.has(el.id) && el.id !== selected3DId;
+    if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.25;
 
     if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_20a_classic' || t === 'outlet_dedicated_20' || t === 'outlet_dedicated_32' || t === 'outlet_switched') {
-        // prise simple : demi-disque à l'échelle du module ; dans une double / triple, le demi-disque est un peu plus petit
+
+
+    // prise simple : demi-disque à l'échelle du module ; dans une double / triple, le demi-disque est un peu plus petit
     // pour que les prises voisines (7,5 cm d'entraxe) ne se chevauchent pas
     const inGang = (_gangSizes2D || computeOutletGangs().sizeOf).get(el.id) > 1;
     const r = isDedicatedOutlet(el) ? 9.5 : (inGang ? 3.4 : 4.5);
@@ -1163,7 +1190,7 @@ function drawElementSymbol2D(el) {
         ctx2D.fillStyle = paper;
         ctx2D.fill();
         ctx2D.lineWidth = (2) * LW;
-        ctx2D.strokeStyle = col;
+        ctx2D.strokeStyle = '#64748b';   // liseré gris foncé, visible sur fond clair comme sombre;
         ctx2D.stroke();
         line(-4, 0, 4, 0, 1.2, ink);
         line(0, -4, 0, 4, 1.2, ink);
@@ -1207,8 +1234,14 @@ function drawElementSymbol2D(el) {
 
     // anneau de circuit : permanent sur les points de circuit, sauf sonnerie et moteur de volet.
     // Les autres appareils (commandes, sonnerie, moteur) n'en ont pas au repos : il apparaît en clignotant quand leur circuit est sélectionné
-    const permanentRing = !!circ && t !== 'doorbell_chime' && t !== 'shutter_motor';
-    if (ringCirc && ringR > 0 && !isGangRing && (permanentRing || circHot)) {
+    // prise simple (non groupée) : pas de liseré rond, ni au repos ni quand son circuit est sélectionné
+    // pas d'anneau rond sur ces appareils, ni au repos ni quand leur circuit est sélectionné
+    const NO_RING_TYPES = ['doorbell_chime', 'shutter_motor', 'outlet_dedicated_20', 'outlet_dedicated_32', 'outlet_switched', 'shutter_control'];
+    // prise simple (non groupée) : même règle ; les groupes double, triple et quadruple gardent leur anneau
+    const simpleOutlet = GANGABLE_OUTLETS.includes(t) && !((_gangSizes2D || computeOutletGangs().sizeOf).get(el.id) > 1);
+    const ringless = NO_RING_TYPES.includes(t) || simpleOutlet;
+    const permanentRing = !!circ && !ringless;
+    if (ringCirc && ringR > 0 && !isGangRing && !ringless && (permanentRing || circHot)) {
         ctx2D.beginPath();
         ctx2D.arc(ringX, 0, ringR, 0, Math.PI * 2);
         ctx2D.lineWidth = (2.2) * LW;
@@ -1236,7 +1269,8 @@ function drawElementSymbol2D(el) {
         ctx2D.globalAlpha = 1;
     }
     // élément sélectionné depuis son circuit : repère qui clignote (visible un temps sur deux)
-    const blinkSel = el.id === selected3DId && !!ringCirc && ringCirc.id === selectedCircuitId;
+    // tout élément sélectionné clignote (commande, charge ou prise), au même rythme que les autres alertes
+    const blinkSel = el.id === selected3DId;
     if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
         const ringPath = () => {
             if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
@@ -1260,9 +1294,12 @@ function drawElementSymbol2D(el) {
     // calibre (10 / 16 / 20 / 32), hors du symbole, dans sa couleur. Absent de la légende : le libellé porte déjà l'ampérage, et le chiffre chevauche les lignes voisines
     if (textAt && !el.legendOnly) {
         const fx = Math.cos(ang), fy = Math.sin(ang);
+
         ctx2D.save();
+        if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.25;
         ctx2D.fillStyle = col;
         ctx2D.font = 'bold 6.5px Inter, sans-serif';
+
         ctx2D.textAlign = 'center';
         ctx2D.textBaseline = 'middle';
         ctx2D.translate(c.x + fx * (textAt.x + 1), c.y + fy * (textAt.x + 1));
@@ -1272,12 +1309,15 @@ function drawElementSymbol2D(el) {
     }
 }
 
-// Cotes des murs : placées hors de l'épaisseur des murs, à l'écart des appareils, des ouvertures et des autres cotes
+// Cotes des murs : taille fixe à l'écran (11 px, quel que soit le zoom), texte « 4,00 m »,
+// placées hors de l'épaisseur des murs, à l'écart des appareils, des ouvertures et des autres cotes
 function drawWallLengthLabels() {
-    ctx2D.font = 'bold 11px Inter, sans-serif';
+    // k : taille d'un pixel écran en unités du plan, pour que police, marges et halo restent fixes à l'écran
+    const k = 1 / zoom;
+    ctx2D.font = 'bold ' + (11 * k) + 'px Inter, sans-serif';
     ctx2D.textAlign = 'center';
     ctx2D.textBaseline = 'middle';
-    const hh = 7;
+    const hh = 7 * k;
     const obstacles = [];
     electricalOn().forEach(el => {
         const p = getElCoords(el);
@@ -1303,16 +1343,15 @@ function drawWallLengthLabels() {
         }
         return false;
     };
-    const bg = currentTheme === 'light' ? '#ffffff' : '#020617';
 
     wallsOn().forEach(wall => {
         const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
         const len = Math.hypot(dx, dy);
         if (len < 1) return;
-        const label = (len / 100).toFixed(2) + ' m';
-        const hw = ctx2D.measureText(label).width / 2 + 3;
+        const label = (len / 100).toFixed(2).replace('.', ',') + ' m';
+        const hw = ctx2D.measureText(label).width / 2 + 3 * k;
         const nx = -dy / len, ny = dx / len;
-        const off = (wall.thickness || 10) / 2 + 4 + hh;
+        const off = (wall.thickness || 10) / 2 + 4 * k + hh;
         let best = null, bestScore = Infinity;
         [0.5, 0.35, 0.65, 0.2, 0.8].forEach(t => {
             [1, -1].forEach(side => {
@@ -1333,10 +1372,6 @@ function drawWallLengthLabels() {
         ctx2D.save();
         ctx2D.translate(best.x, best.y);
         ctx2D.rotate(-rot2D);
-        ctx2D.lineJoin = 'round';
-        ctx2D.lineWidth = 4;
-        ctx2D.strokeStyle = bg;
-        ctx2D.strokeText(label, 0, 0);
         ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f1f5f9';
         ctx2D.fillText(label, 0, 0);
         ctx2D.restore();
@@ -1344,9 +1379,14 @@ function drawWallLengthLabels() {
     ctx2D.textBaseline = 'alphabetic';
 }
 
+
 // Tailles des groupes de prises (double, triple…), calculées une fois par dessin du plan
 let _gangSizes2D = null;
+
 let _gangGroups2D = null;
+// Appareillages du circuit sélectionné (clignotent eux-mêmes), calculé une fois par dessin du plan
+let _circuitMembers2D = null;
+
 // Commande -> charge qu'elle pilote, calculé une fois par dessin du plan
 let _controlTargets2D = new Map();
 
@@ -1428,7 +1468,11 @@ function cableOutsideDevices2D(a, b, discs) {
 function draw2DEquipment() {
     const gangs = computeOutletGangs();
     _gangSizes2D = gangs.sizeOf;
+    
     _gangGroups2D = gangs.groupOf;
+    const selCircuit = selectedCircuitId ? circuitById(selectedCircuitId) : null;
+    _circuitMembers2D = selCircuit ? circuitHighlightIds(selCircuit) : null;
+
     ensureCircuitAssignment();
     // 1. Câbles (trait plein = plafond, pointillé = plinthe)
     const net = projectData.electrical.length ? getCableNetwork() : null;
@@ -1449,6 +1493,8 @@ function draw2DEquipment() {
         const focusMode = hasLinkFocus || !!focusCircuit;
         // câbles hors focus : couleur pâle pleine (pas de transparence, sinon les croisements se mélangent)
         const dimColor = currentTheme === 'light' ? '#d5dde8' : '#2f3e52';
+        // couleur « éteinte » du fil sélectionné : contraste avec le fond (sans effet à l'impression)
+        const focusAlt = currentTheme === 'light' ? '#0f172a' : '#f8fafc';
         ctx2D.lineCap = 'round';
         const deviceDiscs = electricalOn().map(el => ({ c: getElCoords(el), R: isDedicatedOutlet(el) ? 14 : 12 }));
         const ctlColors = switchedOutletCableColors(net);
@@ -1473,6 +1519,9 @@ function draw2DEquipment() {
             // couleur du lien sélectionné uniquement (un tronçon partagé peut porter aussi d'autres commandes)
             const linkColor = (s.links || []).filter(id => selectedLinkIds.has(id)).map(id => linkCableColors.get(id)).find(Boolean);
             const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
+            // fil du circuit (ou de la commande) sélectionné : il alterne avec le contraste, comme les appareils
+            const focusBlinkColour = (!isPrintRendering && !blinkOn) ? focusAlt : focusColor;
+
             ctx2D.lineWidth = focusMode && focusHit ? 2.4 : 1.4;
             const nx = -dy / len, ny = dx / len;
             // trace le tronçon décalé de `shift` perpendiculairement à sa direction ; faux si rien à tracer
@@ -1492,7 +1541,7 @@ function draw2DEquipment() {
             const bandColors = focusMode ? [] : [...new Set([...circs.map(c => circuitColor(c)), ...(s.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id))])].sort();
             if (focusMode || bandColors.length <= 1) {
                 ctx2D.strokeStyle = focusMode
-                    ? (focusHit ? focusColor : dimColor)
+                    ? (focusHit ? focusBlinkColour : dimColor)
                     : bandColors[0] || '#94a3b8';
                 ctx2D.setLineDash(isLow ? [8, 6] : []);
                 ctx2D.stroke();
@@ -1526,8 +1575,8 @@ function draw2DEquipment() {
         ctx2D.translate(p.x, p.y);
         ctx2D.rotate(p.angle);
         // toujours visible en fort (comme à la sélection) ; sélectionnée : liseré blanc extérieur
-        ctx2D.fillStyle = 'rgba(248,250,252,0.30)';
-        ctx2D.strokeStyle = '#f8fafc';
+        ctx2D.fillStyle = currentTheme === 'light' ? 'rgba(15,23,42,0.30)' : 'rgba(248,250,252,0.30)';
+        ctx2D.strokeStyle = shaftColour();
         ctx2D.lineWidth = 3 / zoom;
         ctx2D.fillRect(-s / 2, -s / 2, s, s);
         ctx2D.strokeRect(-s / 2, -s / 2, s, s);
@@ -1549,9 +1598,10 @@ function draw2DEquipment() {
         ctx2D.lineWidth = 1.5 / zoom;
         ctx2D.fill();
         ctx2D.stroke();
-        ctx2D.fillStyle = '#f8fafc';
+        ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f8fafc';
         ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
         ctx2D.textAlign = 'center';
+        ctx2D.textBaseline = 'middle';
         ctx2D.fillText(shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - 6 / zoom);
         ctx2D.restore();
     });
@@ -1761,6 +1811,8 @@ function place2DAt(coords) {
         const linkedNames = (lastShaft.levelIds || []).filter(id => id !== activeLevelId)
             .map(id => (projectData.levels.find(l => l.id === id) || {}).name).filter(Boolean);
         showNotification(linkedNames.length ? 'Trémie reliée à : ' + linkedNames.join(', ') : 'Trémie placée (un seul niveau)', 'success');
+    } else if (type === 'outlet_switched') {
+        showNotification('Prise commandée placée : elle sera reliée au circuit 16A (même couleur)', 'success');
     } else {
         showNotification('Élément placé', 'success');
     }

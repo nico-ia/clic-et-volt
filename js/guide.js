@@ -31,6 +31,16 @@
                        <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#10b981" stroke-width="1.2"/>
                        <path d="M8.5,0 L12.7,-4.2" stroke="#10b981" stroke-width="1.1"/>
                        <circle cx="12.7" cy="-4.2" r="1" fill="#10b981"/>`,
+        // interrupteur qui pilote une lumière : même couleur que le circuit d'éclairage
+        switchLight: `<path d="M-1,0 H5" stroke="#facc15" stroke-width="1.2"/>
+                      <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#facc15" stroke-width="1.2"/>
+                      <path d="M8.5,0 L12.7,-4.2" stroke="#facc15" stroke-width="1.1"/>
+                      <circle cx="12.7" cy="-4.2" r="1" fill="#facc15"/>`,
+        // interrupteur qui pilote une prise commandée : même couleur que le circuit 16A
+        switchOutlet: `<path d="M-1,0 H5" stroke="#f97316" stroke-width="1.2"/>
+                       <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#f97316" stroke-width="1.2"/>
+                       <path d="M8.5,0 L12.7,-4.2" stroke="#f97316" stroke-width="1.1"/>
+                       <circle cx="12.7" cy="-4.2" r="1" fill="#f97316"/>`,
         // va-et-vient (vert clair)
         switchVaEtVient: `<path d="M-1,0 H5" stroke="#22c55e" stroke-width="1.2"/>
                           <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#22c55e" stroke-width="1.2"/>
@@ -52,21 +62,21 @@
                  <rect x="-30" y="-4" width="60" height="8" fill="none" stroke="#22d3ee" stroke-width="2"/>
                  <line x1="-30" y1="0" x2="30" y2="0" stroke="#22d3ee" stroke-width="2"/>`,
         // prise commandée (orange clair) : prise 16 A avec un point
-        outletSwitched: `<path d="M-1,-6 V6" stroke="#fb923c" stroke-width="1.2"/>
-                         <path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#fb923c" stroke-width="1.3"/>
-                         <path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#fb923c" stroke-width="1.1"/>
-                         <circle cx="1" cy="2.5" r="1.6" fill="#fb923c"/>`,
-        // bouton de sonnette (rose) et sonnerie (fuchsia) : ondes sonores
-        doorbellButton: `<path d="M-1,0 H5" stroke="#f472b6" stroke-width="1.2"/>
-                         <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#f472b6" stroke-width="1.2"/>
-                         <circle cx="8.5" cy="0" r="1.2" fill="#f472b6"/>`,
-        doorbellChime: `<circle r="5" fill="#f8fafc" stroke="#e879f9" stroke-width="2"/>
-                        <path d="M6.12,-5.15 A8,8 0 0 1 6.12,5.15 M8.41,-7.09 A11,11 0 0 1 8.41,7.09" fill="none" stroke="#e879f9" stroke-width="1.2"/>`,
-        // commande de volet (indigo) : flèches monter / descendre ; moteur (indigo) : boîtier à deux axes
-        shutterControl: `<path d="M-1,0 H5" stroke="#818cf8" stroke-width="1.8"/>
-                         <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#818cf8" stroke-width="1.2"/>
-                         <path d="M8.5,-2.4 L7.4,-0.9 H9.6 Z M8.5,2.4 L7.4,0.9 H9.6 Z" fill="#818cf8"/>`,
-        shutterMotor: `<rect x="-7" y="-5" width="14" height="10" rx="2" fill="#f8fafc" stroke="#6366f1" stroke-width="2"/>
+        outletSwitched: `<path d="M-1,-6 V6" stroke="#f97316" stroke-width="1.2"/>
+                         <path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#f97316" stroke-width="1.3"/>
+                         <path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#f97316" stroke-width="1.1"/>
+                         <circle cx="1" cy="2.5" r="1.6" fill="#f97316"/>`,
+        // bouton de sonnette et sonnerie (rose clair, couleur du circuit Sonnerie) : ondes sonores
+        doorbellButton: `<path d="M-1,0 H5" stroke="#f9a8d4" stroke-width="1.2"/>
+                         <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#f9a8d4" stroke-width="1.2"/>
+                         <circle cx="8.5" cy="0" r="1.2" fill="#f9a8d4"/>`,
+        doorbellChime: `<circle r="5" fill="#f8fafc" stroke="#f9a8d4" stroke-width="2"/>
+                        <path d="M6.12,-5.15 A8,8 0 0 1 6.12,5.15 M8.41,-7.09 A11,11 0 0 1 8.41,7.09" fill="none" stroke="#f9a8d4" stroke-width="1.2"/>`,
+        // commande de volet (gris clair) : flèches monter / descendre ; moteur (gris, circuit Volets 10A) : boîtier à deux axes
+        shutterControl: `<path d="M-1,0 H5" stroke="#9ca3af" stroke-width="1.8"/>
+                         <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#9ca3af" stroke-width="1.2"/>
+                         <path d="M8.5,-2.4 L7.4,-0.9 H9.6 Z M8.5,2.4 L7.4,0.9 H9.6 Z" fill="#9ca3af"/>`,
+        shutterMotor: `<rect x="-7" y="-5" width="14" height="10" rx="2" fill="#f8fafc" stroke="#6b7280" stroke-width="2"/>
                        <path d="M-4,-2 H4 M-4,2 H4" stroke="#0f172a" stroke-width="1.2"/>`,
         // sous-tableau (cyan clair) : même forme que le plan (coffret, deux rangées de modules, éclair)
         subpanel: `<rect x="-1" y="-12" width="9" height="24" fill="#f8fafc" stroke="#67e8f9" stroke-width="1.6"/>
@@ -138,7 +148,7 @@
     // Commande : interrupteur sur le mur, câble pointillé jusqu'au plafonnier qui s'allume
     const animControl = () => svg(`
         <line x1="20" y1="30" x2="300" y2="30" stroke="#334155" stroke-width="8"/>
-        ${sym(S.switchSimple, 60, 32, 90, 3.2)}
+        ${sym(S.switchLight, 60, 32, 90, 3.2)}
         <path class="g-dash" d="M60 74 L60 120 L216 120" fill="none" stroke="#facc15" stroke-width="3" stroke-dasharray="6 6"/>
         <circle class="g-bulb" cx="240" cy="120" r="22"/>
         ${sym(S.ceiling, 240, 120, 0, 2.2)}
@@ -148,20 +158,20 @@
     const animControlled = () => svg(`
         <line x1="20" y1="40" x2="300" y2="40" stroke="#334155" stroke-width="8"/>
         <g class="g-circ c1">
-            ${sym(S.switchSimple, 26, 44, 90, 2.4)}${sym(S.outletSwitched, 78, 44, 90, 2.4)}
-            <path d="M26 80 V96 H78 V66" fill="none" stroke="#fb923c" stroke-width="2.5" stroke-dasharray="5 4"/>
-            <text class="g-lbl" x="52" y="118">Prise commandée</text>
-            <text class="g-lbl" x="52" y="132" style="font-size:10px">interrupteur → prise</text>
+            ${sym(S.switchOutlet, 26, 44, 90, 2.4)}${sym(S.outletSwitched, 78, 44, 90, 2.4)}
+            <path d="M26 80 V96 H78 V66" fill="none" stroke="#f97316" stroke-width="2.5" stroke-dasharray="5 4"/>
+            <text class="g-lbl" x="58" y="118">Prise commandée 16A</text>
+            <text class="g-lbl" x="58" y="132" style="font-size:10px">interrupteur → prise</text>
         </g>
         <g class="g-circ c2">
             ${sym(S.doorbellButton, 134, 44, 90, 2.4)}${sym(S.doorbellChime, 186, 44, 90, 1.8)}
-            <path d="M134 80 V96 H186 V62" fill="none" stroke="#e879f9" stroke-width="2.5" stroke-dasharray="5 4"/>
+            <path d="M134 80 V96 H186 V62" fill="none" stroke="#f9a8d4" stroke-width="2.5" stroke-dasharray="5 4"/>
             <text class="g-lbl" x="160" y="118">Sonnette</text>
             <text class="g-lbl" x="160" y="132" style="font-size:10px">bouton → sonnerie</text>
         </g>
         <g class="g-circ c3">
             ${sym(S.shutterControl, 242, 44, 90, 2.4)}${sym(S.shutterMotor, 294, 44, 90, 2.4)}
-            <path d="M242 80 V96 H294 V66" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-dasharray="5 4"/>
+            <path d="M242 80 V96 H294 V66" fill="none" stroke="#6b7280" stroke-width="2.5" stroke-dasharray="5 4"/>
             <text class="g-lbl" x="268" y="118">Volet roulant</text>
             <text class="g-lbl" x="268" y="132" style="font-size:10px">commande → moteur</text>
         </g>
@@ -417,13 +427,13 @@
                  'Le luminaire peut être sur un autre circuit que l\'interrupteur : le câble de commande part alors du circuit de l\'interrupteur jusqu\'à celui du luminaire.'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'switch_simple', pulse: '#btn-2d-place-switch_simple' },
           retenir: 'Un va-et-vient se pose toujours par deux.' },
-        { part: 'Plan 2D', title: 'Prise commandée, sonnette et volet', anim: animControlled,
-          text: ['Prise commandée : un interrupteur la coupe ou la rétablit, comme un luminaire. Reliez-la dans « Modifier les associations ».',
+        { part: 'Plan 2D', title: 'Prise commandée 16A, sonnette et volet', anim: animControlled,
+          text: ['Prise commandée 16A : un interrupteur la coupe ou la rétablit, comme un luminaire. Reliez-la dans « Modifier les associations ».',
                  'Sonnette : posez le « Bouton de sonnette » et la « Sonnerie ». Le bouton fait sonner la sonnerie.',
-                 'Volet roulant : la « Commande de volet roulant » monte ou descend le « Moteur de volet roulant ». Le moteur est alimenté par le circuit des prises.',
+                 'Volet roulant : la « Commande de volet roulant » monte ou descend le « Moteur de volet roulant ». Le moteur est alimenté par le circuit Volets 10A.',
                  'Ces câblages sont simplifiés : la sonnette et le volet ne montrent pas les fils réels (basse tension, moteur à plusieurs fils).'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'doorbell_button', pulse: '#btn-2d-place-doorbell_button' },
-          retenir: 'Une prise commandée se relie à un interrupteur, comme un luminaire.' },
+          retenir: 'Une prise commandée 16A se relie à un interrupteur, comme un luminaire.' },
         { part: 'Plan 2D', title: 'Ajouter un étage ou un sous-sol', anim: animLevels,
           text: ['Cliquez sur [fa-circle-up] pour ajouter un étage, ou sur [fa-circle-down] pour ajouter un sous-sol, dans la barre du haut.',
                  'Donnez un nom et une cote (hauteur par rapport au RDC).',
@@ -465,7 +475,8 @@
           text: ['Vous ne dessinez pas les câbles : l\'appli les trace toute seule entre le tableau et chaque appareil.',
                  'Un appareil posé en 2D ou en 3D reçoit son câble automatiquement.',
                  'Le câble suit les murs et passe par les trémies (ouvertures dans le plancher) pour rejoindre l\'autre étage.',
-                 'Pièce fermée sans liaison au tableau : l\'alerte propose un mur commun ou « Autoriser le passage » (câble au plafond entre les pièces). Le bouton « Retirer l\'autorisation », dans le panneau Avertissements ou dans l\'onglet Appareillages, annule ce choix.',
+                 'Pièce fermée sans liaison au tableau : l\'alerte du circuit concerné propose « Autoriser le passage » (câble au plafond entre les pièces, et vers un mur intérieur isolé). Ce réglage se fait sur la carte de chaque circuit (onglet Circuits) ; « Retirer l\'autorisation » l\'annule.',
+                 'Cheminement par circuit : sur la carte de chaque circuit (onglet Circuits), choisissez « Murs » (défaut), « Mixte » ou « Plafond ». Le plafond prend la ligne droite au-dessus de la pièce (et des îlots) pour un chemin plus court, même sans îlot ; le mixte ne le fait que si le chemin par les murs est nettement plus long. Un appareil posé sur un mur isolé passe toujours par le plafond. Si un circuit n\'a pas de chemin, il clignote en rouge, ainsi que son bouton de cheminement, et le compteur d\'alertes global y renvoie.',
                  'Pour une pièce séparée, voir l\'étape « Pièce séparée : le sous-tableau ».'],
           retenir: 'Pas besoin de tracer les câbles : vérifiez seulement la place des appareils.' },
         { part: 'Vue 3D et câblage', title: 'Pièce séparée : le sous-tableau', anim: animSubpanel,

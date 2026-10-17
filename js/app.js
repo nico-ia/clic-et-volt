@@ -18,7 +18,7 @@ let projectData = {
         { id: 'c_lighting', name: 'Éclairage 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#facc15' },
         { id: 'c_outlets', name: 'Prises de courant 16A', type: 'outlets', maxPoints: 8, breakerRating: 16, wireSection: 2.5, color: '#f97316' },
         classicOutlet20Circuit(),
-        { id: 'c_kitchen', name: 'Prises 20A plan de travail', type: 'specialized', maxPoints: 6, breakerRating: 20, wireSection: 2.5, color: '#ec4899' },
+        { id: 'c_kitchen', name: 'Prises 20A plan de travail', type: 'specialized', maxPoints: 6, breakerRating: 20, wireSection: 2.5, color: '#ef4444' },
         ...dedicatedCircuitDefs(),
         doorbellCircuitDef(),
         daafCircuitDef(),
@@ -26,15 +26,17 @@ let projectData = {
     ],
     annotations: []
 };
+// Couleurs de base figées au chargement, avant toute restauration de projet
+const DEFAULT_CIRCUIT_COLOR_BY_ID = Object.fromEntries(projectData.circuits.map(c => [c.id, c.color]));
 
 // Prises 20 A classiques : 12 points max en 2,5 mm² / 20 A
 function classicOutlet20Circuit() {
-    return { id: 'c_outlets20', name: 'Prises 20A', type: 'specialized', maxPoints: 12, breakerRating: 20, wireSection: 2.5, color: '#ef4444' };
+    return { id: 'c_outlets20', name: 'Prises 20A', type: 'specialized', maxPoints: 12, breakerRating: 20, wireSection: 2.5, color: '#15803d' };
 }
 
 // Sonnerie : circuit à part, distinct de l'éclairage
 function doorbellCircuitDef() {
-    return { id: 'c_doorbell', name: 'Sonnerie 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#34d399' };
+    return { id: 'c_doorbell', name: 'Sonnerie 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#f9a8d4' };
 }
 
 // DAAF : circuit à part, distinct de l'éclairage
@@ -45,7 +47,7 @@ function daafCircuitDef() {
 // Volets roulants : moteurs et commandes sur un circuit à part (et non sur les prises)
 function shutterCircuitDef() {
     // 9e circuit : hors de la palette (sinon il reprendrait le jaune de l'éclairage)
-    return { id: 'c_shutters', name: 'Volets 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#6366f1' };
+    return { id: 'c_shutters', name: 'Volets 10A', type: 'lighting', maxPoints: 8, breakerRating: 10, wireSection: 1.5, color: '#6b7280' };
 }
 
 // Circuits dédiés (une prise par circuit) : 20 A en 2,5 mm² ou 32 A en 6 mm²
@@ -154,6 +156,7 @@ function startProjectWatcher() {
 
 window.addEventListener('DOMContentLoaded', () => {
     initializeTheme();
+    paintOutletIcons();
     document.getElementById('inspector-dock-slot').appendChild(document.getElementById('inspector-3d'));
     init2DCanvas();
     init3DScene();
@@ -259,6 +262,16 @@ function refreshViewportSizes() {
     else if (currentMode === '3d') on3DWindowResize();
 }
 
+// Icônes des prises de la sidebar : couleur de base du circuit par défaut de leur type
+const OUTLET_ICON_TYPES = ['outlet_16a', 'outlet_20a', 'outlet_20a_classic', 'outlet_dedicated_20', 'outlet_dedicated_32', 'outlet_switched'];
+function paintOutletIcons() {
+    document.querySelectorAll('button[data-type]').forEach(btn => {
+        const svg = btn.querySelector('svg');
+        if (!svg || !OUTLET_ICON_TYPES.includes(btn.dataset.type)) return;
+        svg.style.color = DEFAULT_CIRCUIT_COLOR_BY_ID[DEFAULT_CIRCUIT_BY_TYPE[btn.dataset.type]];
+    });
+}
+
 function initSidebars() {
     const prefs = readSidebarPrefs();
     const defs = [
@@ -354,8 +367,12 @@ function applyTheme() {
         button.title = light ? 'Passer au thème sombre' : 'Passer au thème clair';
     }
     if (threeScene) threeScene.background = new THREE.Color(light ? '#e2e8f0' : '#020617');
+    // la 3D se reconstruit pour que les fils noirs et gris prennent la teinte du thème
+    if (currentMode === '3d' && threeScene) build3DScene();
     redraw2D();
 }
+// Trémie : blanche en thème sombre, noire en thème clair (une trémie blanche disparaît sur fond clair)
+function shaftColour() { return currentTheme === 'light' ? '#0f172a' : '#f8fafc'; }
 
 function toggleTheme() {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -1245,7 +1262,7 @@ function updateStats() {
 // =====================================================================
 //  CIRCUITS, MÉTRÉ, CONTRÔLES, OUTILS 2D, SAUVEGARDE AUTO
 // =====================================================================
-const CIRCUIT_PALETTE = ['#facc15', '#f97316', '#ef4444', '#ec4899', '#a78bfa', '#38bdf8', '#34d399', '#94a3b8'];
+const CIRCUIT_PALETTE = ['#facc15', '#f97316', '#14b8a6', '#ec4899', '#a78bfa', '#38bdf8', '#84cc16', '#94a3b8'];
 // Familles d'appareils : un nouveau type s'ajoute aussi dans ces listes selon son comportement
 const CEILING_TYPES = ['light_ceiling', 'light_spot', 'smoke_detector'];   // fixés au plafond
 const LIGHT_TYPES = ['light_ceiling', 'light_spot', 'wall_light'];         // luminaires, reliés à une commande
@@ -1273,7 +1290,7 @@ const DEDICATED_APPLIANCE_LABELS = {
 };
 const ELEMENT_LABELS = {
     outlet_16a: 'Prise 16A', outlet_20a: 'Prise 20A plan de travail', outlet_20a_classic: 'Prise 20A classique', outlet_dedicated_20: 'Prise 20A dédiée', outlet_dedicated_32: 'Prise 32A dédiée',
-    outlet_switched: 'Prise commandée',
+    outlet_switched: 'Prise commandée 16A',
     switch_simple: 'Interrupteur simple', switch_va_et_vient: 'Interrupteur va-et-vient',
     switch_pushbutton: 'Bouton poussoir (télérupteur)', switch_dimmer: 'Variateur',
     motion_timer: 'Minuterie / détecteur de mouvement',
@@ -1285,12 +1302,12 @@ const ELEMENT_LABELS = {
     junction_box: 'Boîte de dérivation'
 };
 const EL_COLORS = {
-    outlet_16a: '#f97316', outlet_20a: '#ef4444', outlet_20a_classic: '#0891b2', outlet_dedicated_20: '#8b5cf6', outlet_dedicated_32: '#6d28d9',
-    outlet_switched: '#fb923c',
+    outlet_16a: '#f97316', outlet_20a: '#ef4444', outlet_20a_classic: '#15803d', outlet_dedicated_20: '#a78bfa', outlet_dedicated_32: '#38bdf8',
+    outlet_switched: '#f97316',
     switch_simple: '#10b981', switch_va_et_vient: '#22c55e', switch_pushbutton: '#38bdf8',
     switch_dimmer: '#14b8a6', motion_timer: '#a3e635',
-    doorbell_button: '#f472b6', doorbell_chime: '#e879f9',
-    shutter_control: '#818cf8', shutter_motor: '#6366f1',
+    doorbell_button: '#f9a8d4', doorbell_chime: '#f9a8d4',
+    shutter_control: '#9ca3af', shutter_motor: '#6b7280',
     wall_light: '#fbbf24', light_ceiling: '#fde047', light_spot: '#fef08a', smoke_detector: '#94a3b8',
     panel: '#06b6d4', subpanel: '#67e8f9',
     junction_box: '#e2e8f0'
@@ -1392,11 +1409,8 @@ function dedicatedApplianceOf(el) { return DEDICATED_APPLIANCE_LABELS[el.applian
 // Clignotement des appareils en collision (plan 2D et vue 3D)
 // Élément sélectionné depuis un circuit : son repère clignote pour qu'on sache qu'il est sélectionné
 function selectionBlinkNeeded() {
-    if (selectedCircuitId) return true;
-    // porte, fenêtre, trémie ou escalier sélectionné : son cadre clignote comme celui des appareils
-    return !!selected3DId && (projectData.openings.some(o => o.id === selected3DId)
-        || (projectData.shafts || []).some(s => s.id === selected3DId)
-        || (projectData.stairs || []).some(s => s.id === selected3DId));
+    // tout élément sélectionné ou tout circuit : le plan est redessiné à chaque phase de clignotement
+    return !!selectedCircuitId || !!selected3DId;
 }
 
 function startCollisionBlink() {
@@ -1409,9 +1423,9 @@ function startCollisionBlink() {
                 if (m.userData && m.userData.blinkPalette && m.material) m.material.color.set(blinkOn ? m.userData.blinkPalette[1] : m.userData.blinkPalette[0]);
             });
             if (selectedHighlightMesh && selectedHighlightMesh.material) selectedHighlightMesh.material.color.set(blinkOn ? contrastHex3D('#f8fafc') : '#f8fafc');
-            // trémie sélectionnée : sa colonne et son cadre alternent avec un contraste (la couleur jaune seule se voyait mal)
+            // trémie sélectionnée : sa colonne et son cadre alternent avec un contraste
             if (selected3DId) wallMeshes3D.forEach(m => {
-                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D('#f8fafc') : '#f8fafc');
+                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(shaftColour()) : shaftColour());
             });
         } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded())) {
             redraw2D();
@@ -1658,7 +1672,6 @@ function ensureProjectDefaults() {
     if (!activeLevelId || !projectData.levels.some(l => l.id === activeLevelId)) activeLevelId = firstLevelId;
     projectData.walls = projectData.walls || [];
     projectData.wallsLocked = !!projectData.wallsLocked;
-    projectData.roomCrossing = !!projectData.roomCrossing;
     projectData.walls.forEach(w => {
         w.thickness = w.thickness ? Math.max(5, Math.min(50, w.thickness)) : 10;
     });
@@ -1678,10 +1691,14 @@ function ensureProjectDefaults() {
             { id: 'c_kitchen', name: 'Prises 20A plan de travail', type: 'specialized', maxPoints: 6, breakerRating: 20, wireSection: 2.5 }
         ];
     }
-    // circuits dédiés ajoutés aux fichiers enregistrés avant leur création
-    [classicOutlet20Circuit(), doorbellCircuitDef(), daafCircuitDef(), shutterCircuitDef(), ...dedicatedCircuitDefs()].forEach(d => { if (!projectData.circuits.some(c => c.id === d.id)) projectData.circuits.push(d); });
+    // circuits fixes : ajoutés aux fichiers enregistrés avant leur création, couleur recalée sur la valeur par défaut
+    [classicOutlet20Circuit(), doorbellCircuitDef(), daafCircuitDef(), shutterCircuitDef(), ...dedicatedCircuitDefs()].forEach(d => {
+        const existing = projectData.circuits.find(c => c.id === d.id);
+        if (existing) existing.color = d.color;
+        else projectData.circuits.push(d);
+    });
     projectData.circuits.forEach(c => {
-        if (c.id === 'c_kitchen') c.name = 'Prises 20A plan de travail';
+        if (c.id === 'c_kitchen') { c.name = 'Prises 20A plan de travail'; c.color = '#ef4444'; }
         if (c.id === 'c_lighting') {
             if (c.name === 'Circuit Éclairage') c.name = 'Éclairage 10A';
         }
@@ -2083,7 +2100,8 @@ function computeCircuitReport() {
         if (points > pointLimit) warnings.push(points + ' points pour ' + pointLimit + ' maximum (tous niveaux)');
         if (c.wireSection < minSectionFor(c.breakerRating)) warnings.push('section ' + c.wireSection + ' mm² trop faible pour ' + c.breakerRating + ' A');
         if (drop > limit) warnings.push('chute de tension ' + drop.toFixed(1) + ' % (limite ' + limit + ' %)');
-        return { circuit: c, points, cableM: cableCm / 100, maxRunM, drop, limit, warnings };
+        const unrouted = nets.reduce((s, n) => s + ((n.unroutedBy || {})[c.id] || 0), 0);
+        return { circuit: c, points, cableM: cableCm / 100, maxRunM, drop, limit, warnings, unrouted };
     });
 
     const alerts = [];
@@ -2102,10 +2120,12 @@ function computeCircuitReport() {
     if (computeOutletGangs().overflow.size) addAlert('Plus de 4 prises groupées : une quadruple au maximum, les prises en trop sont en rouge.', { tab: 'appareillage', hint: 'Éloignez la prise en trop d’au moins 15 cm du groupe, ou retirez-la depuis l’onglet Appareillages.' });
     // le réseau câblé est calculé pour l'étage affiché : ses alertes portent son nom
     if (net.unrouted > 0) {
-        const target = { tab: 'appareillage', hint: projectData.roomCrossing
-            ? 'Le passage à plafond est autorisé mais ne suffit pas : ajoutez une trémie, ou déplacez l’appareil isolé.'
-            : 'Ajoutez un mur commun entre les deux pièces, ou autorisez le passage du câble à plafond entre elles.' };
-        if (!projectData.roomCrossing) target.action = 'roomCrossing';
+        // compteur global : renvoie vers le circuit le plus touché, qui signale lui-même son problème
+        const worst = Object.entries(net.unroutedBy || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])[0];
+        const target = { tab: 'circuits', hint: 'Ouvrez le circuit en rouge : son cheminement se règle sur sa carte (murs, mixte ou plafond).' };
+        if (worst) target.circuitId = worst[0];
+        const worstCircuit = worst && projectData.circuits.find(c => c.id === worst[0]);
+        if (worstCircuit && !worstCircuit.roomCrossing) target.action = 'roomCrossing';
         addAlert(levelPrefix(activeLevelId) + net.unrouted + ' liaison(s) de câble non reliée(s) au tableau, sans chemin possible.', target);
     }
     (net.warnings || []).forEach(w => addAlert(levelPrefix(activeLevelId) + w, { tab: 'appareillage', hint: 'Vérifiez l’appareil ou la trémie concernés par ce câblage, depuis l’onglet Appareillages.' }));
@@ -2236,18 +2256,41 @@ function toggleCircuitCard(id) {
     updateCircuitsUI();
 }
 
-// Bloc du passage à plafond dans l'onglet Appareillages (2D et 3D), à côté des boutons de pose
-function roomCrossingBoxHtml() {
-    const on = !!projectData.roomCrossing;
-    const label = on ? 'Passage à plafond entre pièces fermées : autorisé' : 'Passage à plafond entre pièces fermées : non autorisé';
+// Passage entre pièces fermées (par circuit) : le câble peut traverser le mur au plafond, franchir l'extérieur et
+// retraverser le mur de l'autre pièce. Réglage propre à chaque circuit, désactivé par défaut.
+function roomCrossingHtml(cid, on) {
+    const label = on ? 'Passage entre pièces fermées : autorisé' : 'Passage entre pièces fermées : non autorisé';
     const button = on
-        ? '<button type="button" onclick="disallowRoomCrossing()" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px]">Retirer l\'autorisation</button>'
-        : '<button type="button" onclick="allowRoomCrossing()" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-amber-400/70 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 text-[10px]">Autoriser le passage</button>';
-    return '<div class="flex items-start gap-2"><div class="flex-1 text-[11px] ' + (on ? 'text-amber-200/90' : 'text-slate-400') + '">' + label + '</div>' + button + '</div>';
+        ? '<button type="button" onclick="event.stopPropagation();setCircuitRoomCrossing(\'' + esc(cid) + '\',false)" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px]">Retirer l\'autorisation</button>'
+        : '<button type="button" onclick="event.stopPropagation();setCircuitRoomCrossing(\'' + esc(cid) + '\',true)" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-amber-400/70 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 text-[10px]">Autoriser le passage</button>';
+    return '<div class="mt-2 flex items-start gap-2"><div class="flex-1 text-[11px] ' + (on ? 'text-amber-200/90' : 'text-slate-400') + '">' + label + '</div>' + button + '</div>';
+}
+
+// Cheminement des câbles d'un circuit : murs (défaut), mixte ou plafond
+const CABLE_ROUTING = {
+    murs: { label: 'Murs', title: 'par les murs', icon: 'fa-border-all', color: 'border-slate-700 bg-slate-800 text-slate-200',
+        help: 'Suit les murs. Murs isolés : au plafond.' },
+    mixte: { label: 'Mixte', title: 'mixte', icon: 'fa-shuffle', color: 'border-sky-400/50 bg-sky-400/15 text-sky-200',
+        help: 'Murs, sauf au plafond si c’est nettement plus court.' },
+    plafond: { label: 'Plafond', title: 'par le plafond', icon: 'fa-arrow-up', color: 'border-amber-400/50 bg-amber-400/15 text-amber-200',
+        help: 'Plus court chemin au plafond.' }
+};
+const cableRoutingOf = c => (CABLE_ROUTING[c.cableRouting] ? c.cableRouting : 'murs');
+const nextCableRouting = mode => ({ murs: 'mixte', mixte: 'plafond', plafond: 'murs' })[mode];
+
+function cableRoutingHtml(cid, routing) {
+    const opts = Object.keys(CABLE_ROUTING).map(m => {
+        const o = CABLE_ROUTING[m];
+        const on = m === routing;
+        return '<button type="button" onclick="event.stopPropagation();setCircuitRouting(\'' + esc(cid) + '\',\'' + m + '\')" aria-pressed="' + (on ? 'true' : 'false') +
+            '" class="flex-1 px-1.5 py-1 rounded-md border text-[10px] ' + (on ? o.color : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800') +
+            '"><i class="fa-solid ' + o.icon + ' mr-1"></i>' + o.label + '</button>';
+    }).join('');
+    return '<div class="mt-2"><div class="text-[10px] text-slate-400 mb-1">Cheminement des câbles</div><div class="flex gap-1">' + opts + '</div>' +
+        '<div class="text-[10px] text-slate-500 mt-1">' + esc(CABLE_ROUTING[routing].help) + '</div></div>';
 }
 
 function updateCircuitsUI() {
-    document.querySelectorAll('[data-room-crossing]').forEach(el => { el.innerHTML = roomCrossingBoxHtml(); });
     // la liste existe en 3D (barre gauche) et en 2D (barre droite) : les deux sont remplies
     const lists = ['circuits-list', 'circuits-list-2d'].map(id => document.getElementById(id)).filter(Boolean);
     if (!lists.length) return;
@@ -2279,13 +2322,16 @@ function updateCircuitsUI() {
             }
         });
         // Carte compacte : une ligne d'identité, une ligne de résumé ; réglages et détails repliés
+        const open = expandedCircuitCards.has(c.id);
         const levelNames = [...new Set(projectData.electrical
             .filter(el => { const cc = circuitOf(el); return cc && cc.id === c.id; })
             .map(el => el.levelId))]
             .map(id => ((projectData.levels || []).find(l => l.id === id) || {}).name)
             .filter(Boolean);
         const star = c.wiringMode === 'star';
-        const open = expandedCircuitCards.has(c.id);
+        const routing = cableRoutingOf(c);
+        const rout = CABLE_ROUTING[routing];
+        const unroutedHere = r.unrouted || 0;
         // sur le circuit sélectionné : bouton pour retirer (ou remettre) le câble entre tableaux de son affichage
         const feederBtn = selectedCircuitId === c.id && rep.feederM > 0
             ? '<button onclick="event.stopPropagation();toggleFeederWithCircuit()" class="w-6 h-6 shrink-0 rounded-md border text-[11px] ' +
@@ -2297,8 +2343,11 @@ function updateCircuitsUI() {
         const hasWarn = r.warnings.length > 0;
         const summary = [c.breakerRating + ' A', c.wireSection + ' mm²',
             r.cableM > 0 ? r.cableM.toFixed(1) + ' m' : '',
-            r.cableM > 0 ? 'ΔU ' + r.drop.toFixed(1) + ' %' : ''].filter(Boolean).join(' · ');
+            r.cableM > 0 ? 'ΔU ' + r.drop.toFixed(1) + ' %' : '',
+            routing !== 'murs' ? 'câble ' + rout.title : '',
+            c.roomCrossing ? 'passage pièces autorisé' : ''].filter(Boolean).join(' · ');
         const multiLevel = levelNames.length > 1 ? ' · ' + levelNames.join(' · ') : '';
+        const nextRouting = CABLE_ROUTING[nextCableRouting(routing)];
         div.innerHTML =
             '<div class="flex items-center gap-2 min-w-0">' +
             '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + esc(circuitColor(c)) + '"></span>' +
@@ -2310,19 +2359,30 @@ function updateCircuitsUI() {
             '<button onclick="event.stopPropagation();toggleWiringMode(\'' + esc(c.id) + '\')" class="w-6 h-6 shrink-0 rounded-md border text-[11px] ' +
             (star ? 'border-sky-500/50 bg-sky-500/15 text-sky-300' : 'border-slate-700 bg-slate-800 text-slate-200') +
             '" title="Câblage : ' + (star ? 'étoile (chaque appareil relié au tableau)' : 'chaîné (en guirlande)') + '. Cliquer pour changer"><i class="fa-solid ' + (star ? 'fa-sitemap' : 'fa-link') + '"></i></button>' +
+            '<button onclick="event.stopPropagation();toggleCircuitRouting(\'' + esc(c.id) + '\')" class="w-6 h-6 shrink-0 rounded-md border text-[11px] ' + rout.color + '"' +
+            (unroutedHere ? ' data-alert-blink' : '') +
+            ' title="Cheminement des câbles : ' + rout.title + '. Cliquer pour passer à : ' + nextRouting.title + '"><i class="fa-solid ' + rout.icon + '"></i></button>' +
             '<button onclick="event.stopPropagation();toggleCircuitCard(\'' + esc(c.id) + '\')" class="w-6 h-6 shrink-0 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]" aria-expanded="' + (open ? 'true' : 'false') + '"' + (hasWarn ? ' data-alert-blink' : '') + ' title="Réglages du circuit"><i class="fa-solid ' + (open ? 'fa-chevron-up' : 'fa-chevron-down') + '"></i></button>' +
             '</div>' +
             '<div class="mt-0.5 pl-4 text-[10px] text-slate-400 break-words">' + esc(summary + multiLevel) + '</div>' +
+            (unroutedHere
+                ? '<div class="mt-1 pl-4 text-[10px] text-rose-300 break-words"><i class="fa-solid fa-triangle-exclamation mr-1"></i>' + unroutedHere +
+                  ' liaison(s) non reliée(s) : ' + (routing === 'murs'
+                      ? 'passez ce circuit en « mixte » ou « plafond », ou autorisez le passage entre pièces fermées.'
+                      : 'aucun chemin, même au plafond : ajoutez une trémie ou déplacez l’appareil.') + '</div>'
+                : '') +
             (open
                 ? '<div class="grid gap-1.5 mt-2" style="grid-template-columns:repeat(auto-fit,minmax(84px,1fr))">' +
                   circuitCellHtml(c.id, 'breakerRating', 'Calibre', c.breakerRating + ' A') +
                   circuitCellHtml(c.id, 'wireSection', 'Section', c.wireSection + ' mm²') +
                   circuitCellHtml(c.id, 'maxPoints', 'Éléments', String(c.maxPoints)) +
                   '</div>' +
+                  cableRoutingHtml(c.id, routing) +
+                  roomCrossingHtml(c.id, !!c.roomCrossing) +
                   r.warnings.map(w => '<div class="text-[10px] text-rose-300 mt-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>' + esc(w) + '</div>' +
                       '<div class="ml-4 text-[10px] text-amber-200/90">Piste de correction : ' + esc(solutionForWarning(w)) + '</div>').join('')
                 : '');
-        if (hasWarn) div.setAttribute('data-alert-blink', '');
+        if (hasWarn || unroutedHere) div.setAttribute('data-alert-blink', '');
         list.appendChild(div);
     });
     });
@@ -2357,16 +2417,13 @@ function updateCircuitsUI() {
     });
 
     lastAlertTargets = rep.alertTargets;
-    const crossingHtml = projectData.roomCrossing
-        ? '<div class="mb-2 flex items-start gap-2"><div class="flex-1 text-[11px] text-amber-200/90"><i class="fa-solid fa-arrows-left-right mr-1"></i>Passage à plafond entre pièces fermées : autorisé</div><button type="button" onclick="disallowRoomCrossing()" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px]">Retirer l\'autorisation</button></div>'
-        : '';
-    const alertsHtml = crossingHtml + (rep.alerts.length
+    const alertsHtml = (rep.alerts.length
         ? '<div class="space-y-2">' + rep.alerts.map((a, i) => {
             const t = rep.alertTargets[i];
             const tabLabel = t ? (RIGHT_TABS.find(x => x[0] === t.tab) || [])[1] : '';
             const where = t
                 ? '<div class="ml-4 mt-0.5 flex items-start gap-2"><div class="flex-1 text-[10px] text-amber-200/90">Onglet « ' + esc(tabLabel) + ' » : ' + esc(t.hint) + '</div>' +
-                  (t.action === 'roomCrossing' ? '<button type="button" onclick="allowRoomCrossing()" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-amber-400/70 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 text-[10px]">Autoriser le passage</button>' : '') +
+                  (t.action === 'roomCrossing' && t.circuitId ? '<button type="button" onclick="setCircuitRoomCrossing(\'' + esc(t.circuitId) + '\',true)" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-amber-400/70 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 text-[10px]">Autoriser le passage</button>' : '') +
                   '<button type="button" onclick="goToAlert(' + i + ')" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-slate-500 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px]">Aller ↗</button></div>'
                 : '<div class="ml-4 text-[10px] text-amber-200/90">Piste de correction : ' + esc(solutionForWarning(a)) + '</div>';
             return '<div><div class="text-[11px] text-amber-300"><i class="fa-solid fa-triangle-exclamation mr-1"></i>' + esc(a) + '</div>' + where + '</div>';
@@ -2640,6 +2697,23 @@ function toggleWiringMode(id) {
     if (!c) return;
     saveStateToUndo();
     c.wiringMode = c.wiringMode === 'star' ? 'chain' : 'star';
+    _cableCache.sig = null;
+    if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
+    redraw2D();
+}
+
+// Cheminement des câbles du circuit : passe au mode suivant (murs → mixte → plafond → murs)
+function toggleCircuitRouting(id) {
+    const c = projectData.circuits.find(x => x.id === id);
+    if (c) setCircuitRouting(id, nextCableRouting(cableRoutingOf(c)));
+}
+
+// Cheminement des câbles du circuit : « murs » (défaut), « mixte » ou « plafond »
+function setCircuitRouting(id, mode) {
+    const c = projectData.circuits.find(x => x.id === id);
+    if (!c || !CABLE_ROUTING[mode] || cableRoutingOf(c) === mode) return;
+    saveStateToUndo();
+    c.cableRouting = mode;
     _cableCache.sig = null;
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
     redraw2D();
@@ -2928,19 +3002,19 @@ function toggleWallsLock() {
     showNotification(projectData.wallsLocked ? "Murs verrouillés" : "Murs déverrouillés", "info");
 }
 
-// Autorise (ou retire) pour tout le projet le passage du câble à plafond entre pièces fermées
-function setRoomCrossing(on) {
+// Autorise (ou retire) pour un seul circuit le passage du câble à plafond entre pièces fermées
+function setCircuitRoomCrossing(id, on) {
+    const c = projectData.circuits.find(x => x.id === id);
+    if (!c || !!c.roomCrossing === !!on) return;
     saveStateToUndo();
-    projectData.roomCrossing = on;
+    c.roomCrossing = !!on;
+    _cableCache.sig = null;
     updateStats();
     updateCircuitsUI();
     redraw2D();
     scheduleBuild3D();
-    showNotification(on ? "Passage à plafond autorisé entre les pièces" : "Passage à plafond retiré", "info");
+    showNotification(on ? "Passage entre pièces autorisé pour « " + c.name + " »" : "Passage entre pièces retiré pour « " + c.name + " »", "info");
 }
-
-function allowRoomCrossing() { setRoomCrossing(true); }
-function disallowRoomCrossing() { setRoomCrossing(false); }
 
 // Bouton à bascule (murs) : liseré coloré quand actif (jaune pour « Modifier les murs », rose pour le verrou), gris sinon
 function setActiveRing(el, on, colour = 'yellow') {

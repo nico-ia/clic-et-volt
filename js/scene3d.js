@@ -32,7 +32,10 @@ function init3DScene() {
     threeRenderer.domElement.addEventListener('pointerdown', on3DPointerDown);
     threeRenderer.domElement.addEventListener('pointermove', on3DPointerMove);
     threeRenderer.domElement.addEventListener('pointerleave', hidePlanTooltip);
+
     threeRenderer.domElement.addEventListener('pointerup', on3DPointerUp);
+    threeRenderer.domElement.addEventListener('dblclick', on3DDoubleClick);
+
     // tracé de mur 3D : clic droit = terminer la chaîne (le menu contextuel est masqué dans ce mode)
     threeRenderer.domElement.addEventListener('contextmenu', e => {
         if (activePlacementType !== 'wall') return;
@@ -51,11 +54,76 @@ function on3DWindowResize() {
     threeRenderer.setSize(container.clientWidth, container.clientHeight);
 }
 
+// =====================================================================
+//  ÉTIQUETTES À TAILLE FIXE À L'ÉCRAN (3D) : cotes des murs et noms des niveaux des trémies
+// =====================================================================
+// Le canvas de chaque étiquette est SCREEN_LABEL_SCALE fois plus grand que sa taille à l'écran : le texte reste net.
+const SCREEN_LABEL_SCALE = 4;
+// Étiquettes recalculées à chaque image : { sprite, wPx, hPx } (tailles en pixels écran)
+const SCREEN_LABELS_3D = [];
+
+// Crée une étiquette de texte, sans fond. fontPx : taille du texte à l'écran, en pixels.
+// opts.bold (vrai par défaut), opts.halo (contour autour des lettres, 4 px), opts.dark (couleur en thème sombre)
+function makeScreenLabel3D(text, fontPx, opts = {}) {
+    const S = SCREEN_LABEL_SCALE;
+    const light = currentTheme === 'light';
+    const font = (opts.bold === false ? '' : 'bold ') + (fontPx * S) + 'px Inter, sans-serif';
+    const measure = document.createElement('canvas').getContext('2d');
+    measure.font = font;
+    const haloW = opts.halo ? 4 * S : 0;
+    const pad = haloW + 2 * S;
+    const W = Math.ceil(measure.measureText(text).width + 2 * pad);
+    const H = Math.ceil(fontPx * S + 2 * pad);
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    if (opts.halo) {
+        ctx.lineWidth = haloW;
+        ctx.strokeStyle = light ? '#ffffff' : '#020617';
+        ctx.strokeText(text, W / 2, H / 2);
+    }
+    ctx.fillStyle = light ? '#0f172a' : (opts.dark || '#f8fafc');
+    ctx.fillText(text, W / 2, H / 2);
+    const tex = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
+    sprite.renderOrder = 11;
+    SCREEN_LABELS_3D.push({ sprite, wPx: W / S, hPx: H / S });
+    return sprite;
+}
+
+// Taille monde d'un pixel écran à la distance de l'objet (caméra en perspective)
+function worldPerScreenPx3D(pos) {
+    const dist = threeCamera.position.distanceTo(pos);
+    const viewH = threeRenderer.domElement.clientHeight || 1;
+    return 2 * dist * Math.tan((threeCamera.fov * Math.PI / 180) / 2) / viewH;
+}
+
+// Met chaque étiquette à l'échelle pour qu'elle garde sa taille à l'écran, quel que soit le zoom ou la distance
+function updateScreenLabels3D() {
+    if (!threeCamera || !threeRenderer) return;
+    SCREEN_LABELS_3D.forEach(l => {
+        if (!l.sprite.parent) return;   // retirée par une reconstruction de la scène
+        const k = worldPerScreenPx3D(l.sprite.position);
+        l.sprite.scale.set(l.wPx * k, l.hPx * k, 1);
+    });
+}
+
+
+
+
 function animate3D() {
     requestAnimationFrame(animate3D);
     // scène 3D cachée (mode 2D) : inutile de la dessiner ni de mettre à jour la caméra
     if (currentMode !== '3d') return;
+
     if (threeControls && !dragging3DElementId) threeControls.update();
+    updateScreenLabels3D();
+
     if (threeRenderer && threeScene && threeCamera) {
         threeRenderer.render(threeScene, threeCamera);
     }
@@ -320,6 +388,8 @@ const FEEDER_CID = '_feeder';
 const FEEDER_COLOR = '#e879f9';
 // opacité de la gaine mise en surbrillance : assez transparente pour laisser voir les fils
 const CONDUIT_FOCUS_OPACITY = 0.45;
+// opacité des gaines ICTA, réglée par le curseur 3D (0 à 1) ; valeur de départ = ancien rendu
+let conduitOpacity = 0.32;
 // rayon d'une âme de fil (unités monde) ; les fils occupent toute la section utile de la gaine
 const CORE_R = 0.24;
 // le câble de liaison est listé comme un circuit (sans appareils) : le pseudo-circuit permet de le sélectionner
@@ -694,15 +764,14 @@ function derivationPointsOn(levelId) {
     return out;
 }
 
-// Calcul du réseau : d'abord sans passage entre pièces (routes inchangées), puis avec passage à plafond
-// seulement si le projet l'autorise et qu'un appareil reste non relié.
+// Calcul du réseau : sans passage entre pièces tant qu'aucun circuit ne l'autorise (routes inchangées).
+// Sinon, les arêtes de passage existent, mais seuls les circuits autorisés (c.roomCrossing) peuvent les emprunter.
 function computeCableNetwork() {
-    const base = buildCableNetwork(false);
-    if (base.unrouted === 0 || !projectData.roomCrossing) return base;
-    const alt = buildCableNetwork(true);
-    if (alt.unrouted >= base.unrouted) return base;
-    alt.passageUsed = true;
-    return alt;
+    const anyCrossing = projectData.circuits.some(c => c.roomCrossing);
+    if (!anyCrossing) return buildCableNetwork(false);
+    const net = buildCableNetwork(true);
+    net.passageUsed = true;
+    return net;
 }
 
 function buildCableNetwork(passage) {
@@ -712,7 +781,7 @@ function buildCableNetwork(passage) {
     // faces extérieures : les gaines et les fils restent à l'intérieur du logement
     const outFaces = outsideFacesOf();
     const els = electricalOn();
-    const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {} };
+    const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {}, forced: new Set(), unroutedBy: {} };
     let panel = els.find(e => e.type === 'panel') || null;
     const wired = els.filter(e => e.type !== 'panel' && e.type !== 'subpanel');
     let feedInfo = null;   // niveau sans tableau : trémie qui le relie au tableau d'un autre étage
@@ -1010,7 +1079,8 @@ function buildCableNetwork(passage) {
                 const inner = findNode(p.x, p.y, ceilZ);
                 if (!inner || blockedH(t.wall.id, s - 0.01, s + 0.01, ceilZ)) return;
                 const outN = node(q.x, q.y, ceilZ);
-                addEdge(inner, outN, 'passage', C.passageCost);
+                const pe = addEdge(inner, outN, 'passage', C.passageCost);
+                if (pe) pe.room = true;
                 exits.push({ n: outN, wall: t.wall });
             });
         });
@@ -1029,10 +1099,54 @@ function buildCableNetwork(passage) {
                 if (a.wall === b.wall) continue;
                 const d = Math.hypot(b.n.x - a.n.x, b.n.y - a.n.y);
                 if (d < 0.5) continue;
-                if (clearOutside(a.n, b.n)) addEdge(a.n, b.n, 'passage', 0);
+                if (!clearOutside(a.n, b.n)) continue;
+                const pe = addEdge(a.n, b.n, 'passage', 0);
+                if (pe) pe.room = true;
             }
         }
     }
+
+    // Mur intérieur isolé (relié à aucun mur qui touche l'extérieur) : le câble le rejoint au plafond,
+    // en survolant la pièce. Le segment ne doit croiser aucun mur. Ces liens (marqués island) ne servent
+    // qu'aux circuits « plafond » ou « mixte », et aux appareils posés sur un tel mur.
+    const comp = new Map(walls.map(w => [w.id, w.id]));
+    const root = id => { while (comp.get(id) !== id) id = comp.get(id); return id; };
+    const joinWalls = (wa, wb) => comp.set(root(wa.id), root(wb.id));
+    junctions.forEach(j => joinWalls(j.a.wall, j.b.wall));
+    coincident.forEach(([a, b]) => joinWalls(a.wall, b.wall));
+    const envelope = new Set(walls.filter(w => (outFaces.faces.get(w.id) || []).length).map(w => root(w.id)));
+    const isolated = w => !envelope.has(root(w.id));
+    const airClear = (a, b) => {
+        const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
+        for (let i = 1; i < n; i++) {
+            const f = i / n;
+            if (insideBody(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f)) return false;
+        }
+        return true;
+    };
+    const islandEdge = (a, b) => { const e = addEdge(a, b, 'passage', C.passageCost); if (e) e.island = true; };
+    tracks.forEach(a => {
+        if (!isolated(a.wall)) return;
+        a.st.forEach(s => {
+            if (s < 0 || s > a.len || blockedH(a.wall.id, s - 0.01, s + 0.01, ceilZ)) return;
+            const p = P(a, s);
+            const na = node(p.x, p.y, ceilZ);
+            tracks.forEach(b => {
+                if (b.wall === a.wall) return;
+                b.st.forEach(u => {
+                    if (u < 0 || u > b.len || blockedH(b.wall.id, u - 0.01, u + 0.01, ceilZ)) return;
+                    const q = P(b, u);
+                    if (airClear(p, q)) islandEdge(na, node(q.x, q.y, ceilZ));
+                });
+            });
+        });
+    });
+    // Appareils posés sur un mur isolé : leur cheminement passe obligatoirement par le plafond
+    els.forEach(el => {
+        if (el.type === 'panel' || el.type === 'subpanel') return;
+        const pl = place.get(el.id);
+        if (pl && isolated(pl.t.wall)) result.forced.add(el.id);
+    });
 
     // Bouts de murs voisins non jointifs (angle pas tout à fait fermé) : un petit raccord les relie, au lieu
     // de faire faire le tour complet du logement au câble. Pas de raccord si un mur sépare les deux points.
@@ -1143,14 +1257,43 @@ function buildCableNetwork(passage) {
     result.unrouted += unresolved.length;
     if (!R.get(panel.id)) { result.unrouted += wired.length - unresolved.length; return result; }
 
+    // Liens libres au plafond : droite entre deux points du plafond qui ne traverse aucun mur.
+    // « murs » ne les utilise pas ; « plafond » et « mixte » oui. Un passage direct est alors une seule arête.
+    const ceilNodes = [...nodes.values()].filter(n => Math.abs(n.z - ceilZ) < 0.01);
+    for (let i = 0; i < ceilNodes.length; i++) {
+        for (let j = i + 1; j < ceilNodes.length; j++) {
+            const a = ceilNodes[i], b = ceilNodes[j];
+            if (!airClear(a, b)) continue;
+            const e = addEdge(a, b, 'air');
+            if (e) e.air = true;
+        }
+    }
+
     // 9. Plus courts chemins (Dijkstra, un passage par un plafonnier n'est jamais un raccourci)
-    const maps = new Map();
+    // Liens par le plafond au-dessus des îlots : « plafond » et « mixte » les utilisent, « murs » non, sauf pour un
+    // appareil imposé (mur isolé). En « mixte », chaque passage au plafond (îlot ou lien libre) coûte MIX_ISLAND_PENALTY cm de plus :
+    // le câble ne quitte les murs que s'il n'a pas de chemin raisonnable. Le tableau et les points de raccord restent « par les murs ».
+    const MIX_ISLAND_PENALTY = 1000;
+    // route d'une liaison : mode du circuit (murs / plafond / mixte) et autorisation de passage entre pièces fermées
+    const routeFor = (A, B, cid) => {
+        const c = cid ? projectData.circuits.find(x => x.id === cid) : null;
+        const routing = c ? c.cableRouting : undefined;
+        let mode = 'walls';
+        if (routing === 'mixte') mode = 'mix';
+        else if (routing === 'plafond' || result.forced.has(A.id) || result.forced.has(B.id)) mode = 'ceil';
+        return { mode, room: !!(c && c.roomCrossing) };
+    };
+    const mapCaches = new Map();
     // Dijkstra sur tableaux indexés (B2) : même tas, mêmes relaxations dans le même ordre => mêmes distances et chemins
     const nodeCount = nodes.size;
     let nodeIdx = 0;
     nodes.forEach(n => { n.idx = nodeIdx++; });
-    const mapFor = (src) => {
-        let r = maps.get(src);
+    const mapFor = (src, route) => {
+        const key = route.mode + (route.room ? '+room' : '');
+        if (!mapCaches.has(key)) mapCaches.set(key, new Map());
+        const cache = mapCaches.get(key);
+        const penalty = route.mode === 'mix' ? MIX_ISLAND_PENALTY : 0;
+        let r = cache.get(src);
         if (r) return r;
         const D = new Float64Array(nodeCount).fill(Infinity);
         const P = new Array(nodeCount).fill(null);
@@ -1162,9 +1305,10 @@ function buildCableNetwork(passage) {
             if (d > D[n.idx]) continue;
             if (n.light && n !== src) continue;
             for (const e of n.adj) {
-                if (e.dead) continue;
+                const above = e.island || e.air;
+                if (e.dead || (above && route.mode === 'walls') || (e.room && !route.room)) continue;
                 const o = e.a === n ? e.b : e.a;
-                const nd = d + e.cost;
+                const nd = d + e.cost + (above ? penalty : 0);
                 if (nd < D[o.idx]) {
                     D[o.idx] = nd;
                     P[o.idx] = [n, e];
@@ -1179,15 +1323,15 @@ function buildCableNetwork(passage) {
             },
             prev: { get: (n) => P[n.idx] || undefined }
         };
-        maps.set(src, r);
+        cache.set(src, r);
         return r;
     };
-    const rdist = (A, B) => {
+    const rdist = (A, B, cid) => {
         const ra = R.get(A.id), rb = R.get(B.id);
         if (!ra || !rb) return Infinity;
         const stubs = stubLen(ra.stub) + stubLen(rb.stub);
         if (ra.node === rb.node) return stubs;
-        const d = mapFor(ra.node).dist.get(rb.node);
+        const d = mapFor(ra.node, routeFor(A, B, cid)).dist.get(rb.node);
         return d === undefined ? Infinity : d + stubs;
     };
 
@@ -1207,6 +1351,8 @@ function buildCableNetwork(passage) {
     const alive = wired.filter(el => R.get(el.id));
     const switches = alive.filter(isControl);
     const lights = alive.filter(isControlledLoad);
+    // une liaison de commande suit le circuit de la charge commandée
+    const lightCid = el => { const c = circuitOf(el); return c ? c.id : null; };
     const ctrl = new Map(switches.map(sw => [sw.id, []]));
     const taken = new Set();
     const manuallyConfigured = new Set();
@@ -1215,7 +1361,7 @@ function buildCableNetwork(passage) {
         manuallyConfigured.add(sw.id);
         sw.controlledLightIds.forEach(id => {
             const light = lights.find(candidate => candidate.id === id || candidate.id === 'xl|' + id);
-            if (light && canControl(sw, light) && isFinite(rdist(sw, light))) {
+            if (light && canControl(sw, light) && isFinite(rdist(sw, light, lightCid(light)))) {
                 ctrl.get(sw.id).push(light);
                 taken.add(light.id);
             }
@@ -1225,7 +1371,7 @@ function buildCableNetwork(passage) {
     lights.filter(light => !taken.has(light.id)).forEach(light => {
         let best = null;
         switches.filter(sw => !manuallyConfigured.has(sw.id) && canControl(sw, light)).forEach(sw => {
-            const d = rdist(sw, light);
+            const d = rdist(sw, light, lightCid(light));
             if (d <= 500 && (!best || d < best.d)) best = { sw, d };
         });
         if (best) { ctrl.get(best.sw.id).push(light); taken.add(light.id); }
@@ -1233,7 +1379,7 @@ function buildCableNetwork(passage) {
     // Une seconde commande va-et-vient rejoint le point déjà desservi le plus proche.
     switches.filter(sw => !manuallyConfigured.has(sw.id) && sw.type === 'switch_va_et_vient' && !ctrl.get(sw.id).length).forEach(sw => {
         let best = null;
-        lights.filter(l => canControl(sw, l)).forEach(l => { const d = rdist(sw, l); if (isFinite(d) && (!best || d < best.d)) best = { l, d }; });
+        lights.filter(l => canControl(sw, l)).forEach(l => { const d = rdist(sw, l, lightCid(l)); if (isFinite(d) && (!best || d < best.d)) best = { l, d }; });
         if (best) ctrl.get(sw.id).push(best.l);
     });
     // identifiants réels pour l'interface ; les identifiants de raccord ne servent qu'au tracé
@@ -1299,7 +1445,7 @@ function buildCableNetwork(passage) {
                 : null;
         const path = [];
         if (ra.node !== rb.node) {
-            const mp = mapFor(ra.node);
+            const mp = mapFor(ra.node, routeFor(A, B, cid));
             if (!mp.dist.has(rb.node)) return null;
             for (let cur = rb.node; cur !== ra.node;) {
                 const [p, e] = mp.prev.get(cur);
@@ -1344,6 +1490,8 @@ function buildCableNetwork(passage) {
     });
     byCircuit.forEach((list, k) => {
         const cidOf = k === '_none' ? null : k;
+        // liaisons non reliées, comptées par circuit (clé « _none » : sans circuit)
+        const lostOn = n => { result.unroutedBy[k] = (result.unroutedBy[k] || 0) + n; result.unrouted += n; };
         const tree = [{ el: panel, deg: 0, depth: 0, free: true, boxId: null }]
             .concat(subRoots.map(s => ({ el: s.el, deg: 0, depth: s.depth, free: true, boxId: null })));
         // appareils servis par chaque boîte retenue (le calcul du câblage n'en dépend pas)
@@ -1360,18 +1508,18 @@ function buildCableNetwork(passage) {
                 tree.forEach(tn => {
                     if (star && !tn.free) return;
                     if (!tn.free && tn.deg >= C.maxDegree) return;
-                    const d = rdist(tn.el, u.entry);
+                    const d = rdist(tn.el, u.entry, cidOf);
                     if (!best || d < best.d) best = { d, ui, tn, bx: null };
                 });
                 // une boîte pas encore raccordée coûte son trajet depuis le tableau
                 pending.forEach(bx => {
                     // étoile : la boîte est la plus proche de l'appareil que le tableau ; son trajet n'est compté qu'une fois
-                    const dBox = rdist(bx, u.entry);
-                    const d = star ? (dBox < rdist(panel, u.entry) ? dBox : Infinity) : rdist(panel, bx) + dBox;
+                    const dBox = rdist(bx, u.entry, cidOf);
+                    const d = star ? (dBox < rdist(panel, u.entry, cidOf) ? dBox : Infinity) : rdist(panel, bx, cidOf) + dBox;
                     if (isFinite(d) && (!best || d < best.d)) best = { d, ui, tn: null, bx };
                 });
             });
-            if (!best || !isFinite(best.d)) { result.unrouted += rest.length; break; }
+            if (!best || !isFinite(best.d)) { lostOn(rest.length); break; }
             if (best.bx) {
                 const bx = best.bx;
                 pending.splice(pending.indexOf(bx), 1);
@@ -1383,7 +1531,7 @@ function buildCableNetwork(passage) {
             const u = rest.splice(best.ui, 1)[0];
             const cid = u.cid;
             const len = addLink(best.tn.el, u.entry, u.wires, cid);
-            if (len === null) { result.unrouted++; continue; }
+            if (len === null) { lostOn(1); continue; }
             best.tn.deg++;
             const entryNode = { el: u.entry, deg: 1, depth: best.tn.depth + len + 60, boxId: best.tn.boxId || null };
             tree.push(entryNode);
@@ -1391,8 +1539,8 @@ function buildCableNetwork(passage) {
             if (cid) result.circuitRuns[cid] = Math.max(result.circuitRuns[cid] || 0, entryNode.depth);
             u.members.forEach(mb => {
                 const l2 = addLink(u.entry, mb, u.memberWires || ret, cid);
-                if (l2 === null) { result.unrouted++; return; }
-                if (addLink(panel, mb, supplyWires, cid) === null) result.unrouted++;
+                if (l2 === null) { lostOn(1); return; }
+                if (addLink(panel, mb, supplyWires, cid) === null) lostOn(1);
                 entryNode.deg++;
                 const mn = { el: mb, deg: 1, depth: entryNode.depth + l2 + 60, boxId: entryNode.boxId };
                 tree.push(mn);
@@ -1537,13 +1685,14 @@ function renderCableNetwork(cx, cy) {
             }));
     }
 
-    // teintes séparées : rouge profond, orange franc, violet foncé, bleu franc, vert (sans teinte proche entre elles)
-    const colors = { 'red': '#dc2626', 'neutral': '#2563eb', 'green-yellow': '#018d14', 'black': '#1f2937', 'grey': '#9ca3af', 'orange': '#ff8c00', 'violet': '#5e439c' };
+       // noir et gris prennent une teinte lisible sur le fond du thème (fond sombre : noir clair ; fond clair : gris foncé)
+    const lightTheme = currentTheme === 'light';
+    const colors = { 'red': '#dc2626', 'neutral': '#2563eb', 'green-yellow': '#018d14', 'black': lightTheme ? '#1f2937' : '#e2e8f0', 'grey': lightTheme ? '#475569' : '#9ca3af', 'orange': '#ff8c00', 'violet': '#5e439c' };
     if (!CABLE_RES.cyl) {
         CABLE_RES.cyl = markShared(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true));
         CABLE_RES.core = markShared(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true));
         CABLE_RES.sph = markShared(new THREE.SphereGeometry(1, 12, 10));
-        CABLE_RES.conduitMat = markShared(new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
+        CABLE_RES.conduitMat = markShared(new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: conduitOpacity, depthWrite: false, side: THREE.DoubleSide }));
         CABLE_RES.circMats = {};
         CABLE_RES.hiMats = {};
         CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: '#facc15', transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
@@ -1552,6 +1701,8 @@ function renderCableNetwork(cx, cy) {
         CABLE_RES.feederConduit = markShared(new THREE.MeshBasicMaterial({ color: FEEDER_COLOR, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
         CABLE_RES.mats = {};
     }
+    // matériaux des fils recréés si le thème change (noir et gris changent de teinte)
+    if (CABLE_RES.matsTheme !== currentTheme) { CABLE_RES.mats = {}; CABLE_RES.matsTheme = currentTheme; }
     const matFor = k => CABLE_RES.mats[k] || (CABLE_RES.mats[k] = markShared(new THREE.MeshBasicMaterial({ color: colors[k] || '#ffffff' })));
     const ctlHexOf = cid => (typeof cid === 'string' && cid.startsWith('ctl:') ? cid.slice(4) : null);
     const conduitFor = cid => {
@@ -1561,7 +1712,7 @@ function renderCableNetwork(cx, cy) {
         if (!ctlHex && !circuit) return CABLE_RES.conduitMat;
         const hex = ctlHex || circuitColor(circuit);
         return CABLE_RES.circMats[hex] || (CABLE_RES.circMats[hex] = markShared(new THREE.MeshBasicMaterial({
-            color: hex, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide
+            color: hex, transparent: true, opacity: conduitOpacity, depthWrite: false, side: THREE.DoubleSide
         })));
     };
     const hiFor = cid => {
@@ -1764,7 +1915,18 @@ function renderCableNetwork(cx, cy) {
     mergeCableParts(parts);
     return net;
 }
-
+// Curseur 3D : opacité de toutes les gaines (0 = invisibles, 100 % = pleines). Les matériaux existants sont mis à jour tout de suite.
+// Les gaines « estompées » (hors sélection) gardent leur faible opacité.
+function setConduitOpacity(pct) {
+    const v = Math.max(0, Math.min(100, parseFloat(pct) || 0)) / 100;
+    conduitOpacity = v;
+    const label = document.getElementById('conduit-opacity-val');
+    if (label) label.textContent = Math.round(v * 100) + ' %';
+    if (!CABLE_RES.conduitMat) return;   // matériaux pas encore créés : ils prendront la valeur à leur création
+    const mats = [CABLE_RES.conduitMat, CABLE_RES.highlightConduit, CABLE_RES.feederConduit,
+        ...Object.values(CABLE_RES.circMats || {}), ...Object.values(CABLE_RES.hiMats || {})];
+    mats.forEach(m => { if (m) m.opacity = v; });
+}
 // Étages voisins (dessus et dessous) affichés en fantôme dans la 3D : visibles, mais ni cliquables ni sélectionnables
 let ghostLevelsOn = true;
 function toggleGhostLevels() {
@@ -1778,7 +1940,7 @@ function toggleGhostLevels() {
 // Mis en cache par données ; pendant un glissement on garde le dernier résultat (le calcul est trop lourd à chaque image).
 const _ghostNetCache = new Map();
 function ghostCableNetwork(levelId) {
-    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts, !!projectData.roomCrossing]);
+    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
     const hit = _ghostNetCache.get(levelId);
     if (hit && (hit.sig === sig || layoutDragging3D())) return hit.net;
     const saved = activeLevelId;
@@ -1802,6 +1964,7 @@ function build3DScene() {
     wallMeshes3D = [];
     clickableWalls3D = [];
     interactiveObjects3D = [];
+    SCREEN_LABELS_3D.length = 0;
     if (ceilingMesh3D) threeScene.remove(ceilingMesh3D);
     if (selectedHighlightMesh) {
         threeScene.remove(selectedHighlightMesh);
@@ -1955,7 +2118,7 @@ function build3DScene() {
         const s = sh.size || 40;
         const frame = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
-            new THREE.LineBasicMaterial({ color: '#f8fafc' }));
+              new THREE.LineBasicMaterial({ color: shaftColour() }));
         const sp = shaftPos2D(sh) || { x: w.x1 + (w.x2 - w.x1) * d / len, y: w.y1 + (w.y2 - w.y1) * d / len };
         frame.position.set(sp.x - cx, 1, sp.y - cy);
         frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
@@ -1989,21 +2152,14 @@ function build3DScene() {
             wallMeshes3D.push(sel);
         }
         // étiquette visible au-dessus de la trémie : les niveaux qu'elle relie
-        const labelCanvas = document.createElement('canvas');
-        labelCanvas.width = 512; labelCanvas.height = 96;
-        const lctx = labelCanvas.getContext('2d');
-        lctx.fillStyle = 'rgba(15,23,42,0.85)';
-        lctx.fillRect(0, 0, 512, 96);
-        lctx.fillStyle = '#f8fafc';
-        lctx.font = 'bold 40px sans-serif';
-        lctx.textAlign = 'center';
-        lctx.textBaseline = 'middle';
-        lctx.fillText(shaftLevelNames(sh).join(' ↔ '), 256, 48);
-        const labelTex = new THREE.CanvasTexture(labelCanvas);
+
+        // noms des niveaux reliés : taille fixe à l'écran (12 px), texte seul, sans fond
+        const label = makeScreenLabel3D(shaftLevelNames(sh).join(' ↔ '), 12, { bold: true, halo: false });
         // l'étiquette se place en bas de la trémie si elle relie un niveau plus bas, en haut sinon ;
         // elle est masquée par les murs et les gaines (pas de passage par-dessus)
-        const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, depthTest: true, transparent: true }));
-        label.scale.set(150, 28, 1);
+
+
+
         const elevOf = lvId => ((projectData.levels || []).find(l => l.id === lvId) || {}).elevation || 0;
         const otherId = (sh.levelIds || [sh.levelId]).find(lvId => lvId !== activeLevelId);
         const goesDown = otherId !== undefined && elevOf(otherId) < elevOf(activeLevelId);
@@ -2066,7 +2222,20 @@ function build3DScene() {
         wallMesh.userData = { type: 'wall', id: w.id };
         threeScene.add(wallMesh);
         wallMeshes3D.push(wallMesh);
+
         clickableWalls3D.push(wallMesh);
+        // cote de longueur : même texte que le plan 2D (« 4,00 m »), taille fixe à l'écran
+        const wallLen = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+        if (wallLen >= 1) {
+            const cote = makeScreenLabel3D((wallLen / 100).toFixed(2).replace('.', ',') + ' m', 11, { bold: true, halo: false, dark: '#f1f5f9' });
+            // posée à mi-hauteur, du côté +normale du mur, à demi-épaisseur + 12 cm
+            const ux = (w.x2 - w.x1) / wallLen, uz = (w.y2 - w.y1) / wallLen;
+            const off = (w.thickness || 10) / 2 + 12;
+            cote.position.set((w.x1 + w.x2) / 2 - cx + uz * off, height / 2, (w.y1 + w.y2) / 2 - cy - ux * off);
+            threeScene.add(cote);
+            wallMeshes3D.push(cote);
+        }
+
     });
 
     openingsOn().forEach(op => {
@@ -2787,6 +2956,27 @@ function on3DPointerDown(e) {
         }
     }
 }
+
+// Double clic sur un appareil en 3D : affiche le circuit entier (même effet que le double clic en 2D)
+function on3DDoubleClick(e) {
+    if (activePlacementType || !threeCamera) return;
+    const container = document.getElementById('three-container');
+    const rect = container.getBoundingClientRect();
+    mouse3D.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+    mouse3D.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse3D, threeCamera);
+    let id = null;
+    for (const hit of raycaster.intersectObjects(interactiveObjects3D, true)) {
+        let o = hit.object;
+        while (o && !(o.userData && o.userData.id)) o = o.parent;
+        if (o) { id = o.userData.id; break; }
+    }
+    const el = id ? projectData.electrical.find(x => x.id === id) : null;
+    const circ = el ? circuitForDoubleClick(el) : null;
+    if (circ) selectCircuit(circ.id);
+}
+
+
 
 // Survol 3D : étiquette de l'objet sous le curseur (même logique que le clic)
 function hover3DTooltip(e) {
@@ -3523,7 +3713,7 @@ function getCableNetwork() {
     ensureCircuitAssignment();
     if (layoutDragging3D() && _cableCache.net) { cableStats = _cableCache.net; return _cableCache.net; }
     // Le niveau affiché fait partie de la clé : changer de niveau change le réseau calculé
-    const sig = JSON.stringify([activeLevelId, projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts, !!projectData.roomCrossing]);
+    const sig = JSON.stringify([activeLevelId, projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
     if (_cableCache.sig !== sig) _cableCache = { sig, net: computeCableNetwork() };
     cableStats = _cableCache.net;
     return _cableCache.net;
