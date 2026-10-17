@@ -552,13 +552,26 @@ function on2DDoubleClick(e) {
 // Rouge : il y en a déjà un identique à cet endroit (la pose serait refusée).
 let placeGhost2D = null;
 
+// Niveaux qui seront reliés à l'escalier en cours de pose (cases cochées), sans message ni arrêt
+function previewStairLevels() {
+    const list = document.getElementById(currentMode === '3d' ? 'shaft-link-list-3d' : 'shaft-link-list');
+    const checked = new Set(list ? [...list.querySelectorAll('input:checked')].map(i => i.value) : []);
+    return [activeLevelId, ...otherLevelsByDistance().filter(l => checked.has(l.id)).map(l => l.id)];
+}
+
+
 function updatePlaceGhost2D(coords) {
     const type = document.getElementById('place-type').value;
     let ghost = null;
     if (CEILING_TYPES.includes(type)) {
         ghost = { id: '__ghost', levelId: activeLevelId, type, x: coords.x, y: 245, z: coords.y };
         ghost.blocked = !!ceilingSpotBlocker(coords.x, coords.y, activeLevelId);
-    } else if (type !== 'stair') {
+    } else if (type === 'stair' || type === 'shaft') {
+        // escalier ou trémie : posés au point du curseur (arrondi au cm) ; l'escalier se colle aux murs
+        ghost = { id: '__ghost', type, levelId: activeLevelId, levelIds: previewStairLevels(),
+            x: Math.round(coords.x), y: Math.round(coords.y), angleDeg: 0, width: 90, length: 300, size: 40 };
+        if (type === 'stair') snapStairToWalls(ghost);
+    } else {
         const info = nearestWallInfo(coords);
         if (info && info.d <= (info.wall.thickness || 10) / 2 + 60) {
             const dist = Math.round(info.dist);
@@ -593,6 +606,7 @@ function drawShaftGhost2D(g, color, blocked) {
 
 function drawPlaceGhost2D(g) {
     const color = g.blocked ? '#ef4444' : '#38bdf8';
+    if (g.type === 'stair') { ctx2D.save(); ctx2D.globalAlpha = 0.6; drawStair2D(g, new Set()); ctx2D.restore(); return; }
     if (g.type === 'door_single' || g.type === 'window_std') { drawOpening2D(g, color); return; }
     if (g.type === 'shaft') { drawShaftGhost2D(g, color, g.blocked); return; }
     const p = getElCoords(g);
@@ -940,22 +954,14 @@ function openingPos2D(op) {
     return { x: w.x1 + t * dx, y: w.y1 + t * dy, angle: Math.atan2(dy, dx), th: w.thickness || 10 };
 }
 
-// Trémie : son centre est décalé côté pièce choisi à la pose (la face de la trémie touche le mur, le mur n'est pas percé)
-function shaftPos2D(sh, dist) {
-    const p = openingPos2D({ wallId: sh.wallId, distanceFromStart: dist !== undefined ? dist : sh.distanceFromStart });
-    if (!p) return null;
-    const off = p.th / 2 + (sh.size || 40) / 2;
-    const side = sh.side === -1 ? -1 : 1;
-    return { x: p.x + Math.sin(p.angle) * side * off, y: p.y - Math.cos(p.angle) * side * off, angle: p.angle, th: p.th };
+// Trémie : position libre (son centre en plan)
+function shaftPos2D(sh) {
+    return { x: sh.x, y: sh.y, angle: 0, th: 0 };
 }
 
-// Point de dérivation d'une trémie pour un niveau : collé à la face du mur, côté pièce (boîte de 10 cm d'épaisseur)
-function derivFacePos2D(sh, dist) {
-    const wp = openingPos2D({ wallId: sh.wallId, distanceFromStart: dist });
-    if (!wp) return null;
-    const side = sh.side === -1 ? -1 : 1;
-    const off = wp.th / 2 + 5;
-    return { x: wp.x + Math.sin(wp.angle) * side * off, y: wp.y - Math.cos(wp.angle) * side * off, angle: wp.angle };
+// Point de dérivation d'une trémie : son centre (le câble part de là vers le mur le plus proche)
+function derivFacePos2D(sh) {
+    return { x: sh.x, y: sh.y, angle: 0 };
 }
 
 // Angle de la face avant d'un appareil mural (direction opposée au mur) dans le repère du plan
@@ -1632,9 +1638,9 @@ function draw2DEquipment() {
     ctx2D.textBaseline = 'alphabetic';
 }
 
-// Escalier saisi au clic : décalage entre le curseur et le centre, pour glisser sans saut
+// Escalier ou trémie saisi au clic : décalage entre le curseur et le centre, pour glisser sans saut
 function stairGrab(id, coords) {
-    const st = (projectData.stairs || []).find(s => s.id === id);
+    const st = (projectData.stairs || []).find(s => s.id === id) || (projectData.shafts || []).find(s => s.id === id);
     return st ? { x: coords.x - st.x, y: coords.y - st.y } : null;
 }
 
@@ -1762,6 +1768,18 @@ function askShaftLevels() {
 function place2DAt(coords) {
     const type = document.getElementById('place-type').value;
     const uid = Date.now() + '_' + Math.floor(Math.random() * 1000);
+    if (type === 'shaft') {
+        // trémie : posée où l'on clique, sans mur à côté
+        const links = askShaftLevels();
+        if (!links) return;
+        saveStateToUndo();
+        if (!projectData.shafts) projectData.shafts = [];
+        projectData.shafts.push({ id: 'sh_' + uid, levelId: activeLevelId, levelIds: links,
+            x: Math.round(coords.x), y: Math.round(coords.y), size: 40 });
+        redraw2D();
+        showNotification('Trémie posée', 'success');
+        return;
+    }
     if (type === 'stair') {
         const links = askShaftLevels();
         if (!links) return;
@@ -1836,6 +1854,12 @@ function dragElement2D(coords) {
     const item = el || op || sh;
     if (!item) return;
     if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
+    if (sh) {
+        sh.x = Math.round(coords.x - (draggingEl2D.grab ? draggingEl2D.grab.x : 0));
+        sh.y = Math.round(coords.y - (draggingEl2D.grab ? draggingEl2D.grab.y : 0));
+        redraw2D();
+        return;
+    }
     if (el && CEILING_TYPES.includes(el.type)) {
         el.x = coords.x;
         el.z = coords.y;

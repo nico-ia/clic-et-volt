@@ -240,13 +240,23 @@ function updatePlaceGhost3D(e) {
             ghost = { id: '__ghost', levelId: activeLevelId, type, x: pt.x + cx, y: 245, z: pt.z + cy };
             blocked = !!ceilingSpotBlocker(ghost.x, ghost.z, activeLevelId);
         }
-    } else if (type !== 'stair') {
+    } else if (type === 'stair' || type === 'shaft') {
+        // escalier ou trémie : point du sol sous le curseur ; l'escalier se colle aux murs
+        const floorPt = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), floorPt)) {
+            ghost = { id: '__ghost', type, levelId: activeLevelId, levelIds: previewStairLevels(),
+                x: Math.round(floorPt.x + cx), y: Math.round(floorPt.z + cy), angleDeg: 0, width: 90, length: 300, size: 40 };
+            if (type === 'stair') snapStairToWalls(ghost);
+        }
+    } else {
         const wallIntersects = raycaster.intersectObjects(clickableWalls3D, true);
         if (wallIntersects.length) {
             let m = wallIntersects[0].object;
             while (m && (!m.userData || !m.userData.id) && m.parent) m = m.parent;
             wall = m && m.userData && m.userData.id ? projectData.walls.find(w => w.id === m.userData.id) : null;
+            
             if (wall) {
+
                 const hitPt = wallIntersects[0].point;
                 const wallLen = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
                 const distToPt = Math.hypot(hitPt.x - (wall.x1 - cx), hitPt.z - (wall.y1 - cy));
@@ -272,11 +282,13 @@ function updatePlaceGhost3D(e) {
     if (key === placeGhostKey3D && placeGhost3D && placeGhost3D.parent === threeScene) return;   // encore présent dans la scène
     removePlaceGhost3D();
     const isOpening = type === 'door_single' || type === 'window_std';
-    const mesh = type === 'shaft'
-        ? createShaftGhost3D(ghost, cx, cy)
-        : isOpening
-            ? createOpeningMesh3D(ghost, wall, cx, cy)
-            : createElementMesh3D(ghost, cx, cy);
+    const mesh = type === 'stair'
+        ? buildStair3D(ghost, cx, cy, true)
+        : type === 'shaft'
+            ? createShaftGhost3D(ghost, cx, cy)
+            : isOpening
+                ? createOpeningMesh3D(ghost, wall, cx, cy)
+                : createElementMesh3D(ghost, cx, cy);
     if (!mesh) return;
     placeGhost3D = makeGhostGroup3D(mesh, blocked);
     placeGhostKey3D = key;
@@ -591,18 +603,8 @@ function shaftCandidatesBetween(levelA, levelB, refs) {
     }).sort((p, q) => p.cost - q.cost).map(c => c.sh);
 }
 
-// Une trémie relie deux niveaux si elle a un mur utilisable sur chacun d'eux
-function shaftValidOn(sh, levelId) {
-    const saved = activeLevelId;
-    try {
-        activeLevelId = levelId;
-        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
-        const info = pt && nearestWallInfo(pt);
-        return !!info && info.d <= (sh.size || 40) / 2 + 10;
-    } finally {
-        activeLevelId = saved;
-    }
-}
+// Une trémie se pose n'importe où et relie ses niveaux : le câble la rejoint depuis le mur le plus proche
+function shaftValidOn() { return true; }
 
 // Arbre des niveaux vers le niveau du tableau (parcours en largeur depuis le tableau) :
 // chaque niveau garde la trémie qui le relie au niveau « plus proche du tableau ». Même arbre des deux côtés, donc tracé cohérent.
@@ -677,17 +679,19 @@ function circuitsEnteringLevel(levelId, shaftId, tree, panelLevelId) {
     return [...ids];
 }
 
+// Point de dérivation libre d'une trémie pour un niveau : le câble le rejoint depuis le mur le plus proche
+function freeDerivationItem(sh, id, type, levelId) {
+    return { id, type, levelId, free: { x: sh.x, y: sh.y }, height: derivHeightOf(sh, levelId), side: 1, shaftId: sh.id };
+}
+
 function shaftFeedFor(levelId) {
     const panelEl = projectData.electrical.find(e => e.type === 'panel');
     if (!panelEl) return { feed: null, reason: 'none' };
     if (levelId === panelEl.levelId) {
         // niveau du tableau lui-même : sa trémie de dérivation vers un autre étage (sert à l'affichage)
-        const sh = (projectData.shafts || []).find(s => (s.levelIds || []).length >= 2 && s.levelIds.includes(levelId) && shaftValidOn(s, levelId));
+        const sh = (projectData.shafts || []).find(s => (s.levelIds || []).length >= 2 && s.levelIds.includes(levelId));
         if (!sh) return { feed: null, reason: 'noShaft' };
-        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
-        const info = pt && nearestWallInfo(pt);
-        if (!info) return { feed: null, reason: 'noWall' };
-        const feed = { id: 'feed_' + sh.id, type: 'panel', levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isFeed: true };
+        const feed = Object.assign(freeDerivationItem(sh, 'feed_' + sh.id, 'panel', levelId), { isFeed: true });
         return { feed, reason: null, shaft: sh, nextLevelId: sh.levelIds.find(id => id !== levelId), panelLevelId: levelId, tree: null };
     }
     const tree = levelTreeToPanel(panelEl.levelId);
@@ -695,24 +699,22 @@ function shaftFeedFor(levelId) {
     if (!step) return { feed: null, reason: 'noShaft' };
     const sh = (projectData.shafts || []).find(s => s.id === step.shaft);
     if (!sh) return { feed: null, reason: 'noShaft' };
-    const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
-    const info = pt && nearestWallInfo(pt);
-    if (!info) return { feed: null, reason: 'noWall' };
-    const feed = { id: 'feed_' + sh.id, type: 'panel', levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isFeed: true };
+    const feed = Object.assign(freeDerivationItem(sh, 'feed_' + sh.id, 'panel', levelId), { isFeed: true });
     return { feed, reason: null, shaft: sh, nextLevelId: step.to, panelLevelId: panelEl.levelId, tree };
 }
 
-// Pseudo-élément placé à la trémie qui joint deux niveaux (même logique que le pseudo-tableau d'un étage)
-// refs : les deux appareils de la commande ; même choix de trémie des deux côtés, donc tracé cohérent
+// Pseudo-élément placé à la trémie qui joint deux niveaux
 function shaftProxyOn(levelId, otherLevelId, proxyId, type, height, refs) {
-    for (const sh of shaftCandidatesBetween(levelId, otherLevelId, refs)) {
-        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
-        const info = pt && nearestWallInfo(pt);
-        if (info && info.d <= (sh.size || 40) / 2 + 10) {
-            return { id: proxyId, type, levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isProxy: true };
-        }
-    }
-    return null;
+    const sh = shaftCandidatesBetween(levelId, otherLevelId, refs)[0];
+    if (!sh) return null;
+    return Object.assign(freeDerivationItem(sh, proxyId, type, levelId), { isProxy: true });
+}
+
+// Point de dérivation de chaque trémie qui relie cet étage à un autre
+function derivationPointsOn(levelId) {
+    return shaftsOn(levelId)
+        .filter(sh => (sh.levelIds || [sh.levelId]).length >= 2)
+        .map(sh => Object.assign(freeDerivationItem(sh, 'dv|' + sh.id, 'derivation', levelId), { isProxy: true }));
 }
 
 // Commande entre niveaux (ex. va-et-vient RDC / sous-sol) : la liaison est coupée à la trémie.
@@ -750,20 +752,6 @@ function crossLevelControlProxies(result) {
     return proxies;
 }
 
-// Point de dérivation de chaque trémie qui relie cet étage à un autre : là où la gaine se raccorde à cet étage
-function derivationPointsOn(levelId) {
-    const out = [];
-    shaftsOn(levelId).forEach(sh => {
-        if ((sh.levelIds || [sh.levelId]).length < 2) return;
-        // mur de CE niveau le plus proche du point de la trémie (le mur de la trémie peut être à un autre étage)
-        const pt = shaftPos2D(sh, derivDistOf(sh, levelId));
-        const info = pt && nearestWallInfo(pt);
-        if (!info || info.d > (sh.size || 40) / 2 + 10) return;
-        out.push({ id: 'dv|' + sh.id, type: 'derivation', levelId, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: derivHeightOf(sh, levelId), side: info.side, isProxy: true });
-    });
-    return out;
-}
-
 // Calcul du réseau : sans passage entre pièces tant qu'aucun circuit ne l'autorise (routes inchangées).
 // Sinon, les arêtes de passage existent, mais seuls les circuits autorisés (c.roomCrossing) peuvent les emprunter.
 function computeCableNetwork() {
@@ -782,6 +770,9 @@ function buildCableNetwork(passage) {
     const outFaces = outsideFacesOf();
     const els = electricalOn();
     const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {}, forced: new Set(), unroutedBy: {} };
+    // chaque liaison non reliée est comptée sur son circuit (« _none » : sans circuit) pour que l'alerte le désigne
+    const lostFor = (cid, n = 1) => { const k = cid || '_none'; result.unroutedBy[k] = (result.unroutedBy[k] || 0) + n; result.unrouted += n; };
+    const cidOfEl = el => { const c = circuitOf(el); return c ? c.id : null; };
     let panel = els.find(e => e.type === 'panel') || null;
     const wired = els.filter(e => e.type !== 'panel' && e.type !== 'subpanel');
     let feedInfo = null;   // niveau sans tableau : trémie qui le relie au tableau d'un autre étage
@@ -793,7 +784,7 @@ function buildCableNetwork(passage) {
         panel = fed.feed;
         if (!panel) {
             if (!wired.length) return result;   // étage sans appareil ni trémie utilisable : rien à signaler
-            result.unrouted += wired.length;
+            wired.forEach(el => lostFor(cidOfEl(el)));
             result.warnings.push(fed.reason === 'noWall'
                 ? 'Trémie sans mur à cet étage : appareils non reliés'
                 : 'Pas de tableau ni de trémie vers le tableau à cet étage : appareils non reliés');
@@ -873,6 +864,24 @@ function buildCableNetwork(passage) {
     // 4. Position de la descente verticale de chaque appareil mural
     const place = new Map();
     allEls.forEach(el => {
+        if (el.free) {
+            // point libre (trémie) : le câble rejoint la piste du mur le plus proche, en ligne droite
+            let bestT = null, bestS = 0, bestD = Infinity;
+            tracks.forEach(t => {
+                const s = Math.max(0, Math.min(t.len, (el.free.x - t.ox) * t.ux + (el.free.y - t.oy) * t.uy));
+                const F = P(t, s);
+                const d = Math.hypot(el.free.x - F.x, el.free.y - F.y);
+                if (d < bestD) { bestD = d; bestT = t; bestS = s; }
+            });
+            if (!bestT) {
+                result.warnings.push('Trémie « ' + shaftTitle(el.shaftId) + ' » : aucun mur à cet étage, le câble ne peut pas la rejoindre');
+                return;
+            }
+            bestT.st.push(bestS);
+            const zFree = Math.max(C.lowZ, Math.min(ceilZ, el.height || 150));
+            place.set(el.id, { t: bestT, E: { x: el.free.x, y: el.free.y, z: zFree }, dist: bestS, r: bestS, zEl: zFree, free: true, label: el.shaftId });
+            return;
+        }
         if (CEILING_TYPES.includes(el.type)) return;
         const w = walls.find(x => x.id === el.wallId);
         if (!w) return;
@@ -1183,6 +1192,10 @@ function buildCableNetwork(passage) {
         const pl = place.get(el.id);
         if (pl) {
             const A = P(pl.t, pl.r), F = P(pl.t, pl.dist);
+            if (pl.free && (insideBody(pl.E.x, pl.E.y) || segmentHitsWall(pl.E.x, pl.E.y, F.x, F.y))) {
+                result.warnings.push('Trémie « ' + shaftTitle(pl.label) + ' » : le câble ne peut pas la rejoindre depuis cet étage (trémie dans un mur, ou un mur la sépare du mur le plus proche)');
+                return null;
+            }
             const lo = node(A.x, A.y, C.lowZ), hi = node(A.x, A.y, ceilZ);
             let at;
             if (pl.zEl - C.lowZ < 1) { at = lo; addEdge(lo, hi, 'riser'); }
@@ -1254,8 +1267,8 @@ function buildCableNetwork(passage) {
     const R = new Map();
     allEls.forEach(el => R.set(el.id, resolve(el)));
     const unresolved = wired.filter(el => !R.get(el.id));
-    result.unrouted += unresolved.length;
-    if (!R.get(panel.id)) { result.unrouted += wired.length - unresolved.length; return result; }
+    if (!R.get(panel.id)) { wired.forEach(el => lostFor(cidOfEl(el))); return result; }
+    unresolved.forEach(el => lostFor(cidOfEl(el)));
 
     // Liens libres au plafond : droite entre deux points du plafond qui ne traverse aucun mur.
     // « murs » ne les utilise pas ; « plafond » et « mixte » oui. Un passage direct est alors une seule arête.
@@ -1273,7 +1286,7 @@ function buildCableNetwork(passage) {
     // Liens par le plafond au-dessus des îlots : « plafond » et « mixte » les utilisent, « murs » non, sauf pour un
     // appareil imposé (mur isolé). En « mixte », chaque passage au plafond (îlot ou lien libre) coûte MIX_ISLAND_PENALTY cm de plus :
     // le câble ne quitte les murs que s'il n'a pas de chemin raisonnable. Le tableau et les points de raccord restent « par les murs ».
-    const MIX_ISLAND_PENALTY = 1000;
+    const MIX_ISLAND_PENALTY = 500;
     // route d'une liaison : mode du circuit (murs / plafond / mixte) et autorisation de passage entre pièces fermées
     const routeFor = (A, B, cid) => {
         const c = cid ? projectData.circuits.find(x => x.id === cid) : null;
@@ -1475,7 +1488,7 @@ function buildCableNetwork(passage) {
     els.filter(e => e.type === 'subpanel').forEach(sp => {
         const len = R.get(sp.id) ? addLink(panel, sp, std, FEEDER_CID) : null;
         if (len === null) {
-            result.unrouted++;
+            lostFor(null);
             result.warnings.push('Sous-tableau non relié au tableau principal');
             return;
         }
@@ -1491,7 +1504,7 @@ function buildCableNetwork(passage) {
     byCircuit.forEach((list, k) => {
         const cidOf = k === '_none' ? null : k;
         // liaisons non reliées, comptées par circuit (clé « _none » : sans circuit)
-        const lostOn = n => { result.unroutedBy[k] = (result.unroutedBy[k] || 0) + n; result.unrouted += n; };
+        const lostOn = n => lostFor(cidOf, n);
         const tree = [{ el: panel, deg: 0, depth: 0, free: true, boxId: null }]
             .concat(subRoots.map(s => ({ el: s.el, deg: 0, depth: s.depth, free: true, boxId: null })));
         // appareils servis par chaque boîte retenue (le calcul du câblage n'en dépend pas)
@@ -1552,7 +1565,7 @@ function buildCableNetwork(passage) {
 
     // commande des lampes d'un autre circuit (hors arbre : elles ne servent pas de point de branchement)
     crossControl.forEach(({ sw, light, cid, wires }) => {
-        if (addLink(sw, light, wires, cid) === null) result.unrouted++;
+        if (addLink(sw, light, wires, cid) === null) lostFor(cid);
     });
 
     // navettes : deux va-et-vient qui commandent la même lampe sont reliés par deux fils violets
@@ -1563,7 +1576,7 @@ function buildCableNetwork(passage) {
             const pk = [pair[k].id, pair[k + 1].id].sort().join('~');
             if (navettePairs.has(pk)) continue;
             navettePairs.add(pk);
-            if (addLink(pair[k], pair[k + 1], ['violet', 'violet'], circuitIdOf(light)) === null) result.unrouted++;
+            if (addLink(pair[k], pair[k + 1], ['violet', 'violet'], circuitIdOf(light)) === null) lostFor(circuitIdOf(light));
         }
     });
 
@@ -1572,16 +1585,16 @@ function buildCableNetwork(passage) {
     const treePanelId = feedInfo ? feedInfo.panelLevelId : panel.levelId;
     const tree = feedInfo ? feedInfo.tree : levelTreeToPanel(treePanelId);
     derivPts.forEach(dp => {
-        if (!R.get(dp.id)) { result.unrouted++; return; }
+        if (!R.get(dp.id)) { lostFor(null); return; }
         const shaftId = dp.id.slice(3);   // 'dv|' + id de la trémie
         const cidsIn = circuitsEnteringLevel(activeLevelId, shaftId, tree, treePanelId);
         if (!cidsIn.length) {
             // trémie sans circuit venant d'un autre étage : tronçon neutre, retiré du métré par circuit
-            if (addLink(panel, dp, std, null) === null) result.unrouted++;
+            if (addLink(panel, dp, std, null) === null) lostFor(null);
             else result.linkInfo.pop();
             return;
         }
-        cidsIn.forEach(cid => { if (addLink(panel, dp, std, cid) === null) result.unrouted++; });
+        cidsIn.forEach(cid => { if (addLink(panel, dp, std, cid) === null) lostFor(cid); });
     });
 
     // niveau sans tableau : la gaine monte ou descend de la trémie de cet étage jusqu'à la trémie du niveau suivant
@@ -2111,15 +2124,11 @@ function build3DScene() {
 
     // Trémies (D5) : cadre clair au sol, à la place de chaque trémie du niveau affiché
     shaftsOn().forEach(sh => {
-        const w = projectData.walls.find(x => x.id === sh.wallId);
-        if (!w) return;
-        const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) || 1;
-        const d = Math.max(10, Math.min(len - 10, sh.distanceFromStart !== undefined ? sh.distanceFromStart : len / 2));
         const s = sh.size || 40;
         const frame = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
               new THREE.LineBasicMaterial({ color: shaftColour() }));
-        const sp = shaftPos2D(sh) || { x: w.x1 + (w.x2 - w.x1) * d / len, y: w.y1 + (w.y2 - w.y1) * d / len };
+        const sp = shaftPos2D(sh);
         frame.position.set(sp.x - cx, 1, sp.y - cy);
         frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
         threeScene.add(frame);
@@ -2174,7 +2183,7 @@ function build3DScene() {
         // même remède que pour les appareils : la boîte est posée à 1,5 cm de la face du mur (pas sur l'axe de la paroi
         // transparente) et son ordre de dessin est fixe, sinon le tri des transparents la fait scintiller
         // la boîte est collée à la face du mur, côté pièce de la trémie (jamais dans le mur)
-        const dp = derivFacePos2D(sh, derivDistOf(sh, activeLevelId)) || { x: w.x1, y: w.y1, angle: 0 };
+        const dp = derivFacePos2D(sh) || { x: sh.x, y: sh.y, angle: 0 };
         derivation.position.set(dp.x - cx, derivHeightOf(sh, activeLevelId), dp.y - cy);
         derivation.rotation.y = -dp.angle + Math.PI / 2;
         derivation.renderOrder = 6;
@@ -2768,6 +2777,24 @@ function on3DPointerDown(e) {
             }
             return;
         }
+
+        if (activePlacementType === 'shaft') {
+            // trémie posée au sol, n'importe où
+            const floorPt = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), floorPt)) {
+                const { cx, cy } = scene3DCentre();
+                const links = askShaftLevels();
+                if (!links) return;
+                saveStateToUndo();
+                if (!projectData.shafts) projectData.shafts = [];
+                projectData.shafts.push({ id: 'sh_' + Date.now(), levelId: activeLevelId, levelIds: links,
+                    x: Math.round(floorPt.x + cx), y: Math.round(floorPt.z + cy), size: 40 });
+                renderLevelSelector();
+                showNotification('Trémie posée', 'success');
+                build3DScene();
+            }
+            return;
+        }
         if (CEILING_TYPES.includes(activePlacementType)) {
             if (ceilingMesh3D) {
                 const ceilingIntersect = raycaster.intersectObject(ceilingMesh3D);
@@ -2926,12 +2953,13 @@ function on3DPointerDown(e) {
                 dragging3DElementId = targetId;
                 drag3DMoved = false;   // C1 : l'annulation est enregistrée au premier vrai déplacement
                 drag3DDown = { x: e.clientX, y: e.clientY };
-                if (isCeiling || dragStair) {
+                const dragShaft = (projectData.shafts || []).find(s => s.id === targetId);
+                if (isCeiling || dragStair || dragShaft) {
                     dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), target.position);
                 } else {
                     dragPlane.setFromNormalAndCoplanarPoint(threeCamera.getWorldDirection(dragPlane.normal).negate(), target.position);
                 }
-                if (dragStair) {
+                if (dragStair || dragShaft) {
                     const grabPt = new THREE.Vector3();
                     stair3DGrab = raycaster.ray.intersectPlane(dragPlane, grabPt) ? { x: grabPt.x - target.position.x, z: grabPt.z - target.position.z } : { x: 0, z: 0 };
                 }
@@ -3006,7 +3034,7 @@ function on3DPointerMove(e) {
         if (floorPt && wallDraft3D) { wallCursor3D = snapTracePoint3D(floorPt, wallDraft3D); updateWallPreview3D(); }
         return;
     }
-    if (activePlacementType && activePlacementType !== 'stair' && !dragging3DElementId) { updatePlaceGhost3D(e); return; }
+    if (activePlacementType && !dragging3DElementId) { updatePlaceGhost3D(e); return; }
     if (!dragging3DElementId) { hover3DTooltip(e); return; }
     // un simple clic ne déplace rien : le glissement commence après 5 px de mouvement
     if (!drag3DMoved && drag3DDown && Math.hypot(e.clientX - drag3DDown.x, e.clientY - drag3DDown.y) < 5) return;
@@ -3032,6 +3060,15 @@ function on3DPointerMove(e) {
             scheduleBuild3D();
             return;
         }
+        const shaftDrag = (projectData.shafts || []).find(s => s.id === dragging3DElementId);
+        if (shaftDrag) {
+            const g = stair3DGrab || { x: 0, z: 0 };
+            shaftDrag.x = Math.round(planeIntersectPoint.x - g.x + cx);
+            shaftDrag.y = Math.round(planeIntersectPoint.z - g.z + cy);
+            scheduleBuild3D();
+            return;
+        }
+
         let ceilingEl = projectData.electrical.find(el => el.id === dragging3DElementId && CEILING_TYPES.includes(el.type));
         if (ceilingEl) {
             ceilingEl.x = planeIntersectPoint.x + cx;
@@ -3290,7 +3327,8 @@ function shaftSpan3D(sh) {
 
 // Escalier grabbé en 3D : décalage entre le point saisi et le centre (coordonnées de la scène)
 let stair3DGrab = null;
-function addStair3D(st, cx, cy, ghost = false) {
+// Modèle de l'escalier (marches, emprise), sans l'ajouter à la scène : sert au fantôme de pose et à la vraie pose
+function buildStair3D(st, cx, cy, ghost = false) {
     const L = st.length || 300, W = st.width || 90, n = stairStepCount(st);
     const H = Math.max(stairRiseCm(st), 1);
     const elevOf = lvId => Number(((projectData.levels || []).find(l => l.id === lvId) || {}).elevation) || 0;
@@ -3312,6 +3350,14 @@ function addStair3D(st, cx, cy, ghost = false) {
         new THREE.LineBasicMaterial({ color: '#8b5cf6' }));
     footprint.position.set(0, 0.5, 0);
     group.add(footprint);
+    return group;
+}
+
+// Escalier réel (ou fantôme d'un autre niveau) : ajouté à la scène, avec sa zone cliquable si ce n'est pas un fantôme
+function addStair3D(st, cx, cy, ghost = false) {
+    const L = st.length || 300, W = st.width || 90;
+    const H = Math.max(stairRiseCm(st), 1);
+    const group = buildStair3D(st, cx, cy, ghost);
     // zone invisible sur toute la montée : permet de cliquer l'escalier et de le glisser
     const hit = new THREE.Mesh(
         new THREE.BoxGeometry(L, H + 10, W),
@@ -3325,7 +3371,6 @@ function addStair3D(st, cx, cy, ghost = false) {
     threeScene.add(group);
     wallMeshes3D.push(group);
 }
-
 function shaftLevelNames(sh) {
     return (sh.levelIds || [sh.levelId]).map(lv => {
         const l = (projectData.levels || []).find(x => x.id === lv);
