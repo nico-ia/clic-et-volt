@@ -384,7 +384,7 @@ function findNearestElement(target, allowedTypes) {
 // =====================================================================
 const CABLE_CFG = {
     trackOffset: 5.5,   // axe de la gaine à 5.5 cm de la face du mur (rayon max 5 cm => jamais dans le mur)
-    lowZ: 30,           // cheminement bas : à hauteur des prises (une prise à 30 cm se raccorde sans descente)
+    lowZ: 10,           // cheminement bas : à hauteur des prises (une prise à 30 cm se raccorde sans descente)
     ceilGap: 8,         // cheminement haut = juste sous le plafond
     crossStep: 60,      // pas des traversées de cloison possibles (cm)
     crossPenalty: 12,   // coût fictif (cm) : on ne perce un mur que si cela fait gagner de la longueur
@@ -565,18 +565,6 @@ function derivHeightOf(sh, levelId) {
     const h = sh.derivHeight && sh.derivHeight[levelId];
     const wanted = Number.isFinite(h) ? h : 150;
     return Math.min(wanted, levelCeilingOf(levelId) - DERIV_BOX_H / 2);
-}
-// Montée entre deux boîtes de dérivation : un vrai tube (une THREE.Line reste fine quel que soit le zoom)
-const RISER_RES = {};
-const RISER_RADIUS = 1.8;   // cm
-function riserTube(a, b, mat) {
-    if (!RISER_RES.geo) RISER_RES.geo = markShared(new THREE.CylinderGeometry(1, 1, 1, 8, 1, true));
-    const dir = new THREE.Vector3().subVectors(b, a);
-    const tube = new THREE.Mesh(RISER_RES.geo, mat);
-    tube.position.copy(a).add(b).multiplyScalar(0.5);
-    tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-    tube.scale.set(RISER_RADIUS, dir.length(), RISER_RADIUS);
-    return tube;
 }
 
 // Position du point de dérivation le long du mur de la trémie, par niveau (cm) ; par défaut, celle de la trémie
@@ -1197,6 +1185,12 @@ function buildCableNetwork(passage) {
                 return null;
             }
             const lo = node(A.x, A.y, C.lowZ), hi = node(A.x, A.y, ceilZ);
+            // trémie : la sortie monte jusqu'au plafond dans la trémie, puis file au plafond jusqu'au mur (patch 24).
+            // Jamais d'horizontale à mi-hauteur ni au sol. Les appareils fixés sur un mur ne sont pas concernés.
+            if (pl.free) {
+                addEdge(lo, hi, 'riser');
+                return { node: hi, stub: [pl.E, { x: pl.E.x, y: pl.E.y, z: ceilZ }, { x: A.x, y: A.y, z: ceilZ }] };
+            }
             let at;
             if (pl.zEl - C.lowZ < 1) { at = lo; addEdge(lo, hi, 'riser'); }
             else if (ceilZ - pl.zEl < 1) { at = hi; addEdge(lo, hi, 'riser'); }
@@ -1588,12 +1582,8 @@ function buildCableNetwork(passage) {
         if (!R.get(dp.id)) { lostFor(null); return; }
         const shaftId = dp.id.slice(3);   // 'dv|' + id de la trémie
         const cidsIn = circuitsEnteringLevel(activeLevelId, shaftId, tree, treePanelId);
-        if (!cidsIn.length) {
-            // trémie sans circuit venant d'un autre étage : tronçon neutre, retiré du métré par circuit
-            if (addLink(panel, dp, std, null) === null) lostFor(null);
-            else result.linkInfo.pop();
-            return;
-        }
+        // trémie sans circuit venant d'un autre étage : aucun câble, rien à tracer
+        if (!cidsIn.length) return;
         cidsIn.forEach(cid => { if (addLink(panel, dp, std, cid) === null) lostFor(cid); });
     });
 
@@ -1609,7 +1599,6 @@ function buildCableNetwork(passage) {
         const vEnd = { x: E0.x, y: E0.y, z: zNext };
         const vLen = Math.abs(zNext - E0.z);
         const cidsUp = circuitsOnHop(hop, feedInfo.tree, feedInfo.panelLevelId);
-        if (!cidsUp.length) addPriv([E0, vEnd], std, null, null);
         cidsUp.forEach(cid => {
             addPriv([E0, vEnd], std, cid, null);
             result.linkInfo.push({ circuitId: cid, length: vLen });
@@ -1665,12 +1654,90 @@ function mergeCableParts(parts) {
     });
 }
 
-// Rendu : une gaine par tronçon (cylindres partagés), coudes en manchons sphériques, âmes colorées à l'intérieur
+// Rendu fantôme (patch 20) : options lues par renderCableNetwork ; null pour l'étage affiché
+let cableGhostOpts = null;
+
+// Gaine fantôme : pleine (non translucide), à la couleur de son circuit, grise sans circuit
+function ghostConduitMat(cid) {
+    let hex = '#94a3b8';
+    if (cid === FEEDER_CID) hex = FEEDER_COLOR;
+    else if (typeof cid === 'string' && cid.startsWith('ctl:')) hex = cid.slice(4);
+    else {
+        const c = cid ? projectData.circuits.find(x => x.id === cid) : null;
+        if (c) hex = circuitColor(c);
+    }
+    CABLE_RES.ghostMats = CABLE_RES.ghostMats || {};
+    return CABLE_RES.ghostMats[hex] || (CABLE_RES.ghostMats[hex] = markShared(new THREE.MeshBasicMaterial({ color: hex })));
+}
+
+// Un point (x, y en plan) est-il dans le carré en plan d'une trémie ?
+function insideShaftXY(p, sh) {
+    const h = (sh.size || 40) / 2 + 0.5;
+    return Math.abs(p.x - sh.x) <= h && Math.abs(p.y - sh.y) <= h;
+}
+
+// Rayon des gaines fantômes (cm) : fines, indépendantes du rayon des gaines réelles
+const GHOST_CONDUIT_R = 0.5;
+
+
+// Trémie sélectionnée (sans circuit sélectionné) : seule cette trémie est affichée, par ce qui est dans son carré
+function shaftBoxSel() {
+    if (selectedCircuitId && circuitById(selectedCircuitId)) return null;
+    return selected3DId ? (projectData.shafts || []).find(s => s.id === selected3DId) || null : null;
+}
+
+// Circuit sélectionné : le seul circuit mis en évidence
+function focusCircuitSet() {
+    return selectedCircuitId && circuitById(selectedCircuitId) ? new Set([selectedCircuitId]) : null;
+}
+
+// Morceau d'un tronçon situé dans le carré d'une trémie (plan x, y ; z interpolé). null si le tronçon ne touche pas le carré.
+function clipSegToShaft(p, q, sh) {
+    const h = (sh.size || 40) / 2 + 0.5;
+    const x0 = sh.x - h, x1 = sh.x + h, y0 = sh.y - h, y1 = sh.y + h;
+    const dx = q.x - p.x, dy = q.y - p.y;
+    let t0 = 0, t1 = 1;
+    const tests = [[-dx, p.x - x0], [dx, x1 - p.x], [-dy, p.y - y0], [dy, y1 - p.y]];
+    for (const [pp, qq] of tests) {
+        if (pp === 0) { if (qq < 0) return null; continue; }
+        const r = qq / pp;
+        if (pp < 0) { if (r > t1) return null; if (r > t0) t0 = r; }
+        else { if (r < t0) return null; if (r < t1) t1 = r; }
+    }
+    const at = t => ({ x: p.x + dx * t, y: p.y + dy * t, z: p.z + (q.z - p.z) * t });
+    return { a: at(t0), b: at(t1) };
+}
+
+// Étage fantôme : gaines seules et fines par défaut ; circuit sélectionné ou trémie sélectionnée : rendu de circuit sélectionné
+// circuitOnly : n'afficher que ce qui est mis en évidence (étages fantômes masqués)
+function renderGhostLevelCables(net, cx, cy, dy, circuitOnly) {
+    if (!net || !net.segments || !net.segments.length) return;
+    const box = shaftBoxSel();
+    const FS = focusCircuitSet();
+    if (circuitOnly && !FS && !box) return;
+    let opts;
+    if (box) {
+        opts = { net, dy, box, wires: true, keepSeg: () => true, keepGroup: () => true };
+    } else if (FS) {
+        opts = { net, dy, wires: true, focusIds: FS, keepSeg: s => (s.cids || []).some(c => FS.has(c)), keepGroup: c => FS.has(c) };
+    } else {
+        opts = { net, dy, wires: false, radiusCm: GHOST_CONDUIT_R, keepSeg: () => true, keepGroup: () => true };
+    }
+    cableGhostOpts = opts;
+    try { renderCableNetwork(cx, cy); } finally { cableGhostOpts = null; }
+}
+
 function renderCableNetwork(cx, cy) {
-    const net = getCableNetwork();
-    updateCircuitsUI();
+    const G = cableGhostOpts;   // rendu fantôme (patch 20) ou null pour l'étage affiché
+    // circuits mis en évidence : le circuit sélectionné, sinon ceux qui traversent la trémie sélectionnée (patch 24)
+    
+    const BOX = G ? (G.box || null) : shaftBoxSel();
+    const FOC = G ? (G.focusIds || null) : focusCircuitSet();
+    const net = G ? G.net : getCableNetwork();
+    if (!G) updateCircuitsUI();
+
     if (!showCables2D) return;   // câbles masqués (réglage commun avec la 2D)
-    if (net.unrouted > 0) {
+    if (!G && net.unrouted > 0) {
         console.warn(net.unrouted + ' liaison(s) non routée(s)');
         if (typeof showNotification === 'function') showNotification(net.unrouted + ' appareil(s) n\'ont pas pu être reliés au tableau', 'error');
     }
@@ -1784,8 +1851,12 @@ function renderCableNetwork(cx, cy) {
     // 1) tron?ons et leurs groupes (un groupe = un circuit, ou un tube de commande sans fils)
     const segs = [];
     net.segments.forEach(seg => {
-        const a = new THREE.Vector3(seg.a.x - cx, seg.a.z, seg.a.y - cy);
-        const b = new THREE.Vector3(seg.b.x - cx, seg.b.z, seg.b.y - cy);
+        const dyG = G ? G.dy : 0;   // décalage vertical de l'étage fantôme (0 pour l'étage affiché)
+        // trémie sélectionnée : seule la partie du tronçon située dans le carré est gardée, les sorties coupées au bord (patch 24)
+        const clip = BOX ? clipSegToShaft(seg.a, seg.b, BOX) : { a: seg.a, b: seg.b };
+        if (!clip) return;
+        const a = new THREE.Vector3(clip.a.x - cx, clip.a.z + dyG, clip.a.y - cy);
+        const b = new THREE.Vector3(clip.b.x - cx, clip.b.z + dyG, clip.b.y - cy);
         const dir = b.clone().sub(a);
         const len = dir.length();
         if (len < 0.1) return;
@@ -1801,7 +1872,9 @@ function renderCableNetwork(cx, cy) {
         // commande vers une prise command?e : tube suppl?mentaire ? la couleur de la prise (sans fils, ceux-ci restent dans leur circuit)
         [...new Set((seg.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id)))]
             .forEach(hex => groups.set('ctl:' + hex, { cid: 'ctl:' + hex, wires: [] }));
-        const kept = new Map([...groups].filter(([, g]) => !(feederHidden && g.cid === FEEDER_CID)));
+        const kept = new Map([...groups].filter(([, g]) => !(feederHidden && g.cid === FEEDER_CID) && (!G || G.keepGroup(g.cid))));
+        if (G && (!kept.size || !G.keepSeg(seg))) return;   // fantôme : tronçon hors sélection, rien à tracer
+
         segs.push({ a, b, dir, groups: kept, links: seg.links || [] });
     });
 
@@ -1890,15 +1963,15 @@ function renderCableNetwork(cx, cy) {
             const A = nodeOffsets.get(ka).get(gk);
             const B = nodeOffsets.get(kb).get(gk);
             const R = Math.max(A.R, B.R);
-            const isSelected = selectedCircuitId && cid === selectedCircuitId;
+            const isSelected = !!BOX || (!!FOC && FOC.has(cid));
             const isFocused = hasLinkFocus
                 ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid) || !!ctlHexOf(cid))
                 : (isSelected || (cid === FEEDER_CID && !!selectedCircuitId));
-            const cmat = (hasLinkFocus || selectedCircuitId)
+            const cmat = G ? (isFocused ? hiFor(cid) : ghostConduitMat(cid)) : ((hasLinkFocus || FOC || BOX)
                 ? (isFocused ? hiFor(cid) : CABLE_RES.dimConduit)
-                : conduitFor(cid);
+                : conduitFor(cid));
             const order = isFocused ? 3 : 2;
-            strut(s.a.clone().add(A.tube), s.b.clone().add(B.tube), R, cmat, order, true);
+            strut(s.a.clone().add(A.tube), s.b.clone().add(B.tube), (G && G.radiusCm !== undefined ? G.radiusCm : R), cmat, order, true);
             noteSphere(ka, gk, cmat, isFocused);
             noteSphere(kb, gk, cmat, isFocused);
 
@@ -1906,11 +1979,11 @@ function renderCableNetwork(cx, cy) {
                 const pa = A.wires.get(w.key);
                 const pb = B.wires.get(w.key);
                 if (!pa || !pb) return;
-                const coreMat = (hasLinkFocus || selectedCircuitId) && !isFocused
-                    ? CABLE_RES.dimCore
+                const coreMat = (hasLinkFocus || FOC || BOX) && !isFocused
+                ? CABLE_RES.dimCore
                     : matFor(w.colour);
-                strut(s.a.clone().add(pa), s.b.clone().add(pb), CORE_R, coreMat, order, false);
-            });
+                if (!G || G.wires) strut(s.a.clone().add(pa), s.b.clone().add(pb), CORE_R, coreMat, order, false);
+                });
         });
     });
 
@@ -1921,7 +1994,8 @@ function renderCableNetwork(cx, cy) {
         const off = nodeOffsets.get(nk).get(gk);
         const sph = new THREE.Mesh(CABLE_RES.sph, mat);
         sph.position.copy(nodes.get(nk).p).add(off.tube);
-        sph.scale.set(off.R, off.R, off.R);
+        const rr = G && G.radiusCm !== undefined ? G.radiusCm : off.R;
+        sph.scale.set(rr, rr, rr);
         sph.renderOrder = focused ? 3 : 2;
         add(sph);
     });
@@ -2080,30 +2154,19 @@ function build3DScene() {
                 threeScene.add(mesh);
                 wallMeshes3D.push(mesh);
             });
-            // câblage de ce niveau en fantôme (lignes grises, sans interaction)
-            const ghostNet = ghostCableNetwork(lv.id);
-            const pts = [], cols = [];
-            (ghostNet && ghostNet.segments || []).forEach(sg => {
-                // chaque tronçon prend la couleur de son circuit, comme sur le plan réel
-                const cid = (sg.cids || []).find(Boolean);
-                const cc = cid ? projectData.circuits.find(c => c.id === cid) : null;
-                const col = cc ? new THREE.Color(circuitColor(cc)) : new THREE.Color('#94a3b8');
-                pts.push(sg.a.x - cx, sg.a.z + dy, sg.a.y - cy, sg.b.x - cx, sg.b.z + dy, sg.b.y - cy);
-                cols.push(col.r, col.g, col.b, col.r, col.g, col.b);
-            });
-            if (pts.length) {
-                const lineGeo = new THREE.BufferGeometry();
-                lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-                lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-                const cableGhost = new THREE.LineSegments(lineGeo,
-                    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false }));
-                cableGhost.renderOrder = 3;
-                threeScene.add(cableGhost);
-                wallMeshes3D.push(cableGhost);
-            }
         });
     }
-    // circuit sélectionné : ses appareils et câbles sont surlignés aussi sur les autres niveaux
+    // câbles des autres étages : tous les modes si les étages fantômes sont affichés ;
+    // sinon seul le circuit sélectionné reste visible
+    if (ghostLevelsOn || selectedCircuitId || shaftBoxSel()) {
+        const actLevelC = (projectData.levels || []).find(l => l.id === activeLevelId);
+        const actElevC = Number(actLevelC && actLevelC.elevation) || 0;
+        (projectData.levels || []).filter(l => l.id !== activeLevelId).forEach(lv => {
+            const dyC = (Number(lv.elevation) || 0) - actElevC;
+            renderGhostLevelCables(ghostCableNetwork(lv.id), cx, cy, dyC, !ghostLevelsOn);
+        });
+    }
+
     addCircuitCrossLevelHighlights(cx, cy);
 
     const maxH = Math.max(...wallsOn().map(w => w.height || 250), 250);
@@ -2191,19 +2254,7 @@ function build3DScene() {
         interactiveObjects3D.push(derivation);
         threeScene.add(derivation);
         wallMeshes3D.push(derivation);
-        // montée verticale : trait jaune de la cote de ce niveau à celle de chaque niveau relié par la trémie
-        const elevHere = (projectData.levels || []).find(l => l.id === activeLevelId);
-        (sh.levelIds || [sh.levelId]).filter(lv => lv !== activeLevelId).forEach(lv => {
-            const other = (projectData.levels || []).find(l => l.id === lv);
-            if (!other || !elevHere) return;
-            const dy = (Number(other.elevation) || 0) - (Number(elevHere.elevation) || 0);
-            // câble de la boîte de ce niveau jusqu'à la boîte de l'autre niveau (même trémie)
-            const y0 = derivation.position.y;
-            const y1 = dy + derivHeightOf(sh, lv);
-            const riser = riserTube(new THREE.Vector3(derivation.position.x, y0, derivation.position.z), new THREE.Vector3(derivation.position.x, y1, derivation.position.z), new THREE.MeshBasicMaterial({ color: '#38bdf8' }));
-            threeScene.add(riser);
-            wallMeshes3D.push(riser);
-        });
+
     });
 
     // Escaliers : marches pleines de la marche basse à la marche haute, emprise au sol, zone cliquable
@@ -3051,20 +3102,14 @@ function on3DPointerMove(e) {
 
     if (raycaster.ray.intersectPlane(dragPlane, planeIntersectPoint)) {
         const stairDrag = (projectData.stairs || []).find(s => s.id === dragging3DElementId);
-        if (stairDrag) {
-            const g = stair3DGrab || { x: 0, z: 0 };
-            const prevSt = { x: stairDrag.x, y: stairDrag.y };
-            stairDrag.x = Math.round(planeIntersectPoint.x - g.x + cx);
-            stairDrag.y = Math.round(planeIntersectPoint.z - g.z + cy);
-            snapStairToWalls(stairDrag, prevSt);
-            scheduleBuild3D();
-            return;
-        }
         const shaftDrag = (projectData.shafts || []).find(s => s.id === dragging3DElementId);
-        if (shaftDrag) {
+        if (stairDrag || shaftDrag) {
+            const item = stairDrag || shaftDrag;
             const g = stair3DGrab || { x: 0, z: 0 };
-            shaftDrag.x = Math.round(planeIntersectPoint.x - g.x + cx);
-            shaftDrag.y = Math.round(planeIntersectPoint.z - g.z + cy);
+            const prevSt = { x: item.x, y: item.y };
+            item.x = Math.round(planeIntersectPoint.x - g.x + cx);
+            item.y = Math.round(planeIntersectPoint.z - g.z + cy);
+            if (stairDrag) snapStairToWalls(stairDrag, prevSt);   // seul l'escalier s'aimante aux murs
             scheduleBuild3D();
             return;
         }
@@ -3074,22 +3119,6 @@ function on3DPointerMove(e) {
             ceilingEl.x = planeIntersectPoint.x + cx;
             ceilingEl.z = planeIntersectPoint.z + cy;
             scheduleBuild3D();
-            return;
-        }
-
-        if (dragging3DElementId.startsWith('deriv|')) {
-            const shId = dragging3DElementId.slice(6);
-            const sh = (projectData.shafts || []).find(x => x.id === shId);
-            const w = sh && projectData.walls.find(x => x.id === sh.wallId);
-            if (w) {
-                const ax = w.x1 - cx, az = w.y1 - cy;
-                const bx = w.x2 - cx, bz = w.y2 - cy;
-                const L = Math.hypot(bx - ax, bz - az) || 1;
-                const t = ((planeIntersectPoint.x - ax) * (bx - ax) + (planeIntersectPoint.z - az) * (bz - az)) / (L * L);
-                const dCm = Math.round(Math.max(10, Math.min(L - 10, t * L)));
-                sh.derivDist = Object.assign({}, sh.derivDist, { [activeLevelId]: clampDerivDist(sh, dCm) });
-                scheduleBuild3D();
-            }
             return;
         }
 
@@ -3293,7 +3322,6 @@ function addGhostShaft3D(sh, cx, cy) {
     fill.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     fill.renderOrder = 2;
     // boîtes de dérivation de chaque niveau relié, comme en réel (même taille, même position dans la gaine)
-    const boxes = [];
     levels.forEach(lv => {
         const dp = derivFacePos2D(sh, derivDistOf(sh, lv));
         if (!dp) return;
@@ -3304,15 +3332,8 @@ function addGhostShaft3D(sh, cx, cy) {
         box.position.set(dp.x - cx, y, dp.y - cy);
         box.rotation.y = -dp.angle + Math.PI / 2;
         box.renderOrder = 4;
-        boxes.push({ x: dp.x - cx, y, z: dp.y - cy });
     });
-    // montée entre les boîtes des niveaux reliés
-    if (boxes.length > 1) {
-        const ys = boxes.map(bx => bx.y);
-        const riser = add(riserTube(new THREE.Vector3(boxes[0].x, Math.min(...ys), boxes[0].z), new THREE.Vector3(boxes[0].x, Math.max(...ys), boxes[0].z),
-            new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.6, depthWrite: false })));
-        riser.renderOrder = 4;
-    }
+
 }
 
 // Étendue verticale d'une trémie, relative au niveau affiché : de la dalle la plus basse au plafond le plus haut
@@ -3653,22 +3674,7 @@ function addCircuitCrossLevelHighlights(cx, cy) {
             threeScene.add(helper);
             wallMeshes3D.push(helper);
         });
-        // câbles du circuit sur cet autre niveau
-        const net = ghostCableNetwork(lv.id);
-        const pts = [];
-        (net && net.segments || []).forEach(sg => {
-            if (!(sg.cids || []).includes(sc.id)) return;
-            pts.push(sg.a.x - cx, sg.a.z + dy, sg.a.y - cy, sg.b.x - cx, sg.b.z + dy, sg.b.y - cy);
-        });
-        if (pts.length) {
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-            const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: new THREE.Color(col), transparent: true, opacity: 1, depthWrite: false }));
-            line.renderOrder = 6;
-            line.userData.shared = false;
-            threeScene.add(line);
-            wallMeshes3D.push(line);
-        }
+
     });
 }
 
