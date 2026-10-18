@@ -3338,8 +3338,8 @@ function on3DPointerMove(e) {
                 const distVal = document.getElementById('inspector-distance-val');
                 if (distInput) distInput.value = closestDistCm;
                 if (distVal) distVal.textContent = closestDistCm + ' cm';
-                
-                scheduleBuild3D();
+                // appareil posé sur un mur : seul son groupe bouge pendant le geste ; sinon reconstruction habituelle
+                if (!moveElementGroup3D(item)) scheduleBuild3D();
             }
         }
     }
@@ -3430,7 +3430,29 @@ function endWallDrag3D() {
     }
     build3DScene();
 }
-
+// Déplacement en direct d'un appareil posé sur un mur : seul son groupe 3D bouge, sans reconstruire la scène.
+// Mêmes formules que createElementMesh3D. Renvoie false si ce cas ne s'applique pas (la scène est alors reconstruite).
+function moveElementGroup3D(el) {
+    if (!el || CEILING_TYPES.includes(el.type)) return false;
+    const grp = interactiveObjects3D.find(o => o.userData && o.userData.type === 'electrical' && o.userData.id === el.id);
+    const wall = projectData.walls.find(w => w.id === el.wallId);
+    if (!grp || !wall || !grp.children.length) return false;
+    const { cx, cy } = scene3DCentre();
+    const wx1 = wall.x1 - cx, wz1 = wall.y1 - cy, wx2 = wall.x2 - cx, wz2 = wall.y2 - cy;
+    const wallLen = Math.hypot(wx2 - wx1, wz2 - wz1);
+    if (wallLen <= 0) return false;
+    const dist = Math.max(5, Math.min(wallLen - 5, el.distanceFromStart !== undefined ? el.distanceFromStart : wallLen / 2));
+    const t = dist / wallLen;
+    const angle = Math.atan2(wz2 - wz1, wx2 - wx1);
+    const side = el.side !== undefined ? el.side : 1;
+    const off = (wall.thickness || 10) / 2 + 1.5;
+    const perpX = Math.sin(angle), perpZ = -Math.cos(angle);
+    grp.position.set(wx1 + t * (wx2 - wx1) + perpX * side * off, el.height || 110, wz1 + t * (wz2 - wz1) + perpZ * side * off);
+    grp.rotation.y = -angle;
+    // le modèle est le premier enfant du groupe (createElementMesh3D) : il tourne seulement côté A
+    grp.children[0].rotation.y = side === 1 ? Math.PI : 0;
+    return true;
+}
 function on3DPointerUp(e) {
     if (wallDrag3D) { endWallDrag3D(); return; }
     if (dragging3DElementId) {
