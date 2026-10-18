@@ -142,6 +142,8 @@ function startProjectWatcher() {
         let s = '';
         try { s = JSON.stringify(projectData); } catch (e) { return; }
         // le niveau affiché fait partie de l'état : changer de niveau recalcule aussi les alertes
+                // pendant le glissement d'un appareil, le panneau n'est mis à jour qu'au relâchement (patch 28)
+        if (draggingEl2D || layoutDragging3D()) return;
         if (s !== lastState || activeLevelId !== lastLevelId) {
             lastState = s;
             lastLevelId = activeLevelId;
@@ -495,9 +497,13 @@ function openingOverlapWith(op, wallId, distCm) {
     return (projectData.openings || []).find(o => o.id !== op.id && o.levelId === op.levelId && o.wallId === wallId
         && Math.abs((o.distanceFromStart || 0) - distCm) < (openingWidthOf(o) + w) / 2) || null;
 }
-// Déplacement d'une porte ou fenêtre refusé s'il chevaucherait une autre ouverture (les autres objets : inchangé)
-function openingMoveBlocked(item, wallId, distCm) {
-    return !!(item && OPENING_TYPES.includes(item.type) && openingOverlapWith(item, wallId, distCm));
+// Déplacement d'une porte ou fenêtre : message du refus (chevauchement ou escalier), '' si le déplacement est permis
+function openingMoveRefusal(item, wallId, distCm) {
+    if (!item || !OPENING_TYPES.includes(item.type)) return '';
+    if (openingOverlapWith(item, wallId, distCm)) return 'Porte ou fenêtre déjà à cet endroit : déplacement refusé';
+    const w = (projectData.walls || []).find(x => x.id === wallId);
+    if (w && openingClashesStair(Object.assign({}, item, { wallId, distanceFromStart: distCm }), w)) return 'Porte ou fenêtre dans l’emprise de l’escalier : déplacement refusé';
+    return '';
 }
 // Emprise en plan d'une porte ou fenêtre : longueur comme en 3D, épaisseur du mur
 function openingRectOf(op) {
@@ -518,24 +524,71 @@ function computeOpeningOverlaps() {
     }));
     return list;
 }
-function sameSpotBlocker(type, levelId, wallId, distCm, width) {
-    if (OPENING_TYPES.includes(type)) {
-        const w = width || openingWidthOf({ type });
-        return (projectData.openings || []).find(o => o.levelId === levelId && o.wallId === wallId
-            && Math.abs((o.distanceFromStart || 0) - distCm) < (openingWidthOf(o) + w) / 2) || null;
+// Porte ou fenêtre dont l'emprise sur le mur rencontre le volume plein des marches de cet escalier
+// (la montée part du niveau de l'escalier ; l'espace au-dessus des marches reste permis dans le mur)
+function openingClashesSolid(op, wall, st) {
+    const b = openingBox(op, wall);
+    const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+    if (len < 1) return false;
+    const ux = (wall.x2 - wall.x1) / len, uy = (wall.y2 - wall.y1) / len;
+    const th = wall.thickness || 10;
+    const R = stairRect(st);
+    const H = Math.max(stairRiseCm(st), 1);
+    for (let s = b.d - b.half; s <= b.d + b.half + 0.01; s += 2) {
+        const px = wall.x1 + ux * s, py = wall.y1 + uy * s;   // point de l'axe du mur
+        const dx = px - R.cx, dy = py - R.cy;
+        const pu = dx * R.ux + dy * R.uy, pv = dx * R.vx + dy * R.vy;
+        // l'axe du mur est dans l'emprise élargie de l'épaisseur du mur : l'escalier touche ce mur
+        if (Math.abs(pu) > R.hl + th / 2 || Math.abs(pv) > R.hw + th / 2) continue;
+        // dessus des marches à cet endroit (0 au bas de l'escalier, H en haut)
+        const hz = H * Math.min(1, Math.max(0, (pu + R.hl) / (2 * R.hl)));
+        if (b.z0 < hz) return true;
     }
-    const pool = [...(projectData.electrical || []), ...(projectData.shafts || [])];
-    const tol = GANGABLE_OUTLETS.includes(type) ? OUTLET_SAME_SPOT_CM : SAME_SPOT_CM;
-    return pool.find(e => e.levelId === levelId && (e.type || 'shaft') === type && e.wallId === wallId
-        && Math.abs((e.distanceFromStart || 0) - distCm) < tol) || null;
+    return false;
+}
+
+// Pose ou déplacement d'une porte/fenêtre : escalier posé sur le niveau affiché qui la rencontre, sinon null
+function openingClashesStair(op, wall) {
+    return stairsOn(activeLevelId).find(st => st.levelId === activeLevelId && openingClashesSolid(op, wall, st)) || null;
+}
+
+// Collisions escalier / porte ou fenêtre, tous niveaux : chaque ouverture est comparée aux escaliers posés sur son niveau
+function computeStairOpeningCollisions() {
+    const list = [];
+    (projectData.stairs || []).forEach(st => {
+        (projectData.openings || []).filter(op => op.levelId === st.levelId).forEach(op => {
+            const wall = (projectData.walls || []).find(w => w.id === op.wallId);
+            if (wall && openingClashesSolid(op, wall, st)) list.push({ stair: st, opening: op });
+        });
+    });
+    return list;
+}
+// Refus d'une pose : renvoie le motif (texte) si la position est interdite, sinon null
+function sameSpotBlocker(type, levelId, wallId, distCm, side, height) {
+    if (OPENING_TYPES.includes(type)) {
+        const w = openingWidthOf({ type });
+        const wall = (projectData.walls || []).find(x => x.id === wallId);
+        if (wall && Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) < w) return 'Mur trop court pour cette ouverture : pose annulée';
+        const hit = (projectData.openings || []).find(o => o.levelId === levelId && o.wallId === wallId
+            && Math.abs((o.distanceFromStart || 0) - distCm) < (openingWidthOf(o) + w) / 2);
+        if (hit) return 'Porte ou fenêtre déjà à cet endroit : pose annulée';
+        if (wall && openingClashesStair({ type, levelId, wallId, distanceFromStart: distCm, width: w }, wall)) return 'Fenêtre ou porte dans l’emprise de l’escalier : pose annulée';
+        return null;
+    }
+    if (type === 'shaft') {
+        const hit = (projectData.shafts || []).find(s => s.levelId === levelId && s.wallId === wallId
+            && Math.abs((s.distanceFromStart || 0) - distCm) < SAME_SPOT_CM);
+        return hit ? 'Une trémie est déjà à cet endroit : pose annulée' : null;
+    }
+    return applianceRefusal(type, levelId, wallId, distCm, side, height);
 }
 // Idem pour un plafonnier : à moins de 30 cm (en plan) d'un autre plafonnier du niveau
 function ceilingSpotBlocker(x, z, levelId) {
     return (projectData.electrical || []).find(e => e.levelId === levelId && CEILING_TYPES.includes(e.type)
         && Math.hypot(e.x - x, e.z - z) < SAME_SPOT_CM) || null;
 }
-function refuseSameSpot() {
-    showNotification('Un élément identique est déjà à cet endroit (moins de 30 cm) : pose annulée', 'error');
+function refuseSameSpot(msg) {
+    showNotification(msg || 'Emplacement occupé : pose annulée', 'error');
 }
 
 // Ligne d'aide du mode « poser » en 2D
@@ -718,7 +771,8 @@ function updateSelectedWallProp(prop, val) {
         updateWallEditButtons();
         return;
     }
-    saveStateToUndo();
+    if (!wallUndoPending) { saveStateToUndo(); wallUndoPending = true; }
+    sliderDragging = true;
     if (prop === 'thickness') {
         const thickness = Math.max(5, Math.min(50, parseInt(val)));
         selectedWallIds.forEach(id => {
@@ -736,7 +790,7 @@ function updateSelectedWallProp(prop, val) {
         document.getElementById('inspector-height').value = height;
         document.getElementById('inspector-height-val').textContent = (height / 100).toFixed(2) + ' m';
     }
-    refreshSelectedView();
+    refreshSliderView();
 }
 
 function updateSelectedWallLength(valStr) {
@@ -1133,6 +1187,39 @@ async function deleteActiveLevel() {
     refreshAfterLevelChange();
     showNotification('Niveau supprimé', 'success');
 }
+// Curseurs et flèches (largeur, taille, épaisseur, hauteur, escalier, distance, hauteur au sol) :
+// pendant le réglage, le réseau de câbles reste celui du début (sliderDragging) et le redessin est regroupé par image.
+// Fin du réglage : relâchement du curseur (« change ») ou arrêt des flèches (350 ms sans pression).
+let sliderDragging = false;
+let _sliderFrame = 0;
+let _keyHoldTimer = 0;
+let wallUndoPending = false;
+let posUndoPending = false;   // distance et hauteur au sol : une annulation par réglage
+let nudgeUndoPending = false; // flèches du clavier : une annulation par série de pressions
+function refreshSliderView() {
+    if (_sliderFrame) return;
+    _sliderFrame = requestAnimationFrame(() => { _sliderFrame = 0; refreshSelectedView(); });
+}
+function endSliderDrag() {
+    clearTimeout(_keyHoldTimer);
+    if (!sliderDragging) return;
+    sliderDragging = false;
+    wallUndoPending = false;
+    posUndoPending = false;
+    nudgeUndoPending = false;
+    _cableCache.sig = null;
+    _ghostNetCache.clear();
+    refreshSelectedView();
+}
+// Flèches du clavier : une touche n'a pas de « relâchement », on termine le réglage 350 ms après la dernière pression
+function holdSliderDrag() {
+    sliderDragging = true;
+    clearTimeout(_keyHoldTimer);
+    _keyHoldTimer = setTimeout(endSliderDrag, 350);
+}
+document.addEventListener('change', e => {
+    if (sliderDragging && e.target && e.target.type === 'range') endSliderDrag();
+}, true);
 
 // Taille de la trémie sélectionnée (D5). Une seule annulation par glissement du curseur.
 let shaftUndoPending = false;
@@ -1140,9 +1227,10 @@ function setShaftSize(v) {
     const sh = (projectData.shafts || []).find(s => s.id === selected3DId);
     if (!sh) return;
     if (!shaftUndoPending) { saveStateToUndo(); shaftUndoPending = true; }
+    sliderDragging = true;
     sh.size = Math.max(20, Math.min(120, parseInt(v, 10) || 40));
     document.getElementById('shaft-size-val').textContent = sh.size + ' cm';
-    refreshSelectedView();   // 2D et 3D : la taille de la trémie se voit dans les deux vues
+    refreshSliderView();   // 2D et 3D : la taille de la trémie se voit dans les deux vues
 }
 
 // Trémie sélectionnée : cases des niveaux reliés. Le niveau d'origine (où la trémie est posée) reste toujours relié.
@@ -1211,13 +1299,14 @@ function setStairProp(prop, v) {
     const st = (projectData.stairs || []).find(s => s.id === selected3DId);
     if (!st) return;
     if (!stairUndoPending) { saveStateToUndo(); stairUndoPending = true; }
+    sliderDragging = true;
     const n = parseFloat(v) || 0;
     if (prop === 'width') st.width = Math.max(60, Math.min(150, n));
     if (prop === 'length') st.length = Math.max(150, Math.min(600, n));
     if (prop === 'angle') st.angleDeg = ((n % 360) + 360) % 360;
     snapStairToWalls(st);
     syncStairInspector(st);
-    if (currentMode === '3d') build3DScene(); else redraw2D();
+    refreshSliderView();
 }
 
 // Avertissement avant toute suppression (2D comme 3D). L'annulation reste possible.
@@ -1269,8 +1358,7 @@ function setStairLinkedLevel(levelId, on) {
     } else {
         saveStateToUndo();
         st.levelId = origin;
-        st.levelIds = relinked;
-        snapStairToWalls(st);
+        st.levelIds = relinked;   // pas de recalage sur les murs : l'escalier garde sa place et son sens
         if (!relinked.includes(activeLevelId)) selected3DId = null;
     }
     syncElementInspectors();
@@ -1472,9 +1560,16 @@ function selectionBlinkNeeded() {
     return !!selectedCircuitId || !!selected3DId;
 }
 
+// Vrai si un câble traverse un escalier : le plan doit alors se redessiner à chaque clignotement
+function cableStairHitNow() {
+    return !!(cableStats && cableStats.segments && cableStats.segments.some(s => s.stairHit));
+}
+
 function startCollisionBlink() {
     setInterval(() => {
         blinkOn = !blinkOn;
+        // câbles qui traversent un escalier : même rythme que les autres conflits, sans reconstruire la scène
+        if (CABLE_RES.stairHitMat) CABLE_RES.stairHitMat.color.set(blinkOn ? '#ef4444' : '#fecaca');
         if (currentMode === '3d') {
             wallMeshes3D.forEach(m => { if (m.userData && m.userData.blink) m.visible = blinkOn; });
             // cadres de sélection : alternent de couleur (blanc / couleur d'origine), toujours visibles
@@ -1486,7 +1581,7 @@ function startCollisionBlink() {
             if (selected3DId) wallMeshes3D.forEach(m => {
                 if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(shaftColour()) : shaftColour());
             });
-        } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded())) {
+        } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded() || cableStairHitNow())) {
             redraw2D();
         }
         // Onglet Alertes et cartes de circuits en alerte : même clignotement rouge, dans les deux vues
@@ -1497,7 +1592,7 @@ function startCollisionBlink() {
             el.style.outlineOffset = blinkOn ? '2px' : '';
             el.style.backgroundImage = blinkOn ? 'linear-gradient(rgba(239,68,68,0.3), rgba(239,68,68,0.3))' : '';
         });
-    }, 450);
+    }, 1000);
 }
 
 function circuitRoot(c) {
@@ -1823,7 +1918,7 @@ function computeOpeningCollisions() {
 // Demi-encombrements (cm), d'après les volumes dessinés en 3D (le centre de l'appareil est à sa hauteur)
 function deviceBox(el) {
     const c = getElCoords(el);
-    const gang = GANGABLE_OUTLETS.includes(el.type);
+    const gang = gangFamily(el.type) !== null;
     const r = el.type === 'panel' ? 21 : el.type === 'junction_box' ? 5 : gang ? 3.6 : (el.type === 'outlet_dedicated_20' || el.type === 'outlet_dedicated_32') ? 7.6 : 4;
     const h = el.type === 'panel' ? 28 : el.type === 'wall_light' || el.type === 'junction_box' ? 5 : 4.5;
     return { el, x: c.x, y: c.y, z: c.z, ceiling: CEILING_TYPES.includes(el.type), r, h };
@@ -1835,10 +1930,54 @@ function computeDeviceOverlaps() {
         for (let j = i + 1; j < boxes.length; j++) {
             const a = boxes[i], b = boxes[j];
             if (a.ceiling !== b.ceiling) continue;
-            if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r && Math.abs(a.z - b.z) < a.h + b.h) list.push({ a: a.el, b: b.el });
+            // deux appareils du même mur mais de part et d'autre : ils ne se gênent pas
+            if (!a.ceiling && a.el.wallId === b.el.wallId && (a.el.side === -1 ? -1 : 1) !== (b.el.side === -1 ? -1 : 1)) continue;
+            if (boxesOverlap(a, b)) list.push({ a: a.el, b: b.el });
         }
     }
     return list;
+}
+
+// Même test d'encombrement que computeDeviceOverlaps (plan + hauteur)
+function boxesOverlap(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r && Math.abs(a.z - b.z) < a.h + b.h;
+}
+
+// Appareil déjà présent, même mur, même côté, qui chevauche le candidat ; null sinon
+function wallDeviceHit(cand) {
+    const a = deviceBox(cand);
+    return electricalOn().find(o => !CEILING_TYPES.includes(o.type) && o.wallId === cand.wallId
+        && (o.side === -1 ? -1 : 1) === (cand.side === -1 ? -1 : 1) && boxesOverlap(a, deviceBox(o))) || null;
+}
+
+// Un interrupteur de plus fait-il dépasser le groupe maximal ? Test sur l'état réel, annulé aussitôt
+function wouldOverflowGang(cand) {
+    const before = computeOutletGangs().overflow.size;
+    projectData.electrical.push(cand);
+    try { return computeOutletGangs().overflow.size > before; }
+    finally { projectData.electrical.pop(); }
+}
+
+// Motif de refus d'un appareil mural posé à distCm (texte) ; null si la pose est permise
+function applianceRefusal(type, levelId, wallId, distCm, side, height) {
+    const cand = { id: '__cand', type, levelId, wallId, distanceFromStart: distCm,
+        side: side === -1 ? -1 : 1, height: height || defaultHeightFor(type) };
+    if (wallDeviceHit(cand)) return 'Emplacement occupé par un appareil : pose annulée';
+    if (gangFamily(type) === 'switch' && wouldOverflowGang(cand)) return 'Groupe d’interrupteurs complet (deux au maximum) : pose annulée';
+    return null;
+}
+
+// Position retenue sur le mur : ouverture entièrement sur le mur ; appareil ramené dans le mur puis aimanté à sa plaque
+function placedDistance(el, wallId, distCm, side) {
+    const w = (projectData.walls || []).find(x => x.id === wallId);
+    if (!w) return distCm;
+    const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+    if (OPENING_TYPES.includes(el.type)) {
+        const hw = openingWidthOf(el) / 2;
+        return Math.max(hw, Math.min(len - hw, distCm));
+    }
+    const d = Math.max(10, Math.min(len - 10, distCm));
+    return snapOutletDistance(el.type, wallId, d, side, el.height || defaultHeightFor(el.type), el.id || null);
 }
 
 function collidingElementIds() {
@@ -1847,6 +1986,7 @@ function collidingElementIds() {
     computeDeviceOverlaps().forEach(c => { ids.add(c.a.id); ids.add(c.b.id); });
     computeStairCollisions().forEach(c => { ids.add(c.stair.id); ids.add(c.other.id); });
     computeOutletGangs().overflow.forEach(id => ids.add(id));
+    computeStairOpeningCollisions().forEach(c => { ids.add(c.stair.id); ids.add(c.opening.id); });
     return ids;
 }
 
@@ -1908,6 +2048,19 @@ function stairLevelNames(st) {
         const l = (projectData.levels || []).find(x => x.id === lv);
         return l ? l.name : '?';
     });
+}
+// Étiquette d'un escalier sur le niveau affiché : « ↑ Étage 1 · ↓ Sous-sol ».
+// La flèche indique si le niveau relié est au-dessus (↑) ou en dessous (↓), d'après les altitudes des niveaux.
+function stairLevelLabel(st) {
+    const levels = projectData.levels || [];
+    const elevOf = id => Number(((levels.find(l => l.id === id)) || {}).elevation) || 0;
+    const here = elevOf(activeLevelId);
+    return (st.levelIds || [st.levelId])
+        .filter(id => id !== activeLevelId)
+        .map(id => ({ id, elev: elevOf(id), name: ((levels.find(l => l.id === id)) || {}).name || '?' }))
+        .sort((p, q) => q.elev - p.elev)
+        .map(o => (o.elev > here ? '↑ ' : '↓ ') + o.name)
+        .join(' · ');
 }
 function stairTitle(st) { return 'Escalier : relie ' + stairLevelNames(st).join(' ↔ '); }
 function stairRiseCm(st) {
@@ -2054,14 +2207,33 @@ function snapStairToWalls(st, prev) {
 
 // Prises simples proches (même mur, même côté, même hauteur) : regroupées automatiquement en double / triple / quadruple
 const GANGABLE_OUTLETS = ['outlet_16a', 'outlet_20a', 'outlet_20a_classic'];
+// Interrupteurs : tous les types d'interrupteur se regroupent entre eux, deux au maximum (double)
+const SWITCH_GANG_TYPES = ['switch_simple', 'switch_va_et_vient', 'switch_dimmer', 'switch_pushbutton'];
+const GANG_CAP = { outlet: 4, switch: 2 };
 const GANG_MAX_GAP_CM = 15;
 const GANG_NAMES = { 1: 'simple', 2: 'double', 3: 'triple', 4: 'quadruple' };
-// Aimantation : une prise posée à moins de 15 cm d'une voisine (même mur, côté et hauteur) se colle à une plaque (7,5 cm)
+
+// Libellé d'une ligne de légende. Interrupteur : son nom seul, ou « (double) » si groupé. Prise : nom + taille du groupe, comme avant
+function gangLabel(type, n) {
+    const base = ELEMENT_LABELS[type] || type;
+    if (gangFamily(type) === 'switch') return n > 1 ? base + ' (' + GANG_NAMES[n] + ')' : base;
+    return base + ' ' + GANG_NAMES[n];
+}
+
+
+// Famille de regroupement : 'outlet', 'switch', ou null si l'appareil ne se regroupe pas
+function gangFamily(type) {
+    if (GANGABLE_OUTLETS.includes(type)) return 'outlet';
+    if (SWITCH_GANG_TYPES.includes(type)) return 'switch';
+    return null;
+}
+// Aimantation : un appareil posé à moins de 15 cm d'un voisin (même famille, même mur, côté et hauteur) se colle à une plaque (7,5 cm)
 const OUTLET_PLATE_CM = 7.5;
 function snapOutletDistance(type, wallId, dist, side, height, excludeId) {
-    if (!GANGABLE_OUTLETS.includes(type)) return dist;
+    const fam = gangFamily(type);
+    if (!fam) return dist;
     const sd = side === -1 ? -1 : 1;
-    const peers = electricalOn().filter(o => o.id !== excludeId && GANGABLE_OUTLETS.includes(o.type) && o.wallId === wallId &&
+    const peers = electricalOn().filter(o => o.id !== excludeId && gangFamily(o.type) === fam && o.wallId === wallId &&
         o.distanceFromStart !== undefined && (o.side === -1 ? -1 : 1) === sd &&
         Math.abs((o.height || defaultHeightFor(o.type)) - height) <= 5);
     const near = peers.filter(o => Math.abs(dist - o.distanceFromStart) <= GANG_MAX_GAP_CM);
@@ -2079,23 +2251,26 @@ function snapOutletDistance(type, wallId, dist, side, height, excludeId) {
 
 function computeOutletGangs() {
     const sizeOf = new Map();
-    // prises en trop : une 5e prise collée à un groupe déjà complet (4 max)
+    // appareils en trop : le groupe est déjà au maximum (4 prises, 2 interrupteurs)
     const overflow = new Set();
-    // membres de chaque groupe (ids), indexés par l'id de chaque prise du groupe
+    // membres de chaque groupe (ids), indexés par l'id de chaque appareil du groupe
     const groupOf = new Map();
     const tally = {};
-    GANGABLE_OUTLETS.forEach(type => { tally[type] = { 1: 0, 2: 0, 3: 0, 4: 0 }; });
+    [...GANGABLE_OUTLETS, ...SWITCH_GANG_TYPES].forEach(type => { tally[type] = { 1: 0, 2: 0, 3: 0, 4: 0 }; });
     const buckets = new Map();
     electricalOn().forEach(el => {
-        if (!GANGABLE_OUTLETS.includes(el.type)) return;
+        const fam = gangFamily(el.type);
+        if (!fam) return;
         const w = wallsOn().find(x => x.id === el.wallId);
         const wl = w ? Math.hypot(w.x2 - w.x1, w.y2 - w.y1) : 0;
         const dist = el.distanceFromStart !== undefined ? el.distanceFromStart : wl / 2;
-        const key = el.type + '|' + el.wallId + '|' + (el.side === -1 ? -1 : 1);
-        if (!buckets.has(key)) buckets.set(key, []);
-        buckets.get(key).push({ el, dist, h: el.height || defaultHeightFor(el.type) });
+        // prises : un groupe par type ; interrupteurs : tous types confondus
+        const key = (fam === 'switch' ? 'switch' : el.type) + '|' + el.wallId + '|' + (el.side === -1 ? -1 : 1);
+        if (!buckets.has(key)) buckets.set(key, { fam, items: [] });
+        buckets.get(key).items.push({ el, dist, h: el.height || defaultHeightFor(el.type) });
     });
-    buckets.forEach(items => {
+    buckets.forEach(({ fam, items }) => {
+        const cap = GANG_CAP[fam];
         items.sort((a, b) => a.dist - b.dist);
         let cluster = [];
         const close = () => {
@@ -2112,8 +2287,8 @@ function computeOutletGangs() {
         items.forEach(it => {
             const last = cluster[cluster.length - 1];
             if (last && it.dist - last.dist <= GANG_MAX_GAP_CM && Math.abs(it.h - last.h) <= 5) {
-                if (cluster.length < 4) { cluster.push(it); return; }
-                // groupe complet : la prise en trop et les quatre voisines sont signalées
+                if (cluster.length < cap) { cluster.push(it); return; }
+                // groupe complet : l'appareil en trop et les membres du groupe sont signalés
                 overflow.add(it.el.id);
                 cluster.forEach(c => overflow.add(c.el.id));
             }
@@ -2183,7 +2358,8 @@ function computeCircuitReport() {
         else if (shaftFeedFor(activeLevelId).reason) addAlert('Cet étage n\'est relié au tableau par aucune trémie : ses appareils ne sont pas alimentés.', { tab: 'ouvertures', hint: 'Placez une trémie qui relie cet étage au tableau de l’autre niveau, depuis l’onglet Ouvertures.' });
     }
     if (panels.length > 1) addAlert('Plusieurs tableaux : seul le premier est alimenté.', { tab: 'appareillage', hint: 'Gardez un seul tableau : supprimez les autres depuis l’onglet Appareillages.' });
-    if (computeOutletGangs().overflow.size) addAlert('Plus de 4 prises groupées : une quadruple au maximum, les prises en trop sont en rouge.', { tab: 'appareillage', hint: 'Éloignez la prise en trop d’au moins 15 cm du groupe, ou retirez-la depuis l’onglet Appareillages.' });
+    if (computeOutletGangs().overflow.size) addAlert('Groupe trop grand : quatre prises ou deux interrupteurs au maximum ; les appareils en trop sont en rouge.', { tab: 'appareillage', hint: 'Éloignez l’appareil en trop d’au moins 15 cm du groupe, ou retirez-le depuis l’onglet Appareillages.' });
+    if (computeStairOpeningCollisions().length) addAlert('Escalier sur une fenêtre ou une porte : les deux sont en rouge, déplacez l’un des deux.', { tab: 'ouvertures', hint: 'Un escalier ne peut pas traverser une ouverture : le volume plein des marches est protégé.' });
     // le réseau câblé est calculé pour l'étage affiché : ses alertes portent son nom
     // une alerte par étage non relié : elle désigne le circuit le plus touché de cet étage, qui signale son problème sur sa carte
     const levelIds = (projectData.levels || []).map(l => l.id);
@@ -2265,7 +2441,7 @@ function computeCircuitReport() {
     Object.keys(counts).forEach(t => {
         if (gangs.tally[t]) {
             [1, 2, 3, 4].forEach(n => {
-                if (gangs.tally[t][n]) countLines.push({ type: t, gang: n, label: ELEMENT_LABELS[t] + ' ' + GANG_NAMES[n], count: gangs.tally[t][n] });
+                if (gangs.tally[t][n]) countLines.push({ type: t, gang: n, label: gangLabel(t, n), count: gangs.tally[t][n] });
             });
         } else {
             countLines.push({ type: t, gang: 0, label: ELEMENT_LABELS[t] || t, count: counts[t] });
@@ -3719,15 +3895,14 @@ function setSelectedOpeningProp(prop, raw) {
     } else {
         return;
     }
-    _cableCache.sig = null;
+    sliderDragging = true;
     syncOpeningControls(op);
     const distInput = document.getElementById('inspector-distance-input');
     if (distInput && op.distanceFromStart !== undefined) {
         distInput.value = op.distanceFromStart;
         document.getElementById('inspector-distance-val').textContent = op.distanceFromStart + ' cm';
     }
-    if (currentMode === '3d') build3DScene();
-    redraw2D();
+    refreshSliderView();
 }
 
 window.addEventListener('DOMContentLoaded', initOpeningControls);
@@ -3737,6 +3912,7 @@ const STEPPER_BTN = 'shrink-0 w-4 h-3 flex items-center justify-center rounded-s
 function stepRange(input, dir) {
     if (dir > 0) input.stepUp(); else input.stepDown();
     input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 function enhanceRangeInput(input) {
     if (input.dataset.stepper) return;
@@ -3855,14 +4031,15 @@ function nudgeSelectedAlongWall(dir, stepCm) {
     const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
     const next = Math.max(5, Math.min(len - 5, Math.round(item.distanceFromStart + dir * stepCm)));
     if (next === item.distanceFromStart) return true;
-    if (openingMoveBlocked(item, item.wallId, next)) { showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); return true; }
-    saveStateToUndo();
+    const refusal = openingMoveRefusal(item, item.wallId, next);
+    if (refusal) { showNotification(refusal, 'error'); return true; }
+    if (!nudgeUndoPending) { saveStateToUndo(); nudgeUndoPending = true; }
     item.distanceFromStart = next;
-    refreshSelectedView();
+    holdSliderDrag();
+    refreshSliderView();
     syncElementInspectors();
     return true;
 }
-
 // Ce qui peut être déplacé aux flèches : appareil, porte/fenêtre, trémie, escalier
 function selectedMovable() {
     const id = selected3DId;
@@ -4231,9 +4408,9 @@ function drawLegendOpening(ctx, kind, cx, cy, fs) {
         ctx.fillRect(cx - fs * 0.5, cy - fs * 0.45, fs, fs * 0.9);
         ctx.strokeRect(cx - fs * 0.5, cy - fs * 0.45, fs, fs * 0.9);
     } else {
-        ctx.fillStyle = '#020617';
+        ctx.fillStyle = kind === 'window' ? '#3b82f6' : '#020617';
         ctx.fillRect(x0, cy - th / 2, w, th);
-        ctx.strokeStyle = kind === 'door' ? '#b07a4a' : '#3b82f6';
+        ctx.strokeStyle = kind === 'door' ? '#b07a4a' : '#1e3a8a';
         if (kind === 'door') {                                  // vantail ouvert, pivot à gauche
             ctx.beginPath();
             ctx.moveTo(x0 + w, cy);
@@ -4249,14 +4426,11 @@ function drawLegendOpening(ctx, kind, cx, cy, fs) {
     ctx.restore();
 }
 
-// Symbole réel de l'appli (drawElementSymbol2D), dessiné à l'échelle de la légende.
-// L'élément fictif n'a ni mur ni circuit : il est dessiné à l'origine, face vers la droite, puis pivoté
-// pour que le mur soit en bas et la face avant vers le haut, comme sur la légende de référence.
-// Les copies d'un groupe se suivent le long du mur (axe x).
-// Pas entre copies d'un groupe sur la légende : 16 unités de dessin, pour que les anneaux de prise (rayon 7.4) ne se touchent pas
 const LEGEND_GANG_PITCH = 16;
-const LEGEND_RING_R = 7.4;
-
+// Liseré de groupe dans la légende : taille propre, en fraction de la hauteur de texte (la ligne fait 2 × fs)
+const LEGEND_RING_FS = 0.90;
+// Symboles longs (interrupteurs, sonnette, minuterie, volet) : centrés sur leur milieu
+const LEGEND_LONG_TYPES = [...SWITCH_GANG_TYPES, 'motion_timer', 'doorbell_button', 'shutter_control'];
 function legendScale(type) {
     return type === 'panel' || type === 'subpanel' ? 0.04 : 0.085;
 }
@@ -4275,7 +4449,7 @@ function drawLegendDevice(ctx, type, n, cx, cy, fs) {
             ctx.translate(x0 + i * step, cy);
             ctx.rotate(-Math.PI / 2);
             ctx.scale(s, s);
-            ctx.translate(-3, 0);
+            ctx.translate(LEGEND_LONG_TYPES.includes(type) ? -7 : -3, 0);   // symbole long : centre sur son milieu (≈ 6 unités)
             drawElementSymbol2D(el);
             ctx.restore();
         }
@@ -4284,8 +4458,8 @@ function drawLegendDevice(ctx, type, n, cx, cy, fs) {
         _gangSizes2D = prevGangs;
     }
     // groupe de prises : un seul liseré autour, comme sur le plan (rayon d'anneau = 3.4 + 4)
-    if (n > 1 && type.startsWith('outlet_')) {
-        const R = LEGEND_RING_R * s;
+    if (n > 1 && (type.startsWith('outlet_') || SWITCH_GANG_TYPES.includes(type))) {
+        const R = fs * LEGEND_RING_FS;
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(x0 - R, cy - R, (n - 1) * step + 2 * R, 2 * R, R);
@@ -4308,7 +4482,7 @@ function legendLabelOffset(it, fs) {
     if (it.kind) return fs * 4;
     const n = it.gang || 1;
     const s = fs * legendScale(it.type);
-    const groupRight = fs * 1.6 + (n - 1) * LEGEND_GANG_PITCH * s + LEGEND_RING_R * s;
+    const groupRight = fs * 1.6 + (n - 1) * LEGEND_GANG_PITCH * s + fs * LEGEND_RING_FS;
     return Math.max(fs * 4, groupRight + fs * 0.6);
 }
 

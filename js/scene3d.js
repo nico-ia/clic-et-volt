@@ -256,12 +256,11 @@ function updatePlaceGhost3D(e) {
             wall = m && m.userData && m.userData.id ? projectData.walls.find(w => w.id === m.userData.id) : null;
             
             if (wall) {
-
                 const hitPt = wallIntersects[0].point;
                 const wallLen = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
                 const distToPt = Math.hypot(hitPt.x - (wall.x1 - cx), hitPt.z - (wall.y1 - cy));
-                const distanceCm = Math.round(Math.max(10, Math.min(wallLen - 10, distToPt)));
                 const side = wallSideOf(hitPt.x, hitPt.z, wall.x1 - cx, wall.y1 - cy, wall.x2 - cx, wall.y2 - cy);
+                const distanceCm = placedDistance({ type, height: defaultHeightFor(type) }, wall.id, Math.round(distToPt), side);                
                 ghost = { id: '__ghost', levelId: activeLevelId, type, wallId: wall.id, distanceFromStart: distanceCm, side,
                     height: defaultHeightFor(type) };
                 if (type === 'shaft') { ghost.size = 40; ghost.levelIds = [activeLevelId]; }
@@ -271,7 +270,7 @@ function updatePlaceGhost3D(e) {
                     if (type === 'window_std') ghost.sillHeight = 90;
                     if (type === 'door_single') ghost.hingeSide = doorHingeForPlacement();
                 }
-                blocked = !!sameSpotBlocker(type, activeLevelId, wall.id, distanceCm);
+                blocked = !!sameSpotBlocker(type, activeLevelId, wall.id, distanceCm, side, defaultHeightFor(type));
             }
         }
     }
@@ -497,19 +496,18 @@ function wallSolidGeometry(outline, height) {
     geo.rotateX(-Math.PI / 2);
     return geo;
 }
-
 // Emprise d'une ouverture sur son mur : position, demi-largeur, hauteurs d'allège et de linteau
 function openingBox(op, wall) {
     const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
     const isDoor = op.type === 'door_single';
-    let d = op.distanceFromStart !== undefined ? op.distanceFromStart : (op.positionRatio !== undefined ? op.positionRatio * len : len / 2);
-    d = Math.max(10, Math.min(len - 10, d));
     const width = op.width || (isDoor ? 96 : 120);
+    let d = op.distanceFromStart !== undefined ? op.distanceFromStart : (op.positionRatio !== undefined ? op.positionRatio * len : len / 2);
+    // l'ouverture reste entièrement sur le mur : son centre est au moins à une demi-largeur de chaque bout
+    d = Math.max(width / 2, Math.min(len - width / 2, d));
     const sill = isDoor ? 0 : (op.sillHeight !== undefined ? op.sillHeight : 90);
     const top = isDoor ? 210 : sill + (op.height || 120);
     return { d, half: width / 2, z0: sill, z1: top, isDoor };
 }
-
 // Position de la charnière dans le repère du mur (x local : du départ vers la fin du mur).
 // Convention « poussant » (cf. schéma DP / GP) : on regarde la porte de face, depuis le côté opposé au côté de pose,
 // la porte s'ouvrant en s'éloignant de vous. Côté A (side = 1) : « gauche » = côté départ du mur ;
@@ -750,6 +748,115 @@ function computeCableNetwork() {
     return net;
 }
 
+// Escalier posé contre ce mur (à moins de STAIR_SNAP_CM) : intervalle bloqué sur la piste du mur,
+// de sol à plafond, pour que le câble contourne l'emprise de l'escalier
+function stairSpansOnWall(w, m) {
+    const W = wallRectOf(w);
+    if (!W) return [];
+    const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+    const out = [];
+    stairsOn(activeLevelId).forEach(st => {
+        const R = stairRect(st);
+        const dx = R.cx - W.cx, dy = R.cy - W.cy;
+        const d = dx * W.vx + dy * W.vy;
+        const rS = R.hl * Math.abs(R.ux * W.vx + R.uy * W.vy) + R.hw * Math.abs(R.vx * W.vx + R.vy * W.vy);
+        const gap = Math.abs(d) - (W.hw + rS);
+        if (gap >= STAIR_SNAP_CM) return;
+        const t = dx * W.ux + dy * W.uy;
+        const rU = R.hl * Math.abs(R.ux * W.ux + R.uy * W.uy) + R.hw * Math.abs(R.vx * W.ux + R.vy * W.uy);
+        const sc = t + W.hl;   // position le long du mur, depuis son origine
+        const lo = Math.max(0, sc - rU - m), hi = Math.min(len, sc + rU + m);
+        if (hi <= lo) return;
+        // face du mur côté escalier : d >= 0 est le côté +v, qui correspond à la piste de côté -1
+        // hauteur des marches le long du mur (s = distance depuis l'origine du mur)
+        const stepTop = s => {
+            const px = w.x1 + (w.x2 - w.x1) / len * s - R.cx, py = w.y1 + (w.y2 - w.y1) / len * s - R.cy;
+            return stairStepTopAt(st, px * R.ux + py * R.uy);
+        };
+        // le blocage du mur s'arrête à la hauteur de passage, comme le volume protégé (sol le plus haut relié + 210 cm)
+        const elevOfSt = id => Number(((projectData.levels || []).find(l => l.id === id) || {}).elevation) || 0;
+        const zTop = Math.max(...(st.levelIds || [st.levelId]).map(elevOfSt)) - elevOfSt(activeLevelId) + STAIR_PASSAGE_CM;
+        out.push({ lo, hi, z0: -1e9, z1: zTop, side: d >= 0 ? -1 : 1, stepTop });
+    });
+    return out;
+}
+
+
+// Marge autour de l'emprise pour un câble (cm)
+const STAIR_CABLE_MARGIN = 8;
+
+// Hauteur de passage sous un escalier (cm), au-dessus du sol le plus haut relié
+const STAIR_PASSAGE_CM = 210;
+
+// Bande le long d'un mur collé à l'escalier : libre au-dessus des marches (cm)
+const STAIR_STRIP_CM = 15;
+
+// Côtés de l'escalier collés à un mur du niveau : +1 ou -1 (le long de l'axe v de l'escalier)
+function stairWallSides(st) {
+    const R = stairRect(st);
+    const sides = [];
+    (projectData.walls || []).filter(w => (st.levelIds || [st.levelId]).includes(w.levelId)).forEach(w => {
+        const W = wallRectOf(w);
+        if (!W) return;
+        const dx = W.cx - R.cx, dy = W.cy - R.cy;
+        const dv = dx * R.vx + dy * R.vy;
+        const du = dx * R.ux + dy * R.uy;
+        const gap = Math.abs(dv) - (R.hw + W.hw);
+        if (gap < STAIR_SNAP_CM && Math.abs(du) < R.hl + W.hl) sides.push(dv >= 0 ? 1 : -1);
+    });
+    return sides;
+}
+
+// Hauteur du dessus des marches au point pu de l'axe de l'escalier (0 au bas, H en haut)
+function stairStepTopAt(st, pu) {
+    const R = stairRect(st);
+    const H = Math.max(stairRiseCm(st), 1);
+    return H * Math.min(1, Math.max(0, (pu + R.hl) / (2 * R.hl)));
+}
+
+// Tronçon au-dessus des marches : autorisé dans la bande le long du mur
+function aboveStairSteps(sp, s0, s1, z) {
+    if (!sp.stepTop) return false;
+    return z >= Math.max(sp.stepTop(s0), sp.stepTop(s1)) + 5;
+}
+
+// Premier escalier du niveau dont le volume protégé est traversé par le tronçon a-b, sinon null.
+// Volume protégé : emprise au sol, du sol le plus bas relié jusqu'au sol le plus haut relié + 210 cm,
+// sauf la bande le long du mur au-dessus des marches.
+function segmentCrossesStairVolume(a, b) {
+    const stairs = stairsOn(activeLevelId);
+    if (!stairs.length) return null;
+    const elevOf = id => Number(((projectData.levels || []).find(l => l.id === id) || {}).elevation) || 0;
+    const here = elevOf(activeLevelId);
+    const len = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    const N = Math.max(1, Math.ceil(len / 2));   // un point tous les 2 cm
+    for (const st of stairs) {
+        const elevs = (st.levelIds || [st.levelId]).map(elevOf);
+        const zLow = Math.min(...elevs) - here;
+        const zHigh = Math.max(...elevs) - here + STAIR_PASSAGE_CM;
+        const R = stairRect(st);
+        const sides = stairWallSides(st);
+        for (let k = 0; k <= N; k++) {
+            const t = k / N;
+            const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t, z = a.z + (b.z - a.z) * t;
+            if (z < zLow || z > zHigh) continue;
+            const dx = x - R.cx, dy = y - R.cy;
+            const pu = dx * R.ux + dy * R.uy, pv = dx * R.vx + dy * R.vy;
+            if (Math.abs(pu) > R.hl + STAIR_CABLE_MARGIN || Math.abs(pv) > R.hw + STAIR_CABLE_MARGIN) continue;
+            // bande le long du mur : libre au-dessus des marches, interdite en dessous
+            const inStrip = sides.some(sv => sv * pv >= R.hw - STAIR_STRIP_CM);
+            if (inStrip && z >= stairStepTopAt(st, pu) + 5) continue;
+            return st;
+        }
+    }
+    return null;
+}
+
+// Matériau rouge des tronçons qui traversent un escalier
+function stairHitMaterial() {
+    return CABLE_RES.stairHitMat || (CABLE_RES.stairHitMat = markShared(new THREE.MeshBasicMaterial({ color: '#ef4444', transparent: true, opacity: 1, depthWrite: false })));
+}
+
 function buildCableNetwork(passage) {
     ensureCircuitAssignment();
     const C = CABLE_CFG;
@@ -841,13 +948,16 @@ function buildCableNetwork(passage) {
             const b = openingBox(o, w);
             return { lo: b.d - b.half - m, hi: b.d + b.half + m, z0: b.z0 - m, z1: b.z1 + m };
         });
+        list.push(...stairSpansOnWall(w, m));   // escaliers posés contre le mur : le câble les contourne
         spans.set(w.id, list);
         tracks.filter(t => t.wall === w).forEach(t => list.forEach(sp => t.st.push(sp.lo, sp.hi)));
     });
     // gaine horizontale à la hauteur z entre s0 et s1 ?
-    const blockedH = (wid, s0, s1, z) => spans.get(wid).some(sp => s1 > sp.lo + 0.01 && s0 < sp.hi - 0.01 && z >= sp.z0 && z <= sp.z1);
+    // un blocage d'escalier ne vaut que pour sa face ; une ouverture (sans face) bloque les deux
+    const sameFace = (sp, side) => side === undefined || sp.side === undefined || sp.side === side;
+    const blockedH = (wid, s0, s1, z, side) => spans.get(wid).some(sp => sameFace(sp, side) && !aboveStairSteps(sp, s0, s1, z) && s1 > sp.lo + 0.01 && s0 < sp.hi - 0.01 && z >= sp.z0 && z <= sp.z1);
     // colonne verticale à la position s entre les hauteurs za et zb ?
-    const blockedV = (wid, s, za, zb) => spans.get(wid).some(sp => s > sp.lo && s < sp.hi && Math.max(za, zb) >= sp.z0 && Math.min(za, zb) <= sp.z1);
+    const blockedV = (wid, s, za, zb, side) => spans.get(wid).some(sp => sameFace(sp, side) && !aboveStairSteps(sp, s, s, Math.min(za, zb)) && s > sp.lo && s < sp.hi && Math.max(za, zb) >= sp.z0 && Math.min(za, zb) <= sp.z1);
 
     // 4. Position de la descente verticale de chaque appareil mural
     const place = new Map();
@@ -859,7 +969,8 @@ function buildCableNetwork(passage) {
                 const s = Math.max(0, Math.min(t.len, (el.free.x - t.ox) * t.ux + (el.free.y - t.oy) * t.uy));
                 const F = P(t, s);
                 const d = Math.hypot(el.free.x - F.x, el.free.y - F.y);
-                if (d < bestD) { bestD = d; bestT = t; bestS = s; }
+                const zF = Math.max(C.lowZ, Math.min(ceilZ, el.height || 150));
+                if (d < bestD && !segmentCrossesStairVolume({ x: el.free.x, y: el.free.y, z: zF }, { x: F.x, y: F.y, z: zF })) { bestD = d; bestT = t; bestS = s; }
             });
             if (!bestT) {
                 result.warnings.push('Trémie « ' + shaftTitle(el.shaftId) + ' » : aucun mur à cet étage, le câble ne peut pas la rejoindre');
@@ -885,7 +996,7 @@ function buildCableNetwork(passage) {
         const cands = [dist];
         list.forEach(sp => cands.push(sp.lo - 0.5, sp.hi + 0.5));
         const valid = cands
-            .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, ceilZ) && stubOK(r))
+            .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, ceilZ, t.side) && stubOK(r))
             .sort((p, q) => Math.abs(p - dist) - Math.abs(q - dist) || q - p);
         let r = valid.length ? valid[0] : Math.max(10, Math.min(t.len - 10, dist));
         if (!valid.length) result.warnings.push('Aucune descente possible pour ' + electricalDisplayName(el));
@@ -1021,7 +1132,7 @@ function buildCableNetwork(passage) {
             if (samples.some(p => insideBody(p.x, p.y) && !inTWall(p))) continue;
             const p0 = P(t, s0), p1 = P(t, s1);
             levels.forEach(L => {
-                if (blockedH(t.wall.id, s0, s1, L.z)) return;           // ni devant une porte, ni devant une fenêtre
+                if (blockedH(t.wall.id, s0, s1, L.z, t.side)) return;   // ni devant une porte, ni devant une fenêtre
                 addEdge(node(p0.x, p0.y, L.z), node(p1.x, p1.y, L.z), L.kind);
             });
         }
@@ -1036,10 +1147,10 @@ function buildCableNetwork(passage) {
             const samples = [0.25, 0.5, 0.75].map(f => P(t, s + (sEnd - s) * f));
             if (!samples.some(p => insideBody(p.x, p.y))) return;
             if (samples.some(p => insideBody(p.x, p.y) && !inWallBody(o.wall, p.x, p.y))) return;
-            if (blockedV(o.wall.id, so, C.lowZ, ceilZ)) return;
+            if (blockedV(o.wall.id, so, C.lowZ, ceilZ, o.side)) return;
             const p0 = P(t, s), p1 = P(t, sEnd);
             levels.forEach(L => {
-                if (blockedH(t.wall.id, Math.min(s, sEnd), Math.max(s, sEnd), L.z)) return;
+                if (blockedH(t.wall.id, Math.min(s, sEnd), Math.max(s, sEnd), L.z, t.side)) return;
                 addEdge(node(p0.x, p0.y, L.z), node(p1.x, p1.y, L.z), L.kind, C.crossPenalty);
             });
         });
@@ -1074,7 +1185,7 @@ function buildCableNetwork(passage) {
                 const q = { x: p.x - k * t.uy, y: p.y + k * t.ux };
                 if (!outFaces.isOutside(q.x, q.y)) return;
                 const inner = findNode(p.x, p.y, ceilZ);
-                if (!inner || blockedH(t.wall.id, s - 0.01, s + 0.01, ceilZ)) return;
+                if (!inner || blockedH(t.wall.id, s - 0.01, s + 0.01, ceilZ, t.side)) return;
                 const outN = node(q.x, q.y, ceilZ);
                 const pe = addEdge(inner, outN, 'passage', C.passageCost);
                 if (pe) pe.room = true;
@@ -1119,19 +1230,21 @@ function buildCableNetwork(passage) {
             const f = i / n;
             if (insideBody(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f)) return false;
         }
+        // une liaison de plafond ne traverse jamais le volume d'un escalier
+        if (segmentCrossesStairVolume({ x: a.x, y: a.y, z: ceilZ }, { x: b.x, y: b.y, z: ceilZ })) return false;
         return true;
     };
     const islandEdge = (a, b) => { const e = addEdge(a, b, 'passage', C.passageCost); if (e) e.island = true; };
     tracks.forEach(a => {
         if (!isolated(a.wall)) return;
         a.st.forEach(s => {
-            if (s < 0 || s > a.len || blockedH(a.wall.id, s - 0.01, s + 0.01, ceilZ)) return;
+            if (s < 0 || s > a.len || blockedH(a.wall.id, s - 0.01, s + 0.01, ceilZ, a.side)) return;
             const p = P(a, s);
             const na = node(p.x, p.y, ceilZ);
             tracks.forEach(b => {
                 if (b.wall === a.wall) return;
                 b.st.forEach(u => {
-                    if (u < 0 || u > b.len || blockedH(b.wall.id, u - 0.01, u + 0.01, ceilZ)) return;
+                    if (u < 0 || u > b.len || blockedH(b.wall.id, u - 0.01, u + 0.01, ceilZ, b.side)) return;
                     const q = P(b, u);
                     if (airClear(p, q)) islandEdge(na, node(q.x, q.y, ceilZ));
                 });
@@ -1165,7 +1278,7 @@ function buildCableNetwork(passage) {
 
     // Colonnes verticales dans les angles / jonctions (sauf devant une ouverture)
     junctions.forEach(j => {
-        if (blockedV(j.a.wall.id, j.s, C.lowZ, ceilZ) || blockedV(j.b.wall.id, j.u, C.lowZ, ceilZ)) return;
+        if (blockedV(j.a.wall.id, j.s, C.lowZ, ceilZ, j.a.side) || blockedV(j.b.wall.id, j.u, C.lowZ, ceilZ, j.b.side)) return;
         const lo = findNode(j.p.x, j.p.y, C.lowZ), hi = findNode(j.p.x, j.p.y, ceilZ);
         if (lo && hi) addEdge(lo, hi, 'riser');
     });
@@ -1609,6 +1722,13 @@ function buildCableNetwork(passage) {
         a: { x: e.a.x, y: e.a.y, z: e.a.z }, b: { x: e.b.x, y: e.b.y, z: e.b.z }, cables: u.cables, cids: u.cids, links: u.links
     }));
     priv.forEach(sg => result.segments.push(sg));
+    // contrôle final : tout tronçon qui traverse le volume d'un escalier est marqué (rouge) et signalé
+    let stairCrossing = false;
+    result.segments.forEach(sg => {
+        const st = segmentCrossesStairVolume(sg.a, sg.b);
+        if (st) { sg.stairHit = st.id; stairCrossing = true; }
+    });
+    if (stairCrossing) result.warnings.push('Câble qui traverse un escalier (au-dessus des marches ou dans son emprise au sol) : tronçon en rouge, à déplacer.');
     return result;
 }
 
@@ -1875,7 +1995,7 @@ function renderCableNetwork(cx, cy) {
         const kept = new Map([...groups].filter(([, g]) => !(feederHidden && g.cid === FEEDER_CID) && (!G || G.keepGroup(g.cid))));
         if (G && (!kept.size || !G.keepSeg(seg))) return;   // fantôme : tronçon hors sélection, rien à tracer
 
-        segs.push({ a, b, dir, groups: kept, links: seg.links || [] });
+        segs.push({ a, b, dir, groups: kept, links: seg.links || [], stairHit: !!seg.stairHit });
     });
 
     // 2) n?uds : extr?mit?s partag?es par les tron?ons ; chaque n?ud calcule une seule disposition
@@ -1967,7 +2087,7 @@ function renderCableNetwork(cx, cy) {
             const isFocused = hasLinkFocus
                 ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid) || !!ctlHexOf(cid))
                 : (isSelected || (cid === FEEDER_CID && !!selectedCircuitId));
-            const cmat = G ? (isFocused ? hiFor(cid) : ghostConduitMat(cid)) : ((hasLinkFocus || FOC || BOX)
+            const cmat = s.stairHit ? stairHitMaterial() : G ? (isFocused ? hiFor(cid) : ghostConduitMat(cid)) : ((hasLinkFocus || FOC || BOX)
                 ? (isFocused ? hiFor(cid) : CABLE_RES.dimConduit)
                 : conduitFor(cid));
             const order = isFocused ? 3 : 2;
@@ -2027,9 +2147,9 @@ function toggleGhostLevels() {
 // Mis en cache par données ; pendant un glissement on garde le dernier résultat (le calcul est trop lourd à chaque image).
 const _ghostNetCache = new Map();
 function ghostCableNetwork(levelId) {
-    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
+    const sig = JSON.stringify([projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts, projectData.stairs]);
     const hit = _ghostNetCache.get(levelId);
-    if (hit && (hit.sig === sig || layoutDragging3D())) return hit.net;
+    if (hit && (hit.sig === sig || layoutDragging3D() || sliderDragging)) return hit.net;
     const saved = activeLevelId;
     let net = null;
     try {
@@ -2906,12 +3026,14 @@ function on3DPointerDown(e) {
                     const wallLen = Math.hypot(wx2 - wx1, wz2 - wz1);
 
                     const distToPt = Math.hypot(hitPt.x - wx1, hitPt.z - wz1);
-                    const distanceCm = Math.round(Math.max(10, Math.min(wallLen - 10, distToPt)));
 
                     const side = wallSideOf(hitPt.x, hitPt.z, wx1, wz1, wx2, wz2);
+                    const distanceCm = placedDistance({ type: activePlacementType, height: defaultHeightFor(activePlacementType) }, wall.id, Math.round(distToPt), side);
 
-                    if (sameSpotBlocker(activePlacementType, activeLevelId, wall.id, distanceCm)) { refuseSameSpot(); return; }
+                    const why = sameSpotBlocker(activePlacementType, activeLevelId, wall.id, distanceCm, side, defaultHeightFor(activePlacementType));
+                    if (why) { refuseSameSpot(why); return; }
                     saveStateToUndo();
+                    
                     if (activePlacementType === 'shaft') {
                         // trémie posée en 3D : même réglage de liaison que la 2D (liste « Relier à »)
                         const links = askShaftLevels();
@@ -2965,7 +3087,7 @@ function on3DPointerDown(e) {
             }
         }
     } else {
-        const interactiveIntersects = raycaster.intersectObjects(interactiveObjects3D, true);
+        const interactiveIntersects = orderInteractiveHits(raycaster.intersectObjects(interactiveObjects3D, true));
         const derivHit = interactiveIntersects.find(i => i.object.userData && i.object.userData.derivation);
         if (derivHit) {
             // un clic sur la boîte sélectionne la trémie (sa hauteur se règle dans le panneau)
@@ -3045,7 +3167,7 @@ function on3DDoubleClick(e) {
     mouse3D.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
     raycaster.setFromCamera(mouse3D, threeCamera);
     let id = null;
-    for (const hit of raycaster.intersectObjects(interactiveObjects3D, true)) {
+    for (const hit of orderInteractiveHits(raycaster.intersectObjects(interactiveObjects3D, true))) {
         let o = hit.object;
         while (o && !(o.userData && o.userData.id)) o = o.parent;
         if (o) { id = o.userData.id; break; }
@@ -3057,6 +3179,13 @@ function on3DDoubleClick(e) {
 
 
 
+// Ordre des objets touchés par le rayon : la zone invisible d'un escalier (qui couvre toute son emprise)
+// passe après les appareils et ouvertures, pour qu'ils restent cliquables quand ils sont dans l'emprise
+function orderInteractiveHits(hits) {
+    const isStairZone = h => !!(h.object.userData && h.object.userData.type === 'stair');
+    return [...hits.filter(h => !isStairZone(h)), ...hits.filter(isStairZone)];
+}
+
 // Survol 3D : étiquette de l'objet sous le curseur (même logique que le clic)
 function hover3DTooltip(e) {
     if (activePlacementType || !threeCamera || !interactiveObjects3D.length) { hidePlanTooltip(); return; }
@@ -3066,7 +3195,7 @@ function hover3DTooltip(e) {
     mouse3D.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
     raycaster.setFromCamera(mouse3D, threeCamera);
     let id = null;
-    for (const hit of raycaster.intersectObjects(interactiveObjects3D, true)) {
+    for (const hit of orderInteractiveHits(raycaster.intersectObjects(interactiveObjects3D, true))) {
         let o = hit.object;
         while (o && !(o.userData && o.userData.id)) o = o.parent;
         if (o) { id = o.userData.id; break; }
@@ -3150,16 +3279,17 @@ function on3DPointerMove(e) {
 
         if (closestWall) {
             let item = projectData.electrical.find(el => el.id === dragging3DElementId) || projectData.openings.find(op => op.id === dragging3DElementId) || (projectData.shafts || []).find(sh => sh.id === dragging3DElementId);
-            if (item && openingMoveBlocked(item, closestWall.id, closestDistCm)) {
-                if (!drag3DRefusedOp) { drag3DRefusedOp = true; showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); }
+            const dist3D = item ? placedDistance(item, closestWall.id, closestDistCm, closestSide) : closestDistCm;
+            const moveRefusal = item ? openingMoveRefusal(item, closestWall.id, dist3D) : '';
+            if (moveRefusal) {
+                if (!drag3DRefusedOp) { drag3DRefusedOp = true; showNotification(moveRefusal, 'error'); }
                 item = null;   // reste à sa dernière position valide
             } else if (item) drag3DRefusedOp = false;
             if (item) {
                 item.wallId = closestWall.id;
-                // trémie : son côté (pièce) ne change pas pendant un glissement le long du mur
-                item.distanceFromStart = projectData.electrical.includes(item)
-                    ? snapOutletDistance(item.type, closestWall.id, closestDistCm, item.side, item.height || defaultHeightFor(item.type), item.id)
-                    : closestDistCm;
+                // côté suivi comme en 2D (la fenêtre n'en a pas besoin)
+                if (item.type !== 'window_std') item.side = closestSide;
+                item.distanceFromStart = dist3D;
                 
                 const distInput = document.getElementById('inspector-distance-input');
                 const distVal = document.getElementById('inspector-distance-val');
@@ -3521,32 +3651,33 @@ function updateSelected3DDistance(val) {
     document.getElementById('inspector-distance-val').textContent = distCm + ' cm';
 
     let item = projectData.electrical.find(e => e.id === selected3DId) || projectData.openings.find(o => o.id === selected3DId);
-    if (item && openingMoveBlocked(item, item.wallId, distCm)) { showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); return; }
+    const distRefusal = item ? openingMoveRefusal(item, item.wallId, distCm) : '';
+    if (distRefusal) { showNotification(distRefusal, 'error'); return; }
     if (item) {
+        if (!posUndoPending) { saveStateToUndo(); posUndoPending = true; }
+        sliderDragging = true;
         item.distanceFromStart = distCm;
-        refreshSelectedView();
+        refreshSliderView();
     }
 }
-
 function updateSelected3DHeight(val) {
     if (!selected3DId) return;
     const height = parseInt(val);
     document.getElementById('inspector-height-3d-val').textContent = (height / 100).toFixed(2) + ' m';
 
     let el = projectData.electrical.find(e => e.id === selected3DId);
+    const sh = !el ? (projectData.shafts || []).find(x => x.id === selected3DId) : null;
+    if (!el && !sh) return;
+    if (!posUndoPending) { saveStateToUndo(); posUndoPending = true; }
+    sliderDragging = true;
     if (el) {
         el.height = height;
-        refreshSelectedView();
-        return;
-    }
-    // trémie sélectionnée : hauteur de son point de dérivation sur ce niveau
-    const sh = (projectData.shafts || []).find(x => x.id === selected3DId);
-    if (sh) {
+    } else {
+        // trémie sélectionnée : hauteur de son point de dérivation sur ce niveau
         sh.derivHeight = Object.assign({}, sh.derivHeight, { [activeLevelId]: Math.min(height, levelCeilingOf(activeLevelId) - DERIV_BOX_H / 2) });
-        build3DScene();
     }
+    refreshSliderView();
 }
-
 async function deleteSelected3DElement() {
     if (!selected3DId) return;
     const el = projectData.electrical.find(e => e.id === selected3DId);
@@ -3762,9 +3893,10 @@ let _cableCache = { sig: null, net: null };
 function layoutDragging3D() { return !!dragging3DElementId || !!wallDrag3D; }
 function getCableNetwork() {
     ensureCircuitAssignment();
-    if (layoutDragging3D() && _cableCache.net) { cableStats = _cableCache.net; return _cableCache.net; }
-    // Le niveau affiché fait partie de la clé : changer de niveau change le réseau calculé
-    const sig = JSON.stringify([activeLevelId, projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts]);
+    // pendant un déplacement (3D ou appareil en 2D) ou un glissement de curseur, on garde le réseau calculé au départ
+    if ((layoutDragging3D() || draggingEl2D || sliderDragging) && _cableCache.net) { cableStats = _cableCache.net; return _cableCache.net; }
+    // Le niveau affiché fait partie de la clé ; les escaliers aussi (ils bloquent les pistes)
+    const sig = JSON.stringify([activeLevelId, projectData.walls, projectData.openings, projectData.electrical, projectData.circuits, projectData.shafts, projectData.stairs]);
     if (_cableCache.sig !== sig) _cableCache = { sig, net: computeCableNetwork() };
     cableStats = _cableCache.net;
     return _cableCache.net;

@@ -559,7 +559,6 @@ function previewStairLevels() {
     return [activeLevelId, ...otherLevelsByDistance().filter(l => checked.has(l.id)).map(l => l.id)];
 }
 
-
 function updatePlaceGhost2D(coords) {
     const type = document.getElementById('place-type').value;
     let ghost = null;
@@ -574,15 +573,16 @@ function updatePlaceGhost2D(coords) {
     } else {
         const info = nearestWallInfo(coords);
         if (info && info.d <= (info.wall.thickness || 10) / 2 + 60) {
-            const dist = Math.round(info.dist);
-            ghost = { id: '__ghost', levelId: activeLevelId, type, wallId: info.wall.id, distanceFromStart: dist, height: defaultHeightFor(type), side: info.side };
+            const height = defaultHeightFor(type);
+            const dist = placedDistance({ type, height }, info.wall.id, Math.round(info.dist), info.side);
+            ghost = { id: '__ghost', levelId: activeLevelId, type, wallId: info.wall.id, distanceFromStart: dist, height, side: info.side };
             if (type === 'shaft') { ghost.size = 40; ghost.levelIds = [activeLevelId]; }
             if (type === 'door_single' || type === 'window_std') {
                 ghost.width = type === 'door_single' ? 96 : 120;
                 ghost.hingeSide = type === 'door_single' ? doorHingeForPlacement() : undefined;
                 if (type === 'window_std') ghost.sillHeight = 90;
             }
-            ghost.blocked = !!sameSpotBlocker(type, activeLevelId, info.wall.id, dist);
+            ghost.blocked = !!sameSpotBlocker(type, activeLevelId, info.wall.id, dist, info.side, height);
         }
     }
     placeGhost2D = ghost;
@@ -801,6 +801,8 @@ function on2DMouseUp(e) {
     if (draggingWall) draggingWall = null;
     resetWallSnap();
     if (draggingEl2D) draggingEl2D = null;
+    // au relâchement, le réseau est recalculé une fois avec la nouvelle position
+    _cableCache = { sig: null, net: null };
     redraw2D();
 }
 
@@ -942,14 +944,14 @@ function toggleCables2D() {
     paintAideBtn(document.getElementById('btn-cables-2d'), 'fa-bezier-curve', 'Câbles', showCables2D);
     refreshSelectedView();
 }
-
 function openingPos2D(op) {
     const w = projectData.walls.find(x => x.id === op.wallId);
     if (!w) return null;
     const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
     if (len < 1) return null;
     let d = op.distanceFromStart !== undefined ? op.distanceFromStart : (op.positionRatio !== undefined ? op.positionRatio * len : len / 2);
-    d = Math.max(10, Math.min(len - 10, d));
+    const hw = openingWidthOf(op) / 2;
+    d = Math.max(hw, Math.min(len - hw, d));
     const t = d / len;
     return { x: w.x1 + t * dx, y: w.y1 + t * dy, angle: Math.atan2(dy, dx), th: w.thickness || 10 };
 }
@@ -985,11 +987,12 @@ function drawElementSymbol2D(el) {
     const col = deviceColor(el, el.legendOnly ? null : _controlTargets2D) || EL_COLORS[el.type] || '#94a3b8';
     // groupe double / triple / quadruple dont toutes les prises sont sur le même circuit : un seul liseré autour
     const grp = !el.legendOnly && _gangGroups2D ? _gangGroups2D.get(el.id) : null;
-    const isGangRing = !!grp && grp.length > 1 && !!circ && grp.every(id => {
+    // liseré commun : toujours pour un groupe d'interrupteurs ; pour une prise, seulement si tout le groupe est sur le même circuit
+    const isGangRing = !!grp && grp.length > 1 && (gangFamily(el.type) === 'switch' || (!!circ && grp.every(id => {
         const m = projectData.electrical.find(x => x.id === id);
         const mc = m && circuitOf(m);
         return !!mc && mc.id === circ.id;
-    });
+    })));
     const ringLead = isGangRing && grp[0] === el.id;
     const ang = elFrontAngle(el);
     const t = el.type;
@@ -1010,7 +1013,6 @@ function drawElementSymbol2D(el) {
     ctx2D.translate(c.x, c.y);
     ctx2D.rotate(ang);
     ctx2D.lineJoin = 'round';
-
     ctx2D.lineCap = 'round';
     // appareillage du circuit sélectionné : l'appareil lui-même clignote (estompé une phase sur deux)
     const blinkMember = !isPrintRendering && !el.legendOnly && !!_circuitMembers2D && _circuitMembers2D.has(el.id) && el.id !== selected3DId;
@@ -1396,6 +1398,17 @@ let _circuitMembers2D = null;
 // Commande -> charge qu'elle pilote, calculé une fois par dessin du plan
 let _controlTargets2D = new Map();
 
+
+// Même couleur, plus sombre (facteur 0,55) : sert au clignotement du fil sélectionné en 2D
+function darkerCss2D(css) {
+    try {
+        const c = new THREE.Color(css);
+        c.multiplyScalar(0.55);
+        return c.getStyle();
+    } catch (e) {
+        return css;
+    }
+}
 // Halo clignotant, quelle que soit la couleur du circuit ou du fond : deux traits (sombre et clair) qui
 // s'inversent à chaque phase. Le tracé est fourni par draw() et repris pour chaque trait.
 function blinkHalo2D(draw, w) {
@@ -1526,8 +1539,8 @@ function draw2DEquipment() {
             const linkColor = (s.links || []).filter(id => selectedLinkIds.has(id)).map(id => linkCableColors.get(id)).find(Boolean);
             const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
             // fil du circuit (ou de la commande) sélectionné : il alterne avec le contraste, comme les appareils
-            const focusBlinkColour = (!isPrintRendering && !blinkOn) ? focusAlt : focusColor;
-
+            const focusBlinkColour = (!isPrintRendering && !blinkOn) ? darkerCss2D(focusColor) : focusColor;
+            
             ctx2D.lineWidth = focusMode && focusHit ? 2.4 : 1.4;
             const nx = -dy / len, ny = dx / len;
             // trace le tronçon décalé de `shift` perpendiculairement à sa direction ; faux si rien à tracer
@@ -1545,8 +1558,8 @@ function draw2DEquipment() {
             // couleurs du tronçon : circuits qui le traversent, plus la couleur des commandes vers une prise commandée
             // (triées pour garder le même ordre d'un tronçon à l'autre)
             const bandColors = focusMode ? [] : [...new Set([...circs.map(c => circuitColor(c)), ...(s.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id))])].sort();
-            if (focusMode || bandColors.length <= 1) {
-                ctx2D.strokeStyle = focusMode
+            if (s.stairHit || focusMode || bandColors.length <= 1) {
+                ctx2D.strokeStyle = s.stairHit ? (blinkOn ? '#ef4444' : '#fecaca') : focusMode
                     ? (focusHit ? focusBlinkColour : dimColor)
                     : bandColors[0] || '#94a3b8';
                 ctx2D.setLineDash(isLow ? [8, 6] : []);
@@ -1643,7 +1656,15 @@ function stairGrab(id, coords) {
     const st = (projectData.stairs || []).find(s => s.id === id) || (projectData.shafts || []).find(s => s.id === id);
     return st ? { x: coords.x - st.x, y: coords.y - st.y } : null;
 }
-
+// Sens de la flèche d'un escalier : +1 si le niveau relié est au-dessus du niveau affiché (montée vers +x),
+// -1 s'il est en dessous (la flèche descend vers le niveau relié)
+function stairArrowSign(st) {
+    const elevOf = id => Number(((projectData.levels || []).find(l => l.id === id) || {}).elevation) || 0;
+    const here = elevOf(activeLevelId);
+    const others = (st.levelIds || [st.levelId]).filter(id => id !== activeLevelId);
+    if (!others.length) return 1;
+    return others.some(id => elevOf(id) > here) ? 1 : -1;
+}
 // Escalier en 2D : emprise orientée, traits de marches, flèche vers la marche haute, nom des niveaux reliés
 function drawStair2D(st, colliding) {
     const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId;
@@ -1654,7 +1675,10 @@ function drawStair2D(st, colliding) {
     ctx2D.strokeStyle = '#8b5cf6';
     ctx2D.lineWidth = 2.5 / zoom;
     ctx2D.fillRect(-L / 2, -W / 2, L, W);
+    // niveau d'arrivée (où l'escalier n'a pas été posé) : contour en pointillés
+    if (st.levelId !== activeLevelId) ctx2D.setLineDash([6 / zoom, 4 / zoom]);
     ctx2D.strokeRect(-L / 2, -W / 2, L, W);
+    ctx2D.setLineDash([]);
     ctx2D.beginPath();
     for (let i = 1; i < n; i++) {
         const x = -L / 2 + i * L / n;
@@ -1664,7 +1688,9 @@ function drawStair2D(st, colliding) {
     ctx2D.lineWidth = 1 / zoom;
     ctx2D.stroke();
     // flèche : montée vers la marche haute (sens +x de l'emprise)
-    const tip = L * 0.42, head = 9 / zoom;
+    // le sens de la flèche suit le niveau relié : vu de l'étage haut, elle descend
+    const sgn = stairArrowSign(st);
+    const tip = L * 0.42 * sgn, head = 9 / zoom * sgn;
     ctx2D.beginPath();
     ctx2D.moveTo(-tip, 0); ctx2D.lineTo(tip, 0);
     ctx2D.moveTo(tip, 0); ctx2D.lineTo(tip - head, -head * 0.6);
@@ -1683,7 +1709,10 @@ function drawStair2D(st, colliding) {
     ctx2D.fillStyle = currentTheme === 'light' ? '#6d28d9' : '#c4b5fd';
     ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
     ctx2D.textAlign = 'center';
-    ctx2D.fillText(stairLevelNames(st).join(' ↔ '), st.x, st.y - Math.max(L, W) / 2 - 6 / zoom);
+    // demi-hauteur de l'emprise tournée (en cm) ; l'étiquette est à 30 px à l'écran au-dessus de son bord haut
+    const aRad = (st.angleDeg || 0) * Math.PI / 180;
+    const hy = Math.abs(Math.sin(aRad)) * L / 2 + Math.abs(Math.cos(aRad)) * W / 2;
+    ctx2D.fillText(stairLevelLabel(st), st.x, st.y - hy - 30 / zoom);
     ctx2D.restore();
 }
 
@@ -1746,7 +1775,6 @@ function defaultHeightFor(type) {
     if (type.startsWith('outlet')) return 30;
     return 110;
 }
-
 // Trémie / escalier : niveaux reliés cochés dans la liste de la barre de droite (le plus proche coché par défaut).
 // Renvoie null si aucun niveau n'est coché.
 function askShaftLevels() {
@@ -1764,7 +1792,6 @@ function askShaftLevels() {
     }
     return [activeLevelId, ...chosen];
 }
-
 function place2DAt(coords) {
     const type = document.getElementById('place-type').value;
     const uid = Date.now() + '_' + Math.floor(Math.random() * 1000);
@@ -1801,7 +1828,10 @@ function place2DAt(coords) {
             showNotification("Cliquez près d'un mur pour placer cet élément", 'error');
             return;
         }
-        if (sameSpotBlocker(type, activeLevelId, info.wall.id, Math.round(info.dist))) { refuseSameSpot(); return; }
+        const height = defaultHeightFor(type);
+        const dist = placedDistance({ type, height }, info.wall.id, Math.round(info.dist), info.side);
+        const why = sameSpotBlocker(type, activeLevelId, info.wall.id, dist, info.side, height);
+        if (why) { refuseSameSpot(why); return; }
         let shaftLinks = null;
         if (type === 'shaft') {
             shaftLinks = askShaftLevels();
@@ -1809,7 +1839,7 @@ function place2DAt(coords) {
         }
         saveStateToUndo();
         if (type === 'door_single' || type === 'window_std') {
-            const opening = { id: 'op_' + uid, type, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), height: type === 'door_single' ? 210 : 120, width: type === 'door_single' ? 96 : 120 };
+            const opening = { id: 'op_' + uid, type, wallId: info.wall.id, distanceFromStart: dist, height: type === 'door_single' ? 210 : 120, width: type === 'door_single' ? 96 : 120 };
             if (type === 'window_std') opening.sillHeight = 90;
             if (type === 'door_single') {
                 opening.hingeSide = doorHingeForPlacement();
@@ -1817,10 +1847,9 @@ function place2DAt(coords) {
             }
             projectData.openings.push(Object.assign(opening, { levelId: activeLevelId }));
         } else if (type === 'shaft') {
-            projectData.shafts.push({ id: 'sh_' + uid, levelId: activeLevelId, levelIds: shaftLinks, wallId: info.wall.id, distanceFromStart: Math.round(info.dist), side: info.side, size: 40 });
+            projectData.shafts.push({ id: 'sh_' + uid, levelId: activeLevelId, levelIds: shaftLinks, wallId: info.wall.id, distanceFromStart: dist, side: info.side, size: 40 });
         } else {
-            const height = defaultHeightFor(type);
-        projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, wallId: info.wall.id, distanceFromStart: snapOutletDistance(type, info.wall.id, Math.round(info.dist), info.side, height, null), height, side: info.side });
+            projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, wallId: info.wall.id, distanceFromStart: dist, height, side: info.side });
         }
     }
     redraw2D();
@@ -1835,7 +1864,6 @@ function place2DAt(coords) {
         showNotification('Élément placé', 'success');
     }
 }
-
 function dragElement2D(coords) {
     if (!draggingEl2D) return;
     const el = projectData.electrical.find(e => e.id === draggingEl2D.id);
@@ -1866,13 +1894,15 @@ function dragElement2D(coords) {
     } else {
         const info = nearestWallInfo(coords);
         if (!info) return;
-        if (openingMoveBlocked(op, info.wall.id, Math.round(info.dist))) {
-            if (!draggingEl2D.refusedOp) { draggingEl2D.refusedOp = true; showNotification('Porte ou fenêtre déjà à cet endroit : déplacement refusé', 'error'); }
+        const dist = placedDistance(item, info.wall.id, Math.round(info.dist), info.side);
+        const moveRefusal = openingMoveRefusal(op, info.wall.id, dist);
+        if (moveRefusal) {
+            if (!draggingEl2D.refusedOp) { draggingEl2D.refusedOp = true; showNotification(moveRefusal, 'error'); }
             return;   // reste à sa dernière position valide
         }
         draggingEl2D.refusedOp = false;
         item.wallId = info.wall.id;
-        item.distanceFromStart = el ? snapOutletDistance(el.type, info.wall.id, Math.round(info.dist), info.side, el.height || defaultHeightFor(el.type), el.id) : Math.round(info.dist);
+        item.distanceFromStart = dist;
         if (el || sh || (op && op.type === 'door_single')) item.side = info.side;
     }
     redraw2D();
