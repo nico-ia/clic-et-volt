@@ -835,6 +835,12 @@ function segmentCrossesStairVolume(a, b) {
         const zLow = Math.min(...elevs) - here;
         const zHigh = Math.max(...elevs) - here + STAIR_PASSAGE_CM;
         const R = stairRect(st);
+        // boîte de l'emprise élargie de la marge : un tronçon qui ne la touche pas ne peut pas la traverser
+        const extU = Math.abs(R.ux) * (R.hl + STAIR_CABLE_MARGIN) + Math.abs(R.vx) * (R.hw + STAIR_CABLE_MARGIN);
+        const extV = Math.abs(R.uy) * (R.hl + STAIR_CABLE_MARGIN) + Math.abs(R.vy) * (R.hw + STAIR_CABLE_MARGIN);
+        if (Math.max(a.x, b.x) < R.cx - extU || Math.min(a.x, b.x) > R.cx + extU
+            || Math.max(a.y, b.y) < R.cy - extV || Math.min(a.y, b.y) > R.cy + extV) continue;
+        if (Math.max(a.z, b.z) < zLow || Math.min(a.z, b.z) > zHigh) continue;
         const sides = stairWallSides(st);
         for (let k = 0; k <= N; k++) {
             const t = k / N;
@@ -856,6 +862,9 @@ function segmentCrossesStairVolume(a, b) {
 function stairHitMaterial() {
     return CABLE_RES.stairHitMat || (CABLE_RES.stairHitMat = markShared(new THREE.MeshBasicMaterial({ color: '#ef4444', transparent: true, opacity: 1, depthWrite: false })));
 }
+
+// Mémoire des tests de ligne de vue (airClear) : vidée dès que murs, escaliers, niveaux ou plafond changent
+const AIR_CLEAR_MEMO = { sig: null, map: new Map() };
 
 function buildCableNetwork(passage) {
     ensureCircuitAssignment();
@@ -1086,8 +1095,15 @@ function buildCableNetwork(passage) {
     // géométrie des murs calculée une seule fois (B2) : mêmes opérations que l'ancienne version, résultat identique
     const wallGeo = walls.map(w => {
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
-        return { x1: w.x1, y1: w.y1, len, ux: dx / len, uy: dy / len, half: (w.thickness || 10) / 2 + 1 };
+        const half = (w.thickness || 10) / 2 + 1;
+        // boîte englobante : insideBody accepte jusqu'à 0,5 cm au-delà des extrémités, d'où la marge + 0,5
+        const reach = half + 0.5;
+        return { x1: w.x1, y1: w.y1, len, ux: dx / len, uy: dy / len, half,
+            bx0: Math.min(w.x1, w.x2) - reach, bx1: Math.max(w.x1, w.x2) + reach,
+            by0: Math.min(w.y1, w.y2) - reach, by1: Math.max(w.y1, w.y2) + reach };
     });
+
+
     const insideBody = (x, y) => {
         for (let i = 0; i < wallGeo.length; i++) {
             const g = wallGeo[i];
@@ -1224,15 +1240,42 @@ function buildCableNetwork(passage) {
     coincident.forEach(([a, b]) => joinWalls(a.wall, b.wall));
     const envelope = new Set(walls.filter(w => (outFaces.faces.get(w.id) || []).length).map(w => root(w.id)));
     const isolated = w => !envelope.has(root(w.id));
-    const airClear = (a, b) => {
+    const airClearCalc = (a, b) => {
         const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
+        // seuls les murs dont la boîte englobante touche le segment peuvent le couper
+        const sx0 = Math.min(a.x, b.x), sx1 = Math.max(a.x, b.x), sy0 = Math.min(a.y, b.y), sy1 = Math.max(a.y, b.y);
+        const near = wallGeo.filter(g => g.bx1 >= sx0 && g.bx0 <= sx1 && g.by1 >= sy0 && g.by0 <= sy1);
         for (let i = 1; i < n; i++) {
             const f = i / n;
-            if (insideBody(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f)) return false;
+            const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+            for (let k = 0; k < near.length; k++) {
+                const g = near[k];
+                const s = (x - g.x1) * g.ux + (y - g.y1) * g.uy;
+                const d = Math.abs(-(x - g.x1) * g.uy + (y - g.y1) * g.ux);
+                if (s > -0.5 && s < g.len + 0.5 && d < g.half) return false;
+            }
         }
         // une liaison de plafond ne traverse jamais le volume d'un escalier
         if (segmentCrossesStairVolume({ x: a.x, y: a.y, z: ceilZ }, { x: b.x, y: b.y, z: ceilZ })) return false;
         return true;
+    };    
+    // signature de ce qui influence airClear : murs, escaliers, niveaux, hauteur du plafond
+    const airMemoSig = JSON.stringify([
+        walls.map(w => [w.x1, w.y1, w.x2, w.y2, w.thickness, w.levelId]),
+        projectData.stairs || [],
+        (projectData.levels || []).map(l => [l.id, l.elevation]),
+        activeLevelId, ceilZ
+    ]);
+    if (AIR_CLEAR_MEMO.sig !== airMemoSig) {
+        AIR_CLEAR_MEMO.sig = airMemoSig;
+        AIR_CLEAR_MEMO.map = new Map();
+    }
+    // clé exacte (nombres complets) : deux points différents ne partagent jamais une entrée
+    const airClear = (a, b) => {
+        const key = a.x + ',' + a.y + ',' + b.x + ',' + b.y;
+        const memo = AIR_CLEAR_MEMO.map;
+        if (!memo.has(key)) memo.set(key, airClearCalc(a, b));
+        return memo.get(key);
     };
     const islandEdge = (a, b) => { const e = addEdge(a, b, 'passage', C.passageCost); if (e) e.island = true; };
     tracks.forEach(a => {
