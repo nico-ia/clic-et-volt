@@ -132,6 +132,28 @@ function setTabAlertBlink(key, on) {
     });
 }
 
+// Mesure (console seulement, aucun effet sur l'appli) : tape perfProbe() dans la console.
+// Renvoie le temps moyen de chaque étape lourde sur le projet courant (affiché comme valeur de retour).
+function perfProbe(n = 5) {
+    const lignes = ['--- perfProbe, moyenne sur ' + n + ' passage(s) ---'];
+    const mesure = (label, fn) => {
+        const t0 = performance.now();
+        for (let i = 0; i < n; i++) fn();
+        lignes.push(label.padEnd(30) + ((performance.now() - t0) / n).toFixed(1).padStart(8) + ' ms');
+    };
+    mesure('JSON.stringify(projectData)', () => JSON.stringify(projectData));
+    mesure('collidingElementIds', () => collidingElementIds());
+    mesure('computeCircuitReport', () => computeCircuitReport());
+    mesure('updateCircuitsUI', () => updateCircuitsUI());
+    // le réseau de câbles est mis en cache : le premier appel est un vrai calcul si le cache est vide
+    const t0 = performance.now();
+    getCableNetwork();
+    lignes.push('getCableNetwork (1er appel)'.padEnd(30) + (performance.now() - t0).toFixed(1).padStart(8) + ' ms');
+    const texte = lignes.join('\n');
+    console.log(texte);
+    return texte;
+}
+
 // Les alertes suivent les modifications en temps réel : rafraîchissement seulement si les données changent
 // Un seul minuteur (500 ms) sérialise le projet une fois : alertes en temps réel + sauvegarde automatique toutes les 2 s
 function startProjectWatcher() {

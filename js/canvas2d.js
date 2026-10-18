@@ -736,6 +736,9 @@ function on2DMouseMove(e) {
 }
 
 function on2DMouseUp(e) {
+    // le relâchement compte pour le plan seulement s'il a lieu sur le canevas ou termine une action en cours
+    const surPlan = e.target === canvas2D;
+    const actionEnCours = !!(isPanning || draggingWall || draggingEl2D || (selectionBoxStart && selectionBoxEnd));
     if (isPanning) isPanning = false;
     if (selectionBoxStart && selectionBoxEnd) {
         const start = selectionBoxStart;
@@ -801,9 +804,8 @@ function on2DMouseUp(e) {
     if (draggingWall) draggingWall = null;
     resetWallSnap();
     if (draggingEl2D) draggingEl2D = null;
-    // au relâchement, le réseau est recalculé une fois avec la nouvelle position
-    _cableCache = { sig: null, net: null };
-    redraw2D();
+    // pas de vidage du cache : la signature du réseau change d'elle-même si une position a bougé
+    if (surPlan || actionEnCours) redraw2D();
 }
 
 function distToSegment(p, p1, p2) {
