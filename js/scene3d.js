@@ -718,7 +718,9 @@ function crossLevelControlProxies(result) {
             if (!light) return;
             const pos = shaftProxyOn(activeLevelId, light.levelId, 'xl|' + lid, light.type, 110, [sw, light]);
             if (!pos) {
+                // warnAt n'est pas visible ici (fonction distincte) : même effet inline
                 result.warnings.push('Commande de ' + electricalDisplayName(light) + ' (autre niveau) : aucune trémie entre les deux niveaux');
+                result.warnTarget['Commande de ' + electricalDisplayName(light) + ' (autre niveau) : aucune trémie entre les deux niveaux'] = light.id;
                 return;
             }
             pos.realId = lid;
@@ -873,7 +875,9 @@ function buildCableNetwork(passage) {
     // faces extérieures : les gaines et les fils restent à l'intérieur du logement
     const outFaces = outsideFacesOf();
     const els = electricalOn();
-    const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {}, forced: new Set(), unroutedBy: {} };
+    const result = { segments: [], linkCount: 0, unrouted: 0, linkInfo: [], circuitRuns: {}, warnings: [], controlLinks: [], boxServed: {}, forced: new Set(), unroutedBy: {}, warnTarget: {}, stairHitIds: [], stairCulprits: [] };
+    // avertissement de câblage + élément à corriger (id), lu par l'onglet Avertissements
+    const warnAt = (msg, id) => { result.warnings.push(msg); if (id) result.warnTarget[msg] = id; };
     // chaque liaison non reliée est comptée sur son circuit (« _none » : sans circuit) pour que l'alerte le désigne
     const lostFor = (cid, n = 1) => { const k = cid || '_none'; result.unroutedBy[k] = (result.unroutedBy[k] || 0) + n; result.unrouted += n; };
     const cidOfEl = el => { const c = circuitOf(el); return c ? c.id : null; };
@@ -889,9 +893,7 @@ function buildCableNetwork(passage) {
         if (!panel) {
             if (!wired.length) return result;   // étage sans appareil ni trémie utilisable : rien à signaler
             wired.forEach(el => lostFor(cidOfEl(el)));
-            result.warnings.push(fed.reason === 'noWall'
-                ? 'Trémie sans mur à cet étage : appareils non reliés'
-                : 'Pas de tableau ni de trémie vers le tableau à cet étage : appareils non reliés');
+            result.warnings.push('Pas de tableau ni de trémie vers le tableau à cet étage : appareils non reliés');
             return result;
         }
     }
@@ -981,8 +983,16 @@ function buildCableNetwork(passage) {
                 const zF = Math.max(C.lowZ, Math.min(ceilZ, el.height || 150));
                 if (d < bestD && !segmentCrossesStairVolume({ x: el.free.x, y: el.free.y, z: zF }, { x: F.x, y: F.y, z: zF })) { bestD = d; bestT = t; bestS = s; }
             });
+            // trémie au bout d'un mur (coin) : le point d'attache tomberait sur une extrémité non reliée aux autres pistes.
+            // On se rattache au croisement le plus proche, qui est déjà relié au réseau.
+            if (bestT && (bestS <= 0.5 || bestS >= bestT.len - 0.5) && junctions.length) {
+                let jb = null, jd = Infinity;
+                junctions.forEach(j => { const dj = Math.hypot(el.free.x - j.p.x, el.free.y - j.p.y); if (dj < jd) { jd = dj; jb = j; } });
+                if (jb) { bestT = jb.a; bestS = jb.s; }
+            }
             if (!bestT) {
-                result.warnings.push('Trémie « ' + shaftTitle(el.shaftId) + ' » : aucun mur à cet étage, le câble ne peut pas la rejoindre');
+                if (!tracks.length) warnAt('Trémie « ' + shaftTitle(el.shaftId) + ' » : aucun mur à cet étage, le câble ne peut pas la rejoindre', el.shaftId);
+                else warnAt('Trémie « ' + shaftTitle(el.shaftId) + ' » : toutes les liaisons vers un mur traversent un escalier, le câble ne peut pas la rejoindre', el.shaftId);
                 return;
             }
             bestT.st.push(bestS);
@@ -1008,7 +1018,7 @@ function buildCableNetwork(passage) {
             .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, ceilZ, t.side) && stubOK(r))
             .sort((p, q) => Math.abs(p - dist) - Math.abs(q - dist) || q - p);
         let r = valid.length ? valid[0] : Math.max(10, Math.min(t.len - 10, dist));
-        if (!valid.length) result.warnings.push('Aucune descente possible pour ' + electricalDisplayName(el));
+        if (!valid.length) warnAt('Aucune descente possible pour ' + electricalDisplayName(el), el.id);
         t.st.push(r);
         place.set(el.id, { t, E, dist, r, zEl });
     });
@@ -1336,10 +1346,6 @@ function buildCableNetwork(passage) {
         const pl = place.get(el.id);
         if (pl) {
             const A = P(pl.t, pl.r), F = P(pl.t, pl.dist);
-            if (pl.free && (insideBody(pl.E.x, pl.E.y) || segmentHitsWall(pl.E.x, pl.E.y, F.x, F.y))) {
-                result.warnings.push('Trémie « ' + shaftTitle(pl.label) + ' » : le câble ne peut pas la rejoindre depuis cet étage (trémie dans un mur, ou un mur la sépare du mur le plus proche)');
-                return null;
-            }
             const lo = node(A.x, A.y, C.lowZ), hi = node(A.x, A.y, ceilZ);
             // trémie : la sortie monte jusqu'au plafond dans la trémie, puis file au plafond jusqu'au mur (patch 24).
             // Jamais d'horizontale à mi-hauteur ni au sol. Les appareils fixés sur un mur ne sont pas concernés.
@@ -1639,7 +1645,7 @@ function buildCableNetwork(passage) {
         const len = R.get(sp.id) ? addLink(panel, sp, std, FEEDER_CID) : null;
         if (len === null) {
             lostFor(null);
-            result.warnings.push('Sous-tableau non relié au tableau principal');
+            warnAt('Sous-tableau non relié au tableau principal', sp.id);
             return;
         }
         subRoots.push({ el: sp, depth: len + 60 });
@@ -1766,12 +1772,45 @@ function buildCableNetwork(passage) {
     }));
     priv.forEach(sg => result.segments.push(sg));
     // contrôle final : tout tronçon qui traverse le volume d'un escalier est marqué (rouge) et signalé
+    // contrôle final : tout tronçon qui traverse le volume d'un escalier est marqué (rouge) et signalé
     let stairCrossing = false;
     result.segments.forEach(sg => {
         const st = segmentCrossesStairVolume(sg.a, sg.b);
-        if (st) { sg.stairHit = st.id; stairCrossing = true; }
+        if (!st) return;
+        sg.stairHit = st.id; stairCrossing = true;
+        if (!result.stairHitIds.includes(st.id)) result.stairHitIds.push(st.id);
+        // appareil responsable : parmi ceux du même circuit (et du niveau affiché), le plus proche du milieu du tronçon
+
+        // appareil responsable :
+        // appareils responsables, un par élément (sans doublon)
+        const inFootprint = e => { const R = stairRect(st), b = deviceBox(e); const dx = b.x - R.cx, dy = b.y - R.cy; return Math.abs(dx * R.ux + dy * R.uy) < R.hl && Math.abs(dx * R.vx + dy * R.vy) < R.hw; };
+        const addCulprit = e => { if (e && !result.stairCulprits.includes(e.id)) result.stairCulprits.push(e.id); };
+        let ctlFound = false;
+        // 1. câbles de commande : l'interrupteur et chaque charge commandée dont le lien passe par ce tronçon
+        projectData.electrical.forEach(sw => {
+            if (!isControl(sw) || sw.levelId !== activeLevelId) return;
+            const loads = projectData.electrical.filter(l => l.levelId === activeLevelId && canControl(sw, l)
+                && (sg.links || []).includes(controlCableLinkId(sw.id, l.id)));
+            if (!loads.length) return;
+            ctlFound = true;
+            // extrémités du lien dans l'emprise de l'escalier (toutes désignées) ; sinon l'interrupteur
+            const inside = [sw, ...loads].filter(inFootprint);
+            (inside.length ? inside : [sw]).forEach(addCulprit);
+        });
+        // 2. câble de puissance : l'appareil du même circuit le plus proche du milieu du tronçon
+        if (!ctlFound) {
+            const mx = (sg.a.x + sg.b.x) / 2, my = (sg.a.y + sg.b.y) / 2;
+            let best = null, bestD = Infinity;
+            projectData.electrical.forEach(e => {
+                if (['panel', 'junction_box', 'subpanel'].includes(e.type) || e.levelId !== activeLevelId) return;
+                if (!(sg.cids || []).includes(cidOfEl(e))) return;
+                const b = deviceBox(e), d = Math.hypot(b.x - mx, b.y - my);
+                if (d < bestD) { bestD = d; best = e; }
+            });
+            addCulprit(best);
+        }
     });
-    if (stairCrossing) result.warnings.push('Câble qui traverse un escalier (au-dessus des marches ou dans son emprise au sol) : tronçon en rouge, à déplacer.');
+    if (stairCrossing) result.warnings.push('Câble qui traverse un escalier : tronçon en rouge, à déplacer.');
     return result;
 }
 
