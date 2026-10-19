@@ -350,7 +350,7 @@ function getElCoords(el) {
     return {
         x: posX + perpX * side * offsetDist,
         y: posY + perpY * side * offsetDist,
-        z: el.height || ((el.type === 'panel' || el.type === 'subpanel') ? 150 : el.type === 'wall_light' ? 180 : el.type === 'doorbell_chime' ? 200 : el.type === 'shutter_motor' ? 210 : el.type.startsWith('outlet') ? 30 : 110)
+        z: el.height || (el.type === 'panel' ? 150 : el.type === 'wall_light' ? 180 : el.type === 'doorbell_chime' ? 200 : el.type === 'shutter_motor' ? 210 : el.type.startsWith('outlet') ? 30 : 110)
     };
 }
 
@@ -394,33 +394,15 @@ const CABLE_CFG = {
     lightLinks: 3,      // points de raccordement testés par plafonnier
     maxRadius: 5
 };
-// câble de liaison tableau → sous-tableau : identifiant réservé (hors circuits) et couleur de mise en évidence
-const FEEDER_CID = '_feeder';
-const FEEDER_COLOR = '#e879f9';
 // opacité de la gaine mise en surbrillance : assez transparente pour laisser voir les fils
 const CONDUIT_FOCUS_OPACITY = 0.45;
 // opacité des gaines ICTA, réglée par le curseur 3D (0 à 1) ; valeur de départ = ancien rendu
 let conduitOpacity = 0.32;
 // rayon d'une âme de fil (unités monde) ; les fils occupent toute la section utile de la gaine
 const CORE_R = 0.24;
-// le câble de liaison est listé comme un circuit (sans appareils) : le pseudo-circuit permet de le sélectionner
-const FEEDER_CIRCUIT = { id: FEEDER_CID, name: 'Câble entre tableaux', type: 'feeder', color: FEEDER_COLOR };
 function circuitById(id) {
     if (!id) return null;
-    if (id === FEEDER_CID) return FEEDER_CIRCUIT;
     return projectData.circuits.find(c => c.id === id) || null;
-}
-// false : le câble de liaison a été retiré de l'affichage du circuit sélectionné
-let feederWithCircuit = true;
-function feederShownForSelection() {
-    if (selectedCircuitId === FEEDER_CID) return true;
-    return !!selectedCircuitId && feederWithCircuit;
-}
-function toggleFeederWithCircuit() {
-    feederWithCircuit = !feederWithCircuit;
-    build3DScene();
-    updateCircuitsUI();
-    redraw2D();
 }
 const CABLE_RES = {};
 let cableStats = { segments: [], linkCount: 0, unrouted: 0 };
@@ -638,7 +620,11 @@ function hopsToPanel(levelId, tree, panelLevelId) {
 // Circuits (identifiants) dont les appareils d'un niveau sont présents sur ce niveau
 function circuitIdsOfLevel(levelId) {
     const ids = new Set();
-    electricalOn(levelId).filter(isCircuitPoint).forEach(el => { const c = circuitOf(el); if (c) ids.add(c.id); });
+    electricalOn(levelId).forEach(el => {
+        if (isCircuitPoint(el)) { const c = circuitOf(el); if (c) ids.add(c.id); return; }
+        // une commande (interrupteur) n'a pas de circuit : son câble suit celui de la charge qu'elle commande, même à un autre étage
+        if (isControl(el)) (projectData.electrical || []).filter(l => isControlledLoad(l) && canControl(el, l)).forEach(l => { const c = circuitOf(l); if (c) ids.add(c.id); });
+    });
     return [...ids];
 }
 
@@ -744,9 +730,8 @@ function crossLevelControlProxies(result) {
 // Sinon, les arêtes de passage existent, mais seuls les circuits autorisés (c.roomCrossing) peuvent les emprunter.
 function computeCableNetwork() {
     const anyCrossing = projectData.circuits.some(c => c.roomCrossing);
-    if (!anyCrossing) return buildCableNetwork(false);
-    const net = buildCableNetwork(true);
-    net.passageUsed = true;
+    const net = buildCableNetwork(anyCrossing);
+    if (anyCrossing) net.passageUsed = true;
     return net;
 }
 
@@ -882,7 +867,7 @@ function buildCableNetwork(passage) {
     const lostFor = (cid, n = 1) => { const k = cid || '_none'; result.unroutedBy[k] = (result.unroutedBy[k] || 0) + n; result.unrouted += n; };
     const cidOfEl = el => { const c = circuitOf(el); return c ? c.id : null; };
     let panel = els.find(e => e.type === 'panel') || null;
-    const wired = els.filter(e => e.type !== 'panel' && e.type !== 'subpanel');
+    const wired = els.filter(e => e.type !== 'panel');
     let feedInfo = null;   // niveau sans tableau : trémie qui le relie au tableau d'un autre étage
     // un niveau sans appareil mais avec une trémie vers un autre étage doit aussi être raccordé (ses trémies passent les circuits)
     const hasShaftLinks = wired.length > 0 || derivationPointsOn(activeLevelId).length > 0;
@@ -1306,7 +1291,7 @@ function buildCableNetwork(passage) {
     });
     // Appareils posés sur un mur isolé : leur cheminement passe obligatoirement par le plafond
     els.forEach(el => {
-        if (el.type === 'panel' || el.type === 'subpanel') return;
+        if (el.type === 'panel') return;
         const pl = place.get(el.id);
         if (pl && isolated(pl.t.wall)) result.forced.add(el.id);
     });
@@ -1592,6 +1577,17 @@ function buildCableNetwork(passage) {
     // 11. Arbre de câblage minimal par circuit (Prim sur les distances réelles de gaine)
     const used = new Map();
     const priv = new Map();
+    // un même câble ne se pose qu'une fois par tronçon : deux appareils du même circuit qui passent par ce tronçon le partagent
+    const bundleSeen = new Map();
+    const pushBundle = (segment, wires, cid, relationId) => {
+        if (!bundleSeen.has(segment)) bundleSeen.set(segment, new Set());
+        const sig = [cid, wires.slice().sort().join(','), relationId || ''].join('|');
+        const seen = bundleSeen.get(segment);
+        if (seen.has(sig)) return;
+        seen.add(sig);
+        segment.cables.push(wires);
+        segment.cids.push(cid);
+    };
     const addPriv = (pts, wires, cid, relationId) => {
         for (let k = 0; k < pts.length - 1; k++) {
             const a = pts[k], b = pts[k + 1];
@@ -1600,8 +1596,7 @@ function buildCableNetwork(passage) {
             const pk = ka < kb ? ka + '~' + kb : kb + '~' + ka;
             if (!priv.has(pk)) priv.set(pk, { a, b, cables: [], cids: [], links: [] });
             const segment = priv.get(pk);
-            segment.cables.push(wires);
-            segment.cids.push(cid);
+            pushBundle(segment, wires, cid, relationId);
             if (relationId && !segment.links.includes(relationId)) segment.links.push(relationId);
         }
     };
@@ -1628,8 +1623,7 @@ function buildCableNetwork(passage) {
         path.forEach(e => {
             if (!used.has(e)) used.set(e, { cables: [], cids: [], links: [] });
             const segment = used.get(e);
-            segment.cables.push(wires);
-            segment.cids.push(cid);
+            pushBundle(segment, wires, cid, relationId);
             if (relationId && !segment.links.includes(relationId)) segment.links.push(relationId);
         });
         const length = path.reduce((acc, e) => acc + e.len, 0) + stubLen(ra.stub) + stubLen(rb.stub);
@@ -1637,19 +1631,6 @@ function buildCableNetwork(passage) {
         result.linkCount++;
         return length;
     };
-
-    // sous-tableau : alimenté une fois par le tableau principal (câble neutre, hors circuits), puis racine
-    // de l'arbre de chaque circuit : ses appareils se raccordent à lui s'il est le plus proche
-    const subRoots = [];
-    els.filter(e => e.type === 'subpanel').forEach(sp => {
-        const len = R.get(sp.id) ? addLink(panel, sp, std, FEEDER_CID) : null;
-        if (len === null) {
-            lostFor(null);
-            warnAt('Sous-tableau non relié au tableau principal', sp.id);
-            return;
-        }
-        subRoots.push({ el: sp, depth: len + 60 });
-    });
 
     const byCircuit = new Map();
     units.forEach(u => {
@@ -1661,8 +1642,7 @@ function buildCableNetwork(passage) {
         const cidOf = k === '_none' ? null : k;
         // liaisons non reliées, comptées par circuit (clé « _none » : sans circuit)
         const lostOn = n => lostFor(cidOf, n);
-        const tree = [{ el: panel, deg: 0, depth: 0, free: true, boxId: null }]
-            .concat(subRoots.map(s => ({ el: s.el, deg: 0, depth: s.depth, free: true, boxId: null })));
+        const tree = [{ el: panel, deg: 0, depth: 0, free: true, boxId: null }];
         // appareils servis par chaque boîte retenue (le calcul du câblage n'en dépend pas)
         const countServed = id => { if (id) result.boxServed[id] = (result.boxServed[id] || 0) + 1; };
         const rest = list.slice();
@@ -1682,7 +1662,7 @@ function buildCableNetwork(passage) {
                 });
                 // une boîte pas encore raccordée coûte son trajet depuis le tableau
                 pending.forEach(bx => {
-                    // étoile : la boîte est la plus proche de l'appareil que le tableau ; son trajet n'est compté qu'une fois
+                    // étoile : la boîte est la plus proche de l'appareil que son tableau ; son trajet n'est compté qu'une fois
                     const dBox = rdist(bx, u.entry, cidOf);
                     const d = star ? (dBox < rdist(panel, u.entry, cidOf) ? dBox : Infinity) : rdist(panel, bx, cidOf) + dBox;
                     if (isFinite(d) && (!best || d < best.d)) best = { d, ui, tn: null, bx };
@@ -1694,7 +1674,7 @@ function buildCableNetwork(passage) {
                 pending.splice(pending.indexOf(bx), 1);
                 const l0 = addLink(panel, bx, std, cidOf);
                 if (l0 === null) continue;
-                best.tn = { el: bx, deg: 0, depth: tree[0].depth + l0 + 60, free: true, boxId: bx.id };
+                best.tn = { el: bx, deg: 0, depth: l0 + 60, free: true, boxId: bx.id };
                 tree.push(best.tn);
             }
             const u = rest.splice(best.ui, 1)[0];
@@ -1751,8 +1731,8 @@ function buildCableNetwork(passage) {
 
     // niveau sans tableau : la gaine monte ou descend de la trémie de cet étage jusqu'à la trémie du niveau suivant
     // (vers le tableau). Les couleurs de chaque circuit qui emprunte ce tronçon sont conservées.
+    const elevOf = id => Number(((projectData.levels || []).find(l => l.id === id) || {}).elevation) || 0;
     if (feedInfo && feedInfo.feed && feedInfo.shaft && R.get(panel.id)) {
-        const elevOf = id => Number(((projectData.levels || []).find(l => l.id === id) || {}).elevation) || 0;
         const E0 = R.get(panel.id).stub[0];   // point de la trémie sur cet étage, à sa hauteur
         const next = feedInfo.nextLevelId;
         const hop = { from: activeLevelId, to: next, shaft: feedInfo.shaft.id };
@@ -1767,11 +1747,29 @@ function buildCableNetwork(passage) {
         });
     }
 
+    // niveau avec tableau : la gaine descend ou monte jusqu'à la trémie de chaque niveau relié qui n'a pas de tableau
+    // (les circuits qui y passent restent visibles de ce côté). Pas de longueur ajoutée ici : elle est comptée à l'étage concerné.
+    if (!feedInfo) {
+        derivPts.forEach(dp => {
+            const Rdp = R.get(dp.id);
+            if (!Rdp) return;
+            const shaftId = dp.id.slice(3);
+            const shObj = (projectData.shafts || []).find(x => x.id === shaftId);
+            if (!shObj) return;
+            tree.forEach((step, childId) => {
+                if (step.to !== activeLevelId || step.shaft !== shaftId) return;
+                const E0 = Rdp.stub[0];
+                const zChild = derivHeightOf(shObj, childId) + (elevOf(childId) - elevOf(activeLevelId));
+                circuitsOnHop({ from: childId, to: activeLevelId, shaft: shaftId }, tree, treePanelId)
+                    .forEach(cid => addPriv([E0, { x: E0.x, y: E0.y, z: zChild }], std, cid, null));
+            });
+        });
+    }
+
     used.forEach((u, e) => result.segments.push({
         a: { x: e.a.x, y: e.a.y, z: e.a.z }, b: { x: e.b.x, y: e.b.y, z: e.b.z }, cables: u.cables, cids: u.cids, links: u.links
     }));
     priv.forEach(sg => result.segments.push(sg));
-    // contrôle final : tout tronçon qui traverse le volume d'un escalier est marqué (rouge) et signalé
     // contrôle final : tout tronçon qui traverse le volume d'un escalier est marqué (rouge) et signalé
     let stairCrossing = false;
     result.segments.forEach(sg => {
@@ -1779,9 +1777,6 @@ function buildCableNetwork(passage) {
         if (!st) return;
         sg.stairHit = st.id; stairCrossing = true;
         if (!result.stairHitIds.includes(st.id)) result.stairHitIds.push(st.id);
-        // appareil responsable : parmi ceux du même circuit (et du niveau affiché), le plus proche du milieu du tronçon
-
-        // appareil responsable :
         // appareils responsables, un par élément (sans doublon)
         const inFootprint = e => { const R = stairRect(st), b = deviceBox(e); const dx = b.x - R.cx, dy = b.y - R.cy; return Math.abs(dx * R.ux + dy * R.uy) < R.hl && Math.abs(dx * R.vx + dy * R.vy) < R.hw; };
         const addCulprit = e => { if (e && !result.stairCulprits.includes(e.id)) result.stairCulprits.push(e.id); };
@@ -1802,7 +1797,7 @@ function buildCableNetwork(passage) {
             const mx = (sg.a.x + sg.b.x) / 2, my = (sg.a.y + sg.b.y) / 2;
             let best = null, bestD = Infinity;
             projectData.electrical.forEach(e => {
-                if (['panel', 'junction_box', 'subpanel'].includes(e.type) || e.levelId !== activeLevelId) return;
+                if (['panel', 'junction_box'].includes(e.type) || e.levelId !== activeLevelId) return;
                 if (!(sg.cids || []).includes(cidOfEl(e))) return;
                 const b = deviceBox(e), d = Math.hypot(b.x - mx, b.y - my);
                 if (d < bestD) { bestD = d; best = e; }
@@ -1862,8 +1857,7 @@ let cableGhostOpts = null;
 // Gaine fantôme : pleine (non translucide), à la couleur de son circuit, grise sans circuit
 function ghostConduitMat(cid) {
     let hex = '#94a3b8';
-    if (cid === FEEDER_CID) hex = FEEDER_COLOR;
-    else if (typeof cid === 'string' && cid.startsWith('ctl:')) hex = cid.slice(4);
+    if (typeof cid === 'string' && cid.startsWith('ctl:')) hex = cid.slice(4);
     else {
         const c = cid ? projectData.circuits.find(x => x.id === cid) : null;
         if (c) hex = circuitColor(c);
@@ -1953,8 +1947,6 @@ function renderCableNetwork(cx, cy) {
             .flatMap(link => link.linkIds || [])
         : []);
     const hasLinkFocus = selectedLinkIds.size > 0;
-    // le câble de liaison n'est affiché que si un circuit (ou le câble lui-même) ou un éclairage est sélectionné
-    const feederHidden = !hasLinkFocus && !feederShownForSelection();
     // circuits réellement concernés par la sélection : les autres circuits qui passent dans le même tronçon restent estompés
     const linkCircuitIds = new Set();
     if (hasLinkFocus) {
@@ -1980,7 +1972,6 @@ function renderCableNetwork(cx, cy) {
         CABLE_RES.highlightConduit = markShared(new THREE.MeshBasicMaterial({ color: '#facc15', transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
         CABLE_RES.dimConduit = markShared(new THREE.MeshBasicMaterial({ color: '#64748b', transparent: true, opacity: 0.035, depthWrite: false }));
         CABLE_RES.dimCore = markShared(new THREE.MeshBasicMaterial({ color: '#475569', transparent: true, opacity: 0.08, depthWrite: false }));
-        CABLE_RES.feederConduit = markShared(new THREE.MeshBasicMaterial({ color: FEEDER_COLOR, transparent: true, opacity: CONDUIT_FOCUS_OPACITY, depthWrite: false }));
         CABLE_RES.mats = {};
     }
     // matériaux des fils recréés si le thème change (noir et gris changent de teinte)
@@ -1998,7 +1989,6 @@ function renderCableNetwork(cx, cy) {
         })));
     };
     const hiFor = cid => {
-        if (cid === FEEDER_CID) return CABLE_RES.feederConduit;
         const ctlHex = ctlHexOf(cid);
         const circuit = !ctlHex && cid && projectData.circuits.find(c => c.id === cid);
         if (!ctlHex && !circuit) return CABLE_RES.highlightConduit;
@@ -2074,7 +2064,9 @@ function renderCableNetwork(cx, cy) {
         // commande vers une prise command?e : tube suppl?mentaire ? la couleur de la prise (sans fils, ceux-ci restent dans leur circuit)
         [...new Set((seg.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id)))]
             .forEach(hex => groups.set('ctl:' + hex, { cid: 'ctl:' + hex, wires: [] }));
-        const kept = new Map([...groups].filter(([, g]) => !(feederHidden && g.cid === FEEDER_CID) && (!G || G.keepGroup(g.cid))));
+        // lumière ou commande sélectionnée : seuls les tronçons de sa liaison, et seulement le circuit de la lumière
+        if (hasLinkFocus && !(seg.links || []).some(id => selectedLinkIds.has(id))) return;
+        const kept = new Map([...groups].filter(([, g]) => (!G || G.keepGroup(g.cid)) && (!hasLinkFocus || linkCircuitIds.has(g.cid) || String(g.cid).startsWith('ctl:'))));
         if (G && (!kept.size || !G.keepSeg(seg))) return;   // fantôme : tronçon hors sélection, rien à tracer
 
         segs.push({ a, b, dir, groups: kept, links: seg.links || [], stairHit: !!seg.stairHit });
@@ -2168,21 +2160,22 @@ function renderCableNetwork(cx, cy) {
             const isSelected = !!BOX || (!!FOC && FOC.has(cid));
             const isFocused = hasLinkFocus
                 ? isLinkHighlighted && (!linkCircuitIds.size || linkCircuitIds.has(cid) || !!ctlHexOf(cid))
-                : (isSelected || (cid === FEEDER_CID && !!selectedCircuitId));
-            const cmat = s.stairHit ? stairHitMaterial() : G ? (isFocused ? hiFor(cid) : ghostConduitMat(cid)) : ((hasLinkFocus || FOC || BOX)
-                ? (isFocused ? hiFor(cid) : CABLE_RES.dimConduit)
-                : conduitFor(cid));
-            const order = isFocused ? 3 : 2;
+                : isSelected;
+            const emphasised = isFocused;
+            const cmat = s.stairHit ? stairHitMaterial()
+                : G ? (isFocused ? hiFor(cid) : ghostConduitMat(cid))
+                : ((hasLinkFocus || FOC || BOX) ? (isFocused ? hiFor(cid) : CABLE_RES.dimConduit) : conduitFor(cid));
+            const order = emphasised ? 3 : 2;
             strut(s.a.clone().add(A.tube), s.b.clone().add(B.tube), (G && G.radiusCm !== undefined ? G.radiusCm : R), cmat, order, true);
-            noteSphere(ka, gk, cmat, isFocused);
-            noteSphere(kb, gk, cmat, isFocused);
+            noteSphere(ka, gk, cmat, emphasised);
+            noteSphere(kb, gk, cmat, emphasised);
 
             wireKeysOf(g.wires).forEach(w => {
                 const pa = A.wires.get(w.key);
                 const pb = B.wires.get(w.key);
                 if (!pa || !pb) return;
-                const coreMat = (hasLinkFocus || FOC || BOX) && !isFocused
-                ? CABLE_RES.dimCore
+                const coreMat = (hasLinkFocus || FOC || BOX) && !emphasised
+                    ? CABLE_RES.dimCore
                     : matFor(w.colour);
                 if (!G || G.wires) strut(s.a.clone().add(pa), s.b.clone().add(pb), CORE_R, coreMat, order, false);
                 });
@@ -2212,7 +2205,7 @@ function setConduitOpacity(pct) {
     const label = document.getElementById('conduit-opacity-val');
     if (label) label.textContent = Math.round(v * 100) + ' %';
     if (!CABLE_RES.conduitMat) return;   // matériaux pas encore créés : ils prendront la valeur à leur création
-    const mats = [CABLE_RES.conduitMat, CABLE_RES.highlightConduit, CABLE_RES.feederConduit,
+    const mats = [CABLE_RES.conduitMat, CABLE_RES.highlightConduit,
         ...Object.values(CABLE_RES.circMats || {}), ...Object.values(CABLE_RES.hiMats || {})];
     mats.forEach(m => { if (m) m.opacity = v; });
 }
@@ -2777,23 +2770,6 @@ function applianceModel(el) {
         box(10, 10, 4, white, 0, 0, 2);
         box(8.4, 8.4, 0.4, ivory, 0, 0, 4.2);
         [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]].forEach(p => cylZ(0.5, 0.5, 0.3, metal, p[0], p[1], 4.4));
-    } else if (el.type === 'subpanel') {
-        // sous-tableau : petit coffret, porte fumée, deux rangées de modules
-        const W = 30, H = 40;
-        box(W, H, 6, mMat('#e5e7eb', { rough: 0.5 }), 0, 0, 2);
-        box(W - 4, H - 4, 0.5, mMat('#1f2937', { rough: 0.8 }), 0, 0, 5.1);
-        const modMat = mMat('#f1f5f9', { rough: 0.4 });
-        const toggle = mMat('#111827', { rough: 0.6 });
-        [9, -9].forEach(y => {
-            box(W - 8, 3, 0.5, mMat('#94a3b8', { rough: 0.3, metal: 0.7 }), 0, y, 5.5);
-            for (let i = 0; i < 6; i++) {
-                const x = -9 + i * 3.6;
-                box(3, 6, 4, modMat, x, y, 7.2);
-                box(0.7, 1.5, 0.9, toggle, x, y + 1.2, 9.6);
-            }
-        });
-        box(W - 3, H - 3, 0.5, mMat('#0f172a', { opacity: 0.32, rough: 0.2 }), 0, 0, 10.4);
-        box(W - 3, 2, 0.7, accentMat, 0, H / 2 - 3.2, 10.8);
     } else if (el.type === 'panel') {
         // tableau : coffret, porte fumée, trois rangées de modules (différentiel + disjoncteurs)
         const W = 42, H = 56;
@@ -3145,7 +3121,7 @@ function on3DPointerDown(e) {
                         showNotification("Ouverture placée sur le mur avec succès", "success");
                     } else {
                         let defaultH = 110;
-                        if (activePlacementType === 'panel' || activePlacementType === 'subpanel' || activePlacementType === 'junction_box') defaultH = 150;
+                        if (activePlacementType === 'panel' || activePlacementType === 'junction_box') defaultH = 150;
                         if (activePlacementType === 'wall_light') defaultH = 180;
                         if (activePlacementType === 'doorbell_chime') defaultH = 200;
                         if (activePlacementType === 'shutter_motor') defaultH = 210;
@@ -3844,7 +3820,7 @@ function circuitHighlightIds(selectedCircuit, pool) {
             // une commande suit la charge qu'elle commande, jamais le circuit d'éclairage par défaut
             if (isControl(el)) return switchBelongs(el);
             const assigned = circuitOf(el);
-            return (assigned && assigned.id === selectedCircuit.id) || (panel && el.id === panel.id) || el.type === 'subpanel';
+            return (assigned && assigned.id === selectedCircuit.id) || (panel && el.id === panel.id);
         })
         .map(el => el.id));
 }

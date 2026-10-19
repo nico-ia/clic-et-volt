@@ -1205,24 +1205,6 @@ function drawElementSymbol2D(el) {
         line(-4, 0, 4, 0, 1.2, ink);
         line(0, -4, 0, 4, 1.2, ink);
         ringX = 0; ringR = 9;
-    } else if (t === 'subpanel') {
-        // sous-tableau : petit coffret clair, une rangée de modules
-        ctx2D.beginPath();
-        ctx2D.rect(-1, -12, 9, 24);
-        ctx2D.fillStyle = paper;
-        ctx2D.fill();
-        ctx2D.lineWidth = (2) * LW;
-        ctx2D.strokeStyle = col;
-        ctx2D.stroke();
-        line(-1, -6, 8, -6, 1, col);                                // rangées de modules
-        line(-1, 6, 8, 6, 1, col);
-        ctx2D.beginPath();                                          // éclair (même tracé que le tableau, à l'échelle)
-        ctx2D.moveTo(2.2, -2.6); ctx2D.lineTo(5.1, -0.3); ctx2D.lineTo(3.5, -0.3);
-        ctx2D.lineTo(5.1, 2.6); ctx2D.lineTo(1.9, 0.3); ctx2D.lineTo(3.5, 0.3);
-        ctx2D.closePath();
-        ctx2D.fillStyle = col;
-        ctx2D.fill();
-        ringR = 0;
     } else if (t === 'panel') {
         ctx2D.beginPath();
         ctx2D.rect(-1, -18, 11, 36);
@@ -1284,7 +1266,6 @@ function drawElementSymbol2D(el) {
     if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
         const ringPath = () => {
             if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
-            else if (t === 'subpanel') ctx2D.rect(-5, -16, 15, 32);
             else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + (blinkSel ? 6 : 4), 0, Math.PI * 2);
         };
         if (blinkSel) {
@@ -1522,8 +1503,11 @@ function draw2DEquipment() {
         const linkCableColors = controlCableColors(net, null);
         // Le cheminement bas et le cheminement haut ont les mêmes coordonnées en plan : on les décale
         // de part et d'autre de l'axe pour que les deux restent visibles (haut : trait plein, bas : pointillé).
+        ctx2D.globalAlpha = 1;
         net.segments.forEach(s => {
             const linkHighlighted = (s.links || []).some(id => selectedLinkIds.has(id));
+            // lumière ou commande sélectionnée : seuls les tronçons de sa liaison restent visibles
+            if (hasLinkFocus && !linkHighlighted) return;
             const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, len = Math.hypot(dx, dy);
             if (len < 0.05) return;
             const isLow = s.a.z < 50 && s.b.z < 50;
@@ -1531,15 +1515,10 @@ function draw2DEquipment() {
             const ox = -dy / len * off, oy = dx / len * off;
             const ids = [...new Set((s.cids || []).filter(Boolean))];
             const circs = ids.map(id => projectData.circuits.find(c => c.id === id)).filter(Boolean);
-            const feederSeg = (s.cids || []).includes(FEEDER_CID);
-            const feederOff = !hasLinkFocus && !feederShownForSelection();
-            const onFeeder = feederSeg && !feederOff;
-            // câble de liaison seul : masqué tant qu'aucun circuit ni éclairage n'est sélectionné, ou s'il est retiré du circuit
-            if (feederSeg && !circs.length && (!focusMode || feederOff)) return;
-            const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && ((s.cids || []).includes(focusCircuit.id) || onFeeder));
+            const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && (s.cids || []).includes(focusCircuit.id));
             // couleur du lien sélectionné uniquement (un tronçon partagé peut porter aussi d'autres commandes)
             const linkColor = (s.links || []).filter(id => selectedLinkIds.has(id)).map(id => linkCableColors.get(id)).find(Boolean);
-            const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : FEEDER_COLOR);
+            const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : '#facc15');
             // fil du circuit (ou de la commande) sélectionné : il alterne avec le contraste, comme les appareils
             const focusBlinkColour = (!isPrintRendering && !blinkOn) ? darkerCss2D(focusColor) : focusColor;
             
@@ -1769,7 +1748,7 @@ function nearestWallInfo(coords) {
 }
 
 function defaultHeightFor(type) {
-    if (type === 'panel' || type === 'subpanel' || type === 'junction_box') return 150;
+    if (type === 'panel' || type === 'junction_box') return 150;
     if (type === 'wall_light') return 180;
     if (type === 'doorbell_chime') return 200;
     if (type === 'shutter_motor') return 210;

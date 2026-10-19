@@ -77,11 +77,7 @@
                          <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#9ca3af" stroke-width="1.2"/>
                          <path d="M8.5,-2.4 L7.4,-0.9 H9.6 Z M8.5,2.4 L7.4,0.9 H9.6 Z" fill="#9ca3af"/>`,
         shutterMotor: `<rect x="-7" y="-5" width="14" height="10" rx="2" fill="#f8fafc" stroke="#6b7280" stroke-width="2"/>
-                       <path d="M-4,-2 H4 M-4,2 H4" stroke="#0f172a" stroke-width="1.2"/>`,
-        // sous-tableau (cyan clair) : même forme que le plan (coffret, deux rangées de modules, éclair)
-        subpanel: `<rect x="-1" y="-12" width="9" height="24" fill="#f8fafc" stroke="#67e8f9" stroke-width="1.6"/>
-                   <path d="M-1,-6 H8 M-1,6 H8" stroke="#67e8f9" stroke-width="0.9"/>
-                   <polygon class="g-bolt" points="2.2,-2.6 5.1,-0.3 3.5,-0.3 5.1,2.6 1.9,0.3 3.5,0.3" fill="#67e8f9"/>`
+                       <path d="M-4,-2 H4 M-4,2 H4" stroke="#0f172a" stroke-width="1.2"/>`
     };
 
     // ---------- Animations (SVG, animées en CSS) ----------
@@ -262,18 +258,6 @@
         <text class="g-lbl" x="160" y="170">Interrupteur</text>
         <text class="g-lbl" x="270" y="170">Prise</text>
         <text class="g-lbl" x="160" y="18">Posé en 2D ou en 3D : le câble se trace seul</text>`);
-
-    // Pièce séparée : tableau dans une pièce, sous-tableau dans l'autre, câble fuchsia qui passe au-dessus du mur
-    const animSubpanel = () => svg(`
-        <rect x="20" y="30" width="130" height="120" rx="4" fill="none" stroke="#475569" stroke-width="2"/>
-        <rect x="170" y="30" width="130" height="120" rx="4" fill="none" stroke="#475569" stroke-width="2"/>
-        <line x1="160" y1="30" x2="160" y2="150" stroke="#334155" stroke-width="8"/>
-        <path class="g-wall-draw" d="M50 60 V42 H258 V74" fill="none" stroke="#e879f9" stroke-width="3" stroke-linejoin="round"/>
-        <g class="g-pop p1">${sym(S.panel, 40, 100, 0, 2.2)}</g>
-        <g class="g-pop p2">${sym(S.subpanel, 250, 100, 0, 2.2)}</g>
-        <text class="g-lbl" x="85" y="170">Tableau principal</text>
-        <text class="g-lbl" x="235" y="170">Sous-tableau</text>
-        <text class="g-lbl" x="160" y="18">Câble entre tableaux (fuchsia)</text>`);
 
     // Circuits : trois couleurs (même palette qu'en 2D et dans la liste des circuits)
     const animCircuits = () => svg(`
@@ -477,17 +461,8 @@
                  'Un appareil posé en 2D ou en 3D reçoit son câble automatiquement.',
                  'Le câble suit les murs et passe par les trémies (ouvertures dans le plancher) pour rejoindre l\'autre étage.',
                  'Pièce fermée sans liaison au tableau : l\'alerte du circuit concerné propose « Passer entre pièces au plafond » (câble au plafond entre les pièces, et vers un mur intérieur isolé). Ce réglage se fait sur la carte de chaque circuit (onglet Circuits) ; « Retirer l\'autorisation » l\'annule.',
-                 'Cheminement par circuit : sur la carte de chaque circuit (onglet Circuits), choisissez « Murs » (défaut), « Mixte » ou « Plafond ». Le plafond prend la ligne droite au-dessus de la pièce (et des îlots) pour un chemin plus court, même sans îlot ; le mixte ne le fait que si le chemin par les murs est nettement plus long. Un appareil posé sur un mur isolé passe toujours par le plafond. Si un circuit n\'a pas de chemin, il clignote en rouge, ainsi que son bouton de cheminement, et le compteur d\'alertes global y renvoie (il change d\'étage si besoin).',
-                 'Pour une pièce séparée, voir l\'étape « Pièce séparée : le sous-tableau ».'],
+                 'Cheminement par circuit : sur la carte de chaque circuit (onglet Circuits), choisissez « Murs » (défaut), « Mixte » ou « Plafond ». Le plafond prend la ligne droite au-dessus de la pièce (et des îlots) pour un chemin plus court, même sans îlot ; le mixte ne le fait que si le chemin par les murs est nettement plus long. Un appareil posé sur un mur isolé passe toujours par le plafond. Si un circuit n\'a pas de chemin, il clignote en rouge, ainsi que son bouton de cheminement, et le compteur d\'alertes global y renvoie (il change d\'étage si besoin).'],
           retenir: 'Pas besoin de tracer les câbles : vérifiez seulement la place des appareils.' },
-        { part: 'Vue 3D et câblage', title: 'Pièce séparée : le sous-tableau', anim: animSubpanel,
-          text: ['Une pièce séparée du tableau principal par un mur reçoit un sous-tableau : bouton « Sous-tableau » dans l\'onglet Appareillages, puis cliquez dans la pièce.',
-                 'Le câble d\'alimentation part automatiquement du tableau principal et passe au-dessus du mur. Il est tracé en fuchsia.',
-                 'Ce câble n\'est pas compté dans les longueurs des circuits. Il a sa propre ligne dans les quantités : « Liaison tableau → sous-tableau », 3G6 mm² pour un disjoncteur de tête de 32 A.',
-                 'Il est masqué par défaut. Sélectionnez « Câble entre tableaux » dans la liste des circuits pour le voir seul. Sur la carte d\'un circuit, le bouton ⇄ le retire de l\'affichage de ce circuit (ce choix reste en place pendant vos sélections).',
-                 'Le sous-tableau alimente ensuite les appareils de sa pièce.'],
-          essayer: { mode: '2d', tab: 'appareillage', pulse: '#btn-2d-place-subpanel' },
-          retenir: 'Une pièce séparée = un sous-tableau. Le câble entre tableaux n\'a pas besoin d\'être affiché pour fonctionner.' },
         { part: 'Vue 3D et câblage', title: 'Les circuits en couleur', anim: animCircuits,
           text: ['Un circuit est un groupe d\'appareils protégés par le même disjoncteur (coupe-circuit automatique).',
                  'Chaque circuit a sa couleur. Cette couleur est la même en 2D, en 3D et dans la liste des circuits.',
