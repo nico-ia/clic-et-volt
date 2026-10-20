@@ -2108,31 +2108,53 @@ function wallRectOf(w) {
     if (len < 1) return null;
     return orientedRect((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, Math.atan2(dy, dx), len / 2, (w.thickness || 10) / 2);
 }
+
+// Marches pleines d'un escalier, en repère de l'escalier (u : longueur, v : largeur, z : hauteur depuis le pied).
+// Même géométrie que buildStair3D : marche horizontale de 5 cm + contremarche. Le reste est vide (dessous, dessus).
+function stairStepSolids(st) {
+    const L = st.length || 300, W = st.width || 90;
+    const H = Math.max(stairRiseCm(st), 1), n = stairStepCount(st);
+    const sh = H / n, d = L / n, T = 5, hw = W / 2;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+        const u0 = -L / 2 + i * d, u1 = u0 + d;
+        out.push({ u0, u1, v0: -hw, v1: hw, z0: i * sh - T, z1: i * sh });            // marche horizontale
+        out.push({ u0: u1 - T, u1, v0: -hw, v1: hw, z0: i * sh, z1: (i + 1) * sh });  // contremarche
+    }
+    return out;
+}
 // Chevauchements d'un escalier (niveau affiché) : appareils dans l'emprise jusqu'au plafond, trémies, ouvertures, murs
 function computeStairCollisions() {
     const list = [];
-    const ceil = levelCeilingOf(activeLevelId);
     (projectData.stairs || []).forEach(st => {
         const R = stairRect(st);
-        // hauteur de la montée : l'escalier est plein sous sa rampe, de la dalle basse jusqu'à la marche au point considéré
         const ids = st.levelIds || [st.levelId];
         const elevOfL = lv => Number(((projectData.levels || []).find(l => l.id === lv) || {}).elevation) || 0;
-        const rise = stairRiseCm(st) || ceil;
-        // un escalier relie plusieurs niveaux : ses obstacles sont cherchés sur chacun d'eux, pas seulement sur le niveau affiché
-        // (hauteur testée sur le niveau affiché seulement ; sur les autres niveaux, contrôle du plan)
+        // marches en cote absolue : le pied de l'escalier est au niveau le plus bas relié
+        const bottomAbs = Math.min(...ids.map(elevOfL));
+        const solids = stairStepSolids(st).map(s => Object.assign({}, s, { z0: bottomAbs + s.z0, z1: bottomAbs + s.z1 }));
+        // un escalier relie plusieurs niveaux : ses obstacles sont cherchés sur chacun d'eux
         ids.forEach(lv => {
             electricalOn(lv).forEach(el => {
                 const b = deviceBox(el);
                 if (b.z > levelCeilingOf(lv)) return;
                 const dx = b.x - R.cx, dy = b.y - R.cy;
-                const lu = dx * R.ux + dy * R.uy, lv2 = dx * R.vx + dy * R.vy;
-                if (!(Math.abs(lu) < R.hl + b.r && Math.abs(lv2) < R.hw + b.r)) return;
-                // hauteurs absolues (niveau de l'appareil + cote dans son niveau) : comparées à la montée
-                const f = Math.max(0, Math.min(1, (lu + R.hl) / (2 * R.hl)));   // 0 en marche basse, 1 en marche haute
+                const lu = dx * R.ux + dy * R.uy, lw = dx * R.vx + dy * R.vy;
+                // plafonnier dans l'emprise : trou dans le plafond (niveau le plus bas de l'escalier) → à déplacer
+                if (CEILING_TYPES.includes(el.type)) {
+                    if (elevOfL(lv) === bottomAbs && Math.abs(lu) < R.hl && Math.abs(lw) < R.hw) list.push({ stair: st, other: el, kind: 'appareil' });
+                    return;
+                }
+                if (!(Math.abs(lu) < R.hl + b.r && Math.abs(lw) < R.hw + b.r)) return;
                 const zAbs = elevOfL(lv) + b.z;
-                const stepTopAbs = Math.min(...ids.map(elevOfL)) + rise * f;
-                const bottomAbs = Math.min(...ids.map(elevOfL));
-                if (zAbs + b.h > bottomAbs && zAbs - b.h < stepTopAbs) list.push({ stair: st, other: el, kind: 'appareil' });
+                // signalé seulement s'il touche la matière d'une marche (espace libre dessus et dessous : accepté)
+                const touche = solids.some(s => {
+                    const cu = (s.u0 + s.u1) / 2, cw = (s.v0 + s.v1) / 2;
+                    return Math.abs(lu - cu) < b.r + (s.u1 - s.u0) / 2 - 0.5
+                        && Math.abs(lw - cw) < b.r + (s.v1 - s.v0) / 2 - 0.5
+                        && zAbs - b.h < s.z1 - 0.5 && zAbs + b.h > s.z0 + 0.5;
+                });
+                if (touche) list.push({ stair: st, other: el, kind: 'appareil' });
             });
             shaftsOn(lv).forEach(sh => {
                 const p = shaftPos2D(sh);
@@ -2170,7 +2192,7 @@ function computeStairCollisions() {
 const STAIR_SNAP_CM = 25;
 const STAIR_SNAP_ANGLE = 8 * Math.PI / 180;
 function snapStairToWalls(st, prev) {
-    // écart entre l'emprise et un mur, le long de la normale du mur (négatif = chevauchement)
+    // écart entre l'emprise et un mur, le long de la normale du mur
     const gapOf = (R, W) => {
         const dx = R.cx - W.cx, dy = R.cy - W.cy;
         const d = dx * W.vx + dy * W.vy;
@@ -2179,49 +2201,31 @@ function snapStairToWalls(st, prev) {
         const rU = R.hl * Math.abs(R.ux * W.ux + R.uy * W.uy) + R.hw * Math.abs(R.vx * W.ux + R.vy * W.uy);
         return { gap: Math.abs(d) - (W.hw + rS), sign: d >= 0 ? 1 : -1, along: Math.abs(t) < W.hl + rU + STAIR_SNAP_CM };
     };
-    // murs de tous les niveaux que l'escalier relie (pas seulement le niveau affiché)
+
+    // murs de tous les niveaux que l'escalier relie
     const levelsOfSt = st.levelIds || [st.levelId];
     const walls = (projectData.walls || []).filter(w => levelsOfSt.includes(w.levelId)).map(w => wallRectOf(w)).filter(Boolean);
-    // pousse l'escalier hors d'un mur chevauché : d'abord le mur le moins pénétré, plusieurs passes
-    const pushOut = () => {
-        for (let pass = 0; pass < 4; pass++) {
-            let pick = null;
-            walls.forEach(W => {
-                const g = gapOf(stairRect(st), W);
-                if (g.along && g.gap < 0 && (!pick || g.gap > pick.g.gap)) pick = { W, g };
-            });
-            if (!pick) return;
-            st.x = Math.round(st.x - pick.g.sign * pick.g.gap * pick.W.vx);
-            st.y = Math.round(st.y - pick.g.sign * pick.g.gap * pick.W.vy);
-        }
-    };
-    pushOut();
-    // aimantation : collage à la face d'un mur tout proche (écart inférieur à 25 cm)
+
+    // Aimantation : collage à la face d'un mur tout proche (écart inférieur à 25 cm)
     let best = null;
     walls.forEach(W => {
         const g = gapOf(stairRect(st), W);
         if (g.along && g.gap >= 0 && g.gap < STAIR_SNAP_CM && (!best || g.gap < best.g.gap)) best = { W, g };
     });
-    // éloignement : si l'escalier s'éloigne du mur (flèches, glisser), il n'est pas recollé
+
+    // éloignement : si l'escalier s'éloigne du mur, il n'est pas recollé
     if (best && prev) {
         const before = gapOf(stairRect(Object.assign({}, st, { x: prev.x, y: prev.y })), best.W).gap;
         if (best.g.gap >= before) best = null;
     }
+
+    // Aimantation positionnelle seulement (collage au mur sans rotation automatique ni push-out)
     if (best) {
-        // alignement : parallèle au mur, ou perpendiculaire, si l'escalier est presque dans cette direction
-        const wa = Math.atan2(best.W.uy, best.W.ux);
-        const a = (st.angleDeg || 0) * Math.PI / 180;
-        const delta = c => { let d = ((a - c) % Math.PI + Math.PI) % Math.PI; return d > Math.PI / 2 ? d - Math.PI : d; };
-        const c = Math.abs(delta(wa)) <= Math.abs(delta(wa + Math.PI / 2)) ? wa : wa + Math.PI / 2;
-        if (Math.abs(delta(c)) < STAIR_SNAP_ANGLE) st.angleDeg = ((c * 180 / Math.PI) % 360 + 360) % 360;
         const g = gapOf(stairRect(st), best.W);
         st.x = Math.round(st.x - g.sign * g.gap * best.W.vx);
         st.y = Math.round(st.y - g.sign * g.gap * best.W.vy);
     }
-    // dernière vérification : une rotation ou un arrondi ne doit jamais laisser l'escalier dans un mur
-    pushOut();
 }
-
 // Prises simples proches (même mur, même côté, même hauteur) : regroupées automatiquement en double / triple / quadruple
 const GANGABLE_OUTLETS = ['outlet_16a', 'outlet_20a', 'outlet_20a_classic'];
 // Interrupteurs : tous les types d'interrupteur se regroupent entre eux, deux au maximum (double)

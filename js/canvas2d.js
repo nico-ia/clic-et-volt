@@ -1635,7 +1635,18 @@ function draw2DEquipment() {
 // Escalier ou trémie saisi au clic : décalage entre le curseur et le centre, pour glisser sans saut
 function stairGrab(id, coords) {
     const st = (projectData.stairs || []).find(s => s.id === id) || (projectData.shafts || []).find(s => s.id === id);
-    return st ? { x: coords.x - st.x, y: coords.y - st.y } : null;
+    if (!st) return null;
+    // Calcul du point de saisie en tenant compte de la rotation (centre de l'escalier)
+    const angleRad = (st.angleDeg || 0) * Math.PI / 180;
+    const dx = coords.x - st.x;
+    const dy = coords.y - st.y;
+    // Rotation inverse pour obtenir le décalage local
+    const cosA = Math.cos(-angleRad);
+    const sinA = Math.sin(-angleRad);
+    return {
+        x: dx * cosA - dy * sinA,
+        y: dx * sinA + dy * cosA
+    };
 }
 // Sens de la flèche d'un escalier : +1 si le niveau relié est au-dessus du niveau affiché (montée vers +x),
 // -1 s'il est en dessous (la flèche descend vers le niveau relié)
@@ -1854,8 +1865,12 @@ function dragElement2D(coords) {
     if (st) {
         if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
         const prevSt = { x: st.x, y: st.y };
-        st.x = Math.round(coords.x - (draggingEl2D.grab ? draggingEl2D.grab.x : 0));
-        st.y = Math.round(coords.y - (draggingEl2D.grab ? draggingEl2D.grab.y : 0));
+        const angleRad = (st.angleDeg || 0) * Math.PI / 180;
+        const cosA = Math.cos(angleRad);
+        const sinA = Math.sin(angleRad);
+        const grab = draggingEl2D.grab || { x: 0, y: 0 };
+        st.x = Math.round(coords.x - (grab.x * cosA - grab.y * sinA));
+        st.y = Math.round(coords.y - (grab.x * sinA + grab.y * cosA));
         snapStairToWalls(st, prevSt);
         redraw2D();
         return;
