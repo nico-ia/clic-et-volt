@@ -215,7 +215,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 showNotification("Tracé de mur arrêté", "info");
             }
             // pose 2D (outil « place ») : Échap arrête la pose et vide la sélection, comme le bouton Désélection
-            if (currentMode === '2d' && currentTool === 'place') { stopPlacement(); return; }
+            if (currentMode === '2d' && (currentTool === 'place' || currentTool === 'text' || currentTool === 'wall')) { stopPlacement(); return; }
             if (activePlacementType === 'wall' && wallDraft3D) { endWallTrace3D(); return; }
             if (activePlacementType) setPlacementType(null);
             else if (selected3DId || selectedCircuitId || selectedWallIds.length || selectedDeviceIds.length || selectedOpeningIds.length) clearAllSelection();
@@ -469,6 +469,9 @@ function redoAction() {
 function switchMode(mode) {
     currentMode = mode;
     placeSharedInspectors();
+    const textTool = document.getElementById('btn-tool-text');
+    if (textTool) textTool.classList.toggle('hidden', mode === '3d');   // patch 71 : texte en 2D seulement
+    if (mode === '3d' && textById(selected3DId)) selected3DId = null;   // un texte 2D n'est pas sélectionnable en 3D
     refreshToolButtons();   // l'outil actif est affiché à l'identique dans la vue qui s'ouvre
     document.getElementById('view-2d').classList.toggle('hidden', mode !== '2d');
     document.getElementById('view-3d').classList.toggle('hidden', mode !== '3d');
@@ -629,7 +632,7 @@ function setPlaceType2D(type) {
 }
 
 // Mode affiché : un seul libellé, le même en 2D et en 3D
-const MODE_BADGES = { select: 'Mode : sélection', wall: 'Mode : tracer un mur', place: 'Mode : pose d’appareil', pan: 'Mode : déplacer la vue' };
+const MODE_BADGES = { select: 'Mode : sélection', wall: 'Mode : tracer un mur', place: 'Mode : pose d’appareil', text: 'Mode : ajout de texte', pan: 'Mode : déplacer la vue' };
 
 function currentModeKey() {
     if (currentMode === '3d') return activePlacementType === 'wall' ? 'wall' : (activePlacementType ? 'place' : 'select');
@@ -649,6 +652,7 @@ function modeHint(key) {
             : 'Cliquez pour placer le premier point du mur. Clic droit pour terminer.';
     }
     if (key === 'place') return placementHintText(currentMode === '3d' ? activePlacementType : document.getElementById('place-type').value);
+    if (key === 'text') return 'Cliquez sur le plan, à l’endroit du texte (Échap pour arrêter).';
     if (key === 'pan') return 'Faites glisser le plan avec le bouton gauche de la souris.';
     return 'Cliquez un élément pour le sélectionner. Glissez dans le vide pour en encadrer plusieurs. Ctrl ou Maj + clic pour ajouter.';
 }
@@ -679,8 +683,20 @@ function refreshToolHint() {
     if (badge.textContent !== badgeText) badge.textContent = badgeText;
     if (hintEl.textContent !== hint) hintEl.textContent = hint;
 }
+
+// Bloc du mode (et des boutons Désélection / Supprimer) : posé en haut à droite du plan, en 2D comme en 3D
+function placeModeBar() {
+    const bar = document.getElementById('mode-bar');
+    if (!bar) return;
+    const host = currentMode === '3d'
+        ? document.getElementById('three-container')
+        : document.getElementById('floorplan-canvas').parentElement;
+    if (host && bar.parentElement !== host) host.appendChild(bar);
+}
+
 // L'indication se place dans le coin haut-gauche du plan, en 2D comme en 3D
 function placeToolHint() {
+    placeModeBar();
     const wrap = document.getElementById('tool-hint');
     const slot = document.getElementById('tool-hint-slot-3d');
     if (!wrap || !slot) return;
@@ -852,6 +868,7 @@ function updateSelectedWallLength(valStr) {
 // C2 : suppression de toute la sélection 2D (murs, appareils, ouvertures)
 // Suppr : supprime la sélection courante, en 2D comme en 3D (murs, appareils, ouvertures, trémies, escaliers)
 function deleteCurrentSelection() {
+    if (currentMode === '2d' && textById(selected3DId)) return deleteText2D();
     const shaftSelected = [...(projectData.shafts || []), ...(projectData.stairs || [])].some(s => s.id === selected3DId);
     if (currentMode === '3d' && selected3DId) return deleteSelected3DElement();   // élément 3D : prioritaire
     if (selectedWallIds.length || (currentMode === '2d' && (selectedDeviceIds.length || selectedOpeningIds.length || shaftSelected))) return deleteMultiSelection();
@@ -2007,6 +2024,26 @@ function collidingElementIds() {
     return ids;
 }
 
+// Appelée par le bouton « Garder cette hauteur » (index.html)
+function acceptSwitchHeightSelected() {
+    const m = selectedMovable();
+    if (m && m.item) acceptSwitchHeight(m.item);
+}
+// Crée le message et le bouton dans l'inspecteur 3D s'ils n'existent pas (ou s'ils sont incomplets)
+function ensureSwitchHeightWarning() {
+    const box = document.getElementById('height-control-container');
+    if (!box) return;
+    const old = document.getElementById('switch-height-warning');
+    if (old && old.querySelector('#switch-height-accept')) return;   // déjà complet
+    if (old) old.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'switch-height-warning';
+    wrap.className = 'hidden mt-1 text-xs text-amber-400';
+    wrap.innerHTML = '<span id="switch-height-warning-text"></span>' +
+        '<button type="button" id="switch-height-accept" class="ml-2 underline">Garder cette hauteur</button>';
+    box.appendChild(wrap);
+    document.getElementById('switch-height-accept').addEventListener('click', acceptSwitchHeightSelected);
+}
 // Emprise en plan d'une trémie (carré de sa taille, posé contre son mur)
 function shaftRectOf(sh) {
     const p = shaftPos2D(sh);
@@ -2430,6 +2467,7 @@ function computeCircuitReport() {
         const id = (net.warnTarget || {})[w] || null;
         addAlert(levelPrefix(activeLevelId) + w, { tab: routingTabFor(w), elId: id, hint: routingHintFor(w) });
     });
+
     // commandes et charges comptées sur tout le projet : une liaison peut relier deux niveaux
     const nSw = projectData.electrical.filter(isLightingControl).length;
     const nVaEtVient = projectData.electrical.filter(el => el.type === 'switch_va_et_vient').length;
@@ -2480,12 +2518,6 @@ function computeCircuitReport() {
     if (countType('shutter_control') > 0 && countType('shutter_motor') === 0) addAlert('Commande de volet sans moteur.', { tab: 'appareillage', hint: 'Ajoutez un moteur de volet roulant depuis l’onglet Appareillages.' });
     if (countType('shutter_motor') > 0 && countType('shutter_control') === 0) addAlert('Moteur de volet sans commande.', { tab: 'appareillage', hint: 'Ajoutez une commande de volet roulant depuis l’onglet Appareillages.' });
     if (nVaEtVient % 2 !== 0) addAlert('Nombre impair d’interrupteurs va-et-vient : associez-les par deux pour commander chaque éclairage.', { tab: 'appareillage', hint: 'Ajoutez ou retirez un interrupteur va-et-vient, depuis l’onglet Appareillages, pour en avoir un nombre pair.' });
-    electricalOn().filter(isControl).forEach(el => {
-        const height = el.height || 110;
-        if (height < 90 || height > 130) {
-            addAlert(levelPrefix(el.levelId) + electricalDisplayName(el) + ' hors de la plage de hauteur usuelle 0,90–1,30 m.', { tab: 'appareillage', elId: el.id, hint: 'Sélectionnez-le, puis réglez sa hauteur entre 0,90 et 1,30 m.' });
-        }
-    });
     rows.forEach(r => r.warnings.forEach(w => addAlert(r.circuit.name + ' : ' + w, { tab: 'circuits', circuitId: r.circuit.id, hint: circuitWarningHint(w) })));
     computeOpeningCollisions().forEach(({ el, isDoor, box, dist, z }) => {
         // cm à parcourir le long du mur pour sortir de la largeur ; cm à monter ou descendre pour sortir de la hauteur
@@ -3470,7 +3502,7 @@ function clearAllSelection() {
 // Bouton « Désélection » de la sidebar : visible pendant la pose d'un appareil ou d'une ouverture (2D et 3D)
 function updateStopPlacementButton(key) {
     const b = document.getElementById('btn-stop-placement');
-    if (b) b.classList.toggle('hidden', key !== 'place');
+    if (b) b.classList.toggle('hidden', key !== 'place' && key !== 'text' && key !== 'wall');
     updateDeselectButtons();
 }
 
@@ -3820,14 +3852,15 @@ function syncElementInspectors() {
     const selectedDoor = !!(op && op.type === 'door_single');
     const shaftSel = !el && !op && (projectData.shafts || []).some(s => s.id === selected3DId);
     const stairSel = !el && !op && !shaftSel && (projectData.stairs || []).some(s => s.id === selected3DId);
-    const isSelected = !!(el || op || shaftSel || stairSel);
+    const txSel = textById(selected3DId);
+    const isSelected = !!(el || op || shaftSel || stairSel || txSel);
     // Message d'attente identique en 2D et en 3D (inspecteur vide)
     const emptyDock = document.getElementById('inspector-dock-empty');
     if (emptyDock) emptyDock.classList.toggle('hidden', isSelected);
     const emptyDock2d = document.getElementById('inspector-dock-empty-2d');
     if (emptyDock2d) emptyDock2d.classList.toggle('hidden', isSelected);
     const dockInspector = document.getElementById('inspector-3d');
-    if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected || shaftSel);
+    if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected || shaftSel || txSel);
     // un appareil relié à un circuit : l'onglet Circuits s'ouvre pour montrer ce circuit
     if (el && selectedCircuitId && rightTabCurrent !== 'circuits') setRightTab('circuits');
     updateLightingAssociations(el);
@@ -3843,6 +3876,11 @@ function syncElementInspectors() {
     if (c3) c3.classList.toggle('hidden', !circ);
     setCircuitInspectorText(el);
     syncDedicatedInspectors(el, dedicated);
+    const txBox = document.getElementById('text-inspector-2d');
+    if (txBox) {
+        txBox.classList.toggle('hidden', !txSel);
+        if (txSel) document.getElementById('text-value-2d').value = txSel.text || '';
+    }
     const box = document.getElementById('el-inspector-2d');
     if (box) {
         // l'inspecteur 2D couvre aussi l'escalier, comme l'inspecteur 3D
@@ -4140,6 +4178,8 @@ function selectedMovable() {
     if (op) return { kind: 'ouverture', item: op };
     const sh = (projectData.shafts || []).find(x => x.id === id);
     if (sh) return { kind: 'trémie', item: sh };
+    const tx = textById(id);
+    if (tx) return { kind: 'texte', item: tx };
     const st = (projectData.stairs || []).find(x => x.id === id);
     if (st) return { kind: 'escalier', item: st };
     return null;
@@ -4189,7 +4229,7 @@ function nudgeSelected(key, stepCm) {
     if (horiz === 0 && vert === 0) return false;
     const it = m.item;
     const ax = cameraPlanAxes();
-      if (m.kind === 'escalier' || m.kind === 'plafonnier' || m.kind === 'trémie') {
+      if (m.kind === 'escalier' || m.kind === 'plafonnier' || m.kind === 'trémie' || m.kind === 'texte') {
         // déplacement sur le plan : en 3D, traduit depuis l'écran
         // flèche haut = vers le fond de la vue (avant), bas = vers la caméra
         const dx = ax ? horiz * ax.r.x - vert * ax.f.x : horiz;
@@ -4200,7 +4240,7 @@ function nudgeSelected(key, stepCm) {
             it.x = Math.round(it.x + dx * stepCm);
             it.y = Math.round(it.y + dy * stepCm);
             snapStairToWalls(it, prev);
-        } else if (m.kind === 'trémie') {
+        } else if (m.kind === 'trémie' || m.kind === 'texte') {
             it.x = Math.round(it.x + dx * stepCm);
             it.y = Math.round(it.y + dy * stepCm);
         } else {

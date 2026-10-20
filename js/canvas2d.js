@@ -183,6 +183,7 @@ function redraw2D() {
     });
 
     draw2DEquipment();
+    drawTexts2D();
 
     // fantôme de pose : l'élément qu'on va poser, translucide, sous le curseur
     if (!isPrintRendering && currentTool === 'place' && placeGhost2D) drawPlaceGhost2D(placeGhost2D);
@@ -433,8 +434,23 @@ function on2DMouseDown(e) {
     } else if (currentTool === 'place') {
         place2DAt(coords);
         return;
+    } else if (currentTool === 'text') {
+        placeText2D(coords);
+        return;
     } else if (currentTool === 'select') {
         const hit = pickElement2D(coords);
+        if (hit && textById(hit.id)) {
+            // texte : un clic le sélectionne et le déplacement commence, comme les autres éléments en 2D
+            setSelectedWalls([]);
+            draggingWall = null;
+            selected3DId = hit.id;
+            selectedCircuitId = null;
+            draggingEl2D = { id: hit.id, moved: false, grab: textGrab2D(hit.id, coords) };
+            syncElementInspectors();
+            updateCircuitsUI();
+            redraw2D();
+            return;
+        }
         if (hit) {
             setSelectedWalls([]);
             draggingWall = null;
@@ -541,6 +557,7 @@ function circuitForDoubleClick(el) {
 function on2DDoubleClick(e) {
     if (currentTool !== 'select') return;
     const hit = pickElement2D(worldToCanvasCoords(e.clientX, e.clientY));
+    if (hit && textById(hit.id)) { editText2D(hit.id); return; }
     const el = hit ? electricalOn().find(x => x.id === hit.id) : null;
     const circ = el ? circuitForDoubleClick(el) : null;
     if (circ) selectCircuit(circ.id);
@@ -1734,6 +1751,10 @@ function pickElement2D(coords) {
             if (dd < 10 / zoom + 4 && dd < bd) { bd = dd; best = { id: sh.id }; }
         }
     });
+    if (!best) textsOn().forEach(tx => {
+        const b = textBox2D(tx);
+        if (Math.abs(coords.x - tx.x) <= b.w / 2 + 4 / zoom && Math.abs(coords.y - tx.y) <= b.h / 2 + 4 / zoom) best = { id: tx.id };
+    });
     if (!best) stairsOn().forEach(st => {
         const R = stairRect(st);
         const dx = coords.x - R.cx, dy = coords.y - R.cy;
@@ -1858,6 +1879,14 @@ function place2DAt(coords) {
 }
 function dragElement2D(coords) {
     if (!draggingEl2D) return;
+    const tx = textById(draggingEl2D.id);
+    if (tx) {
+        if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
+        tx.x = Math.round(coords.x - draggingEl2D.grab.x);
+        tx.y = Math.round(coords.y - draggingEl2D.grab.y);
+        redraw2D();
+        return;
+    }
     const el = projectData.electrical.find(e => e.id === draggingEl2D.id);
     const op = !el ? projectData.openings.find(o => o.id === draggingEl2D.id) : null;
     const sh = !el && !op ? (projectData.shafts || []).find(s => s.id === draggingEl2D.id) : null;
@@ -1902,4 +1931,97 @@ function dragElement2D(coords) {
         if (el || sh || (op && op.type === 'door_single')) item.side = info.side;
     }
     redraw2D();
+}
+// ---------- Textes ajoutables (noms de pièces), patch 71 ----------
+// Données : projectData.annotations, { id, kind: 'texte', levelId, x, y, text }. Hors câblage et collisions.
+const TEXT_FONT_PX = 12;
+function textsOn() {
+    return (projectData.annotations || []).filter(a => a.kind === 'texte' && a.levelId === activeLevelId);
+}
+function textById(id) {
+    if (!id) return null;
+    return (projectData.annotations || []).find(a => a.kind === 'texte' && a.id === id) || null;
+}
+// Taille approximative du texte dans le plan (cm), pour la sélection au clic
+function textBox2D(tx) {
+    ctx2D.font = 'bold ' + (TEXT_FONT_PX / zoom) + 'px Inter, sans-serif';
+    return { w: ctx2D.measureText(tx.text || '').width, h: TEXT_FONT_PX / zoom };
+}
+function textGrab2D(id, coords) {
+    const tx = textById(id);
+    return tx ? { x: coords.x - tx.x, y: coords.y - tx.y } : { x: 0, y: 0 };
+}
+// Style aligné sur les noms de trémies : 12 px, gras, sans fond ; taille fixe à l'écran
+function drawTexts2D() {
+    const light = currentTheme === 'light';
+    textsOn().forEach(tx => {
+        ctx2D.save();
+        ctx2D.translate(tx.x, tx.y);
+        ctx2D.rotate(-rot2D);
+        ctx2D.font = 'bold ' + (TEXT_FONT_PX / zoom) + 'px Inter, sans-serif';
+        ctx2D.textAlign = 'center';
+        ctx2D.textBaseline = 'middle';
+        ctx2D.fillStyle = light ? '#0f172a' : '#f8fafc';
+        ctx2D.fillText(tx.text || '', 0, 0);
+        if (!isPrintRendering && selected3DId === tx.id) {
+            const b = textBox2D(tx);
+            ctx2D.strokeStyle = light ? '#047857' : '#f8fafc';
+            ctx2D.lineWidth = 1 / zoom;
+            ctx2D.setLineDash([4 / zoom, 3 / zoom]);
+            ctx2D.strokeRect(-b.w / 2 - 4 / zoom, -b.h / 2 - 4 / zoom, b.w + 8 / zoom, b.h + 8 / zoom);
+            ctx2D.setLineDash([]);
+        }
+        ctx2D.restore();
+    });
+}
+function placeText2D(coords) {
+    askFields('Nouveau texte', [{ id: 'text', label: 'Texte (nom de pièce)', value: '' }], 'Ajouter',
+        v => v.text ? null : 'Saisissez un texte.')
+        .then(r => {
+            if (!r) return;
+            saveStateToUndo();
+            if (!projectData.annotations) projectData.annotations = [];
+            const tx = { id: 'tx_' + Date.now() + '_' + Math.floor(Math.random() * 1000), kind: 'texte',
+                levelId: activeLevelId, x: Math.round(coords.x), y: Math.round(coords.y), text: r.text };
+            projectData.annotations.push(tx);
+            selected3DId = tx.id;
+            syncElementInspectors();
+            redraw2D();
+            showNotification('Texte ajouté', 'success');
+        });
+}
+function editText2D(id) {
+    const tx = textById(id);
+    if (!tx) return;
+    askFields('Modifier le texte', [{ id: 'text', label: 'Texte', value: tx.text || '' }], 'Enregistrer',
+        v => v.text ? null : 'Saisissez un texte.')
+        .then(r => {
+            if (!r || r.text === tx.text) return;
+            saveStateToUndo();
+            tx.text = r.text;
+            syncElementInspectors();
+            redraw2D();
+        });
+}
+// Champ « Texte » de l'inspecteur
+function setSelectedTextValue(value) {
+    const tx = textById(selected3DId);
+    const v = (value || '').trim();
+    if (!tx || !v || v === tx.text) return;
+    saveStateToUndo();
+    tx.text = v;
+    redraw2D();
+    syncElementInspectors();
+}
+function deleteText2D() {
+    const tx = textById(selected3DId);
+    if (!tx) return;
+    return confirmDeletion('le texte « ' + tx.text + ' »').then(ok => {
+        if (!ok) return;
+        saveStateToUndo();
+        projectData.annotations = projectData.annotations.filter(a => a.id !== tx.id);
+        selected3DId = null;
+        syncElementInspectors();
+        redraw2D();
+    });
 }

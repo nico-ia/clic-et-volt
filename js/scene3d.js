@@ -3177,6 +3177,7 @@ function on3DPointerDown(e) {
             while (target.parent && target.parent !== threeScene) target = target.parent;
             if (target.userData && target.userData.id) {
                 const targetId = target.userData.id;
+                const wasSelected = selected3DId === target.userData.id;   // élément déjà sélectionné avant ce clic
                 setSelectedWalls([]);   // un mur sélectionné ne reste pas ouvert quand un autre élément est choisi
                 select3DElement(targetId, target);
                 if ((projectData.shafts || []).some(s => s.id === targetId)) {
@@ -3196,7 +3197,8 @@ function on3DPointerDown(e) {
                     updateCircuitsUI();
                     target = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === targetId) || target;
                 }
-
+                // règle « sélectionner d'abord » : un premier clic ne fait que sélectionner ; le glissement demande un second clic
+                if (!wasSelected) return;
                 let isCeiling = selectedElectrical && CEILING_TYPES.includes(selectedElectrical.type);
                 const dragStair = (projectData.stairs || []).find(s => s.id === targetId);
                 dragging3DElementId = targetId;
@@ -3236,7 +3238,9 @@ function on3DPointerDown(e) {
                 if (selected3DId) { selected3DId = null; selectedCircuitId = null; }
                 setSelectedWalls([wid]);
                 syncElementInspectors();
-                if (canEditWalls()) startWallDrag3D(e, wid, wasSelected);
+                // règle « sélectionner d'abord » : le glissement du mur demande qu'il soit déjà sélectionné ;
+                // canEditWalls() garde le blocage du bouton « Modifier les murs » et du verrou
+                if (canEditWalls() && wasSelected) startWallDrag3D(e, wid, wasSelected);
                 build3DScene();
             }
         }
@@ -3657,21 +3661,18 @@ function buildStair3D(st, cx, cy, ghost = false) {
 }
 // Escalier réel (ou fantôme d'un autre niveau) : ajouté à la scène, avec sa zone cliquable si ce n'est pas un fantôme
 function addStair3D(st, cx, cy, ghost = false) {
-    const L = st.length || 300, W = st.width || 90;
-    const H = Math.max(stairRiseCm(st), 1);
     const group = buildStair3D(st, cx, cy, ghost);
-    // zone invisible sur toute la montée : permet de cliquer l'escalier et de le glisser
-    const hit = new THREE.Mesh(
-        new THREE.BoxGeometry(L, H + 10, W),
-        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
-    hit.position.set(0, (H + 10) / 2, 0);
-    hit.userData = { type: 'stair', id: st.id };
+    // zone cliquable : chaque marche visible (horizontale et contremarche), pas le volume entier de la montée
     if (!ghost) {
-        group.add(hit);
-        interactiveObjects3D.push(hit);
+        group.children.forEach(child => {
+            if (!child.isMesh) return;   // le contour au sol (LineSegments) n'est pas cliquable
+            child.userData = { type: 'stair', id: st.id };
+            interactiveObjects3D.push(child);
+        });
     }
     threeScene.add(group);
     wallMeshes3D.push(group);
+
 }
 function shaftLevelNames(sh) {
     return (sh.levelIds || [sh.levelId]).map(lv => {
@@ -3827,6 +3828,7 @@ function updateSelected3DHeight(val) {
         // trémie sélectionnée : hauteur de son point de dérivation sur ce niveau
         sh.derivHeight = Object.assign({}, sh.derivHeight, { [activeLevelId]: Math.min(height, levelCeilingOf(activeLevelId) - DERIV_BOX_H / 2) });
     }
+
     refreshSliderView();
 }
 async function deleteSelected3DElement() {
