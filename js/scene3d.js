@@ -2531,6 +2531,16 @@ function build3DScene() {
         }
     });
 
+    // Textes ajoutables (patch 72) : étiquette à taille fixe, à la hauteur choisie, cliquable
+    textsOn().forEach(tx => {
+        const s = makeScreenLabel3D(tx.text || '', 12, { bold: true, halo: false, dark: '#f8fafc' });
+        s.position.set(tx.x - cx, tx.height || 150, tx.y - cy);
+        s.renderOrder = 11;
+        s.userData = { type: 'texte', id: tx.id };
+        threeScene.add(s);
+        wallMeshes3D.push(s);
+        interactiveObjects3D.push(s);
+    });
     addCircuitElementHighlights();
     addWallSelectionHighlights();
     addCollisionHighlights();
@@ -2936,9 +2946,19 @@ function traceBannerText3D() {
     return 'Pose : Mur ; longueur ' + len.toFixed(2).replace('.', ',') + ' m ; clic pour valider, clic droit pour terminer (Échap pour arrêter)';
 }
 
+// Longueur du tracé en cours, affichée dans le plan 3D près du tracé (comme la 2D)
+let wallLabel3D = null;
+function removeWallLabel3D() {
+    if (!wallLabel3D) return;
+    if (threeScene) threeScene.remove(wallLabel3D);
+    const i = SCREEN_LABELS_3D.findIndex(l => l.sprite === wallLabel3D);
+    if (i >= 0) SCREEN_LABELS_3D.splice(i, 1);
+    wallLabel3D = null;
+}
 function updateWallPreview3D() {
     if (wallPreview3D && wallPreview3D.parent) wallPreview3D.parent.remove(wallPreview3D);
     wallPreview3D = null;
+    removeWallLabel3D();
     if (activePlacementType === 'wall') refreshToolHint();
     if (!threeScene || activePlacementType !== 'wall' || !wallDraft3D || !wallCursor3D) return;
     const { cx, cy } = scene3DCentre();
@@ -2949,6 +2969,11 @@ function updateWallPreview3D() {
     wallPreview3D = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#38bdf8' }));
     wallPreview3D.renderOrder = 10;
     threeScene.add(wallPreview3D);
+    // Longueur du segment en cours : taille fixe à l'écran, au milieu du segment
+    const lenM = Math.hypot(wallCursor3D.x - wallDraft3D.x, wallCursor3D.y - wallDraft3D.y) / 100;
+    wallLabel3D = makeScreenLabel3D(lenM.toFixed(2).replace('.', ',') + ' m', 12, { bold: true, halo: true, dark: '#f8fafc' });
+    wallLabel3D.position.set((wallDraft3D.x + wallCursor3D.x) / 2 - cx, 60, (wallDraft3D.y + wallCursor3D.y) / 2 - cy);
+    threeScene.add(wallLabel3D);
 }
 
 // Un clic au sol : premier point, ou fin d'un segment qui devient le point de départ du suivant
@@ -3000,6 +3025,12 @@ function on3DPointerDown(e) {
         return;
     }
     if (activePlacementType) {
+        if (activePlacementType === 'text') {
+            // texte : posé au point du sol cliqué (coordonnées du plan)
+            const p = floorPlanPointFrom3D(e);
+            if (p) placeText2D(p);
+            return;
+        }
         if (activePlacementType === 'stair') {
             // escalier posé au sol : son emprise est centrée sur le point cliqué
             const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -3205,7 +3236,7 @@ function on3DPointerDown(e) {
                 drag3DMoved = false;   // C1 : l'annulation est enregistrée au premier vrai déplacement
                 drag3DDown = { x: e.clientX, y: e.clientY };
                 const dragShaft = (projectData.shafts || []).find(s => s.id === targetId);
-                if (isCeiling || dragStair || dragShaft) {
+                if (isCeiling || dragStair || dragShaft || textById(targetId)) {
                     // trémie : plan du sol (base de sa colonne), pas le centre de la colonne, sinon le point saisi dérive en perspective
                     const floorY = dragShaft ? shaftSpan3D(dragShaft).base : target.position.y;
                     dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(target.position.x, floorY, target.position.z));
@@ -3261,6 +3292,7 @@ function on3DDoubleClick(e) {
         while (o && !(o.userData && o.userData.id)) o = o.parent;
         if (o) { id = o.userData.id; break; }
     }
+    if (id && textById(id)) { editText2D(id); return; }
     const el = id ? projectData.electrical.find(x => x.id === id) : null;
     const circ = el ? circuitForDoubleClick(el) : null;
     if (circ) selectCircuit(circ.id);
@@ -3303,7 +3335,7 @@ function on3DPointerMove(e) {
         if (floorPt && wallDraft3D) { wallCursor3D = snapTracePoint3D(floorPt, wallDraft3D); updateWallPreview3D(); }
         return;
     }
-    if (activePlacementType && !dragging3DElementId) { updatePlaceGhost3D(e); return; }
+    if (activePlacementType && activePlacementType !== 'text' && !dragging3DElementId) { updatePlaceGhost3D(e); return; }
     if (!dragging3DElementId) { hover3DTooltip(e); return; }
     // un simple clic ne déplace rien : le glissement commence après 5 px de mouvement
     if (!drag3DMoved && drag3DDown && Math.hypot(e.clientX - drag3DDown.x, e.clientY - drag3DDown.y) < 5) return;
@@ -3334,7 +3366,13 @@ function on3DPointerMove(e) {
             scheduleBuild3D();
             return;
         }
-
+        const textDrag = textById(dragging3DElementId);
+        if (textDrag) {
+            textDrag.x = Math.round(planeIntersectPoint.x + cx);
+            textDrag.y = Math.round(planeIntersectPoint.z + cy);
+            scheduleBuild3D();
+            return;
+        }
         let ceilingEl = projectData.electrical.find(el => el.id === dragging3DElementId && CEILING_TYPES.includes(el.type));
         if (ceilingEl) {
             ceilingEl.x = planeIntersectPoint.x + cx;
@@ -3700,6 +3738,7 @@ function select3DElement(id, meshObj) {
     document.getElementById('inspector-3d').classList.remove('hidden');
     syncElementInspectors();
 
+    if (textById(id)) { syncElementInspectors(); return; }
     let foundEl = projectData.electrical.find(el => el.id === id);
     let foundOp = projectData.openings.find(op => op.id === id);
     let item = foundEl || foundOp;
@@ -3790,7 +3829,8 @@ function updateSelectionHighlight(obj) {
         selectedHighlightMesh = null;
     }
     if (!obj) return;
-    // escalier : le cadre suit le groupe (et non la zone cliquable seule) ; matrices à jour avant calcul
+    if (obj.isSprite) return;   // texte : pas de cadre (l'inspecteur affiche sa sélection)
+    // escalier : le cadre suit le groupe
     const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
     target.updateWorldMatrix(true, true);
     selectedHighlightMesh = new THREE.BoxHelper(target, '#f8fafc');
@@ -3816,7 +3856,13 @@ function updateSelected3DHeight(val) {
     if (!selected3DId) return;
     const height = parseInt(val);
     document.getElementById('inspector-height-3d-val').textContent = (height / 100).toFixed(2) + ' m';
-
+    const txH = textById(selected3DId);
+    if (txH) {
+        if (!posUndoPending) { saveStateToUndo(); posUndoPending = true; }
+        txH.height = height;
+        build3DScene();
+        return;
+    }
     let el = projectData.electrical.find(e => e.id === selected3DId);
     const sh = !el ? (projectData.shafts || []).find(x => x.id === selected3DId) : null;
     if (!el && !sh) return;

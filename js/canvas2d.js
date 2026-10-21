@@ -219,18 +219,19 @@ function redraw2D() {
         const dy = mouseCurrentPos.y - drawingStartPoint.y;
         const length = Math.hypot(dx, dy);
         if (length > 0) {
-            const labelX = (drawingStartPoint.x + mouseCurrentPos.x) / 2 - dy / length * 18;
-            const labelY = (drawingStartPoint.y + mouseCurrentPos.y) / 2 + dx / length * 18;
+            // patch 77 : taille fixe à l'écran (on divise par le zoom, comme le texte du plan)
+            const labelX = (drawingStartPoint.x + mouseCurrentPos.x) / 2 - dy / length * (18 / zoom);
+            const labelY = (drawingStartPoint.y + mouseCurrentPos.y) / 2 + dx / length * (18 / zoom);
             const label = (length / 100).toFixed(2) + ' m';
-            ctx2D.font = 'bold 14px Inter, sans-serif';
+            ctx2D.font = 'bold ' + (14 / zoom) + 'px Inter, sans-serif';
             ctx2D.textAlign = 'center';
             ctx2D.textBaseline = 'middle';
-            const labelWidth = ctx2D.measureText(label).width + 12;
+            const labelWidth = ctx2D.measureText(label).width + 12 / zoom;
             ctx2D.save();
             ctx2D.translate(labelX, labelY);
             ctx2D.rotate(-rot2D);
             ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
-            ctx2D.fillRect(-labelWidth / 2, -10, labelWidth, 20);
+            ctx2D.fillRect(-labelWidth / 2, -10 / zoom, labelWidth, 20 / zoom);
             ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#a7f3d0';
             ctx2D.fillText(label, 0, 0);
             ctx2D.restore();
@@ -319,6 +320,11 @@ function setPlanRotation(deg) {
     if (label) label.textContent = v + '°';
 }
 function rotatePlan(deltaDeg) { rotateView2D(rot2D + deltaDeg * Math.PI / 180); }
+
+// Trémies et escaliers sont des ouvertures (ils percent le plafond) : même sélection que les ouvertures
+function isOpeningLikeId(id) {
+    return openingsOn().some(x => x.id === id) || shaftsOn().some(x => x.id === id) || stairsOn().some(x => x.id === id);
+}
 
 function on2DMouseDown(e) {
     const coords = worldToCanvasCoords(e.clientX, e.clientY);
@@ -439,6 +445,27 @@ function on2DMouseDown(e) {
         return;
     } else if (currentTool === 'select') {
         const hit = pickElement2D(coords);
+        // patch 78 : Ctrl / Maj + clic ajoute ou retire un appareil ou une ouverture (trémies et escaliers compris)
+        if (hit && (e.ctrlKey || e.metaKey || e.shiftKey) && !textById(hit.id)) {
+            const isDev = electricalOn().some(x => x.id === hit.id);
+            const isOp = !isDev && isOpeningLikeId(hit.id);
+            if (isDev || isOp) {
+                // l'élément seul déjà sélectionné rejoint la sélection multiple
+                const prev = selected3DId;
+                if (prev && prev !== hit.id) {
+                    if (electricalOn().some(x => x.id === prev) && !selectedDeviceIds.includes(prev)) selectedDeviceIds = [...selectedDeviceIds, prev];
+                    else if (isOpeningLikeId(prev) && !selectedOpeningIds.includes(prev)) selectedOpeningIds = [...selectedOpeningIds, prev];
+                }
+                if (isDev) selectedDeviceIds = selectedDeviceIds.includes(hit.id) ? selectedDeviceIds.filter(id => id !== hit.id) : [...selectedDeviceIds, hit.id];
+                else selectedOpeningIds = selectedOpeningIds.includes(hit.id) ? selectedOpeningIds.filter(id => id !== hit.id) : [...selectedOpeningIds, hit.id];
+                selected3DId = null;
+                selectedCircuitId = null;
+                syncElementInspectors();
+                updateCircuitsUI();
+                redraw2D();
+                return;
+            }
+        }
         if (hit && textById(hit.id)) {
             // texte : un clic le sélectionne et le déplacement commence, comme les autres éléments en 2D
             setSelectedWalls([]);
@@ -1587,7 +1614,7 @@ function draw2DEquipment() {
     shaftsOn().forEach(sh => {
         const p = shaftPos2D(sh);
         if (!p) return;
-        const s = sh.size || 40, hot = sh.id === selected3DId;
+        const s = sh.size || 40, hot = sh.id === selected3DId || selectedOpeningIds.includes(sh.id);
         ctx2D.save();
         ctx2D.translate(p.x, p.y);
         ctx2D.rotate(p.angle);
@@ -1676,7 +1703,7 @@ function stairArrowSign(st) {
 }
 // Escalier en 2D : emprise orientée, traits de marches, flèche vers la marche haute, nom des niveaux reliés
 function drawStair2D(st, colliding) {
-    const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId;
+    const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId || selectedOpeningIds.includes(st.id);
     ctx2D.save();
     ctx2D.translate(st.x, st.y);
     ctx2D.rotate((st.angleDeg || 0) * Math.PI / 180);
@@ -1974,6 +2001,11 @@ function drawTexts2D() {
         ctx2D.restore();
     });
 }
+// Rafraîchit la vue active après une modification de texte
+function refreshAfterText() {
+    if (currentMode === '3d') build3DScene();
+    else redraw2D();
+}
 function placeText2D(coords) {
     askFields('Nouveau texte', [{ id: 'text', label: 'Texte (nom de pièce)', value: '' }], 'Ajouter',
         v => v.text ? null : 'Saisissez un texte.')
@@ -1982,11 +2014,11 @@ function placeText2D(coords) {
             saveStateToUndo();
             if (!projectData.annotations) projectData.annotations = [];
             const tx = { id: 'tx_' + Date.now() + '_' + Math.floor(Math.random() * 1000), kind: 'texte',
-                levelId: activeLevelId, x: Math.round(coords.x), y: Math.round(coords.y), text: r.text };
+                levelId: activeLevelId, x: Math.round(coords.x), y: Math.round(coords.y), height: 150, text: r.text };
             projectData.annotations.push(tx);
             selected3DId = tx.id;
             syncElementInspectors();
-            redraw2D();
+            refreshAfterText();
             showNotification('Texte ajouté', 'success');
         });
 }
@@ -2000,18 +2032,17 @@ function editText2D(id) {
             saveStateToUndo();
             tx.text = r.text;
             syncElementInspectors();
-            redraw2D();
+            refreshAfterText();
         });
 }
-// Champ « Texte » de l'inspecteur
 function setSelectedTextValue(value) {
     const tx = textById(selected3DId);
     const v = (value || '').trim();
     if (!tx || !v || v === tx.text) return;
     saveStateToUndo();
     tx.text = v;
-    redraw2D();
     syncElementInspectors();
+    refreshAfterText();
 }
 function deleteText2D() {
     const tx = textById(selected3DId);
@@ -2022,6 +2053,6 @@ function deleteText2D() {
         projectData.annotations = projectData.annotations.filter(a => a.id !== tx.id);
         selected3DId = null;
         syncElementInspectors();
-        redraw2D();
+        refreshAfterText();
     });
 }

@@ -466,12 +466,28 @@ function redoAction() {
     showNotification("Action rétablie", "success");
 }
 
+// L'outil choisi reste le même d'une vue à l'autre : Sélectionner, Tracer mur, Texte ou un appareil
+function syncToolBetweenViews(mode) {
+    if (mode === '3d') {
+        const want = (currentTool === 'wall' || currentTool === 'text') ? currentTool
+            : currentTool === 'place' ? document.getElementById('place-type').value : null;
+        if (want !== activePlacementType) {
+            if (activePlacementType) setPlacementType(activePlacementType);   // désactive l'ancien mode
+            if (want) setPlacementType(want);                                 // active le nouveau
+        }
+    } else if (mode === '2d') {
+        const t = activePlacementType;
+        if (t) setPlacementType(t);                    // quitte le mode de pose 3D
+        if (t === 'wall' || t === 'text') setTool(t);
+        else if (t) { document.getElementById('place-type').value = t; setTool('place'); }
+        else if (currentTool !== 'select' && currentTool !== 'pan') setTool('select');
+    }
+}
+
 function switchMode(mode) {
     currentMode = mode;
     placeSharedInspectors();
-    const textTool = document.getElementById('btn-tool-text');
-    if (textTool) textTool.classList.toggle('hidden', mode === '3d');   // patch 71 : texte en 2D seulement
-    if (mode === '3d' && textById(selected3DId)) selected3DId = null;   // un texte 2D n'est pas sélectionnable en 3D
+    syncToolBetweenViews(mode);   // l'outil choisi suit le passage d'une vue à l'autre
     refreshToolButtons();   // l'outil actif est affiché à l'identique dans la vue qui s'ouvre
     document.getElementById('view-2d').classList.toggle('hidden', mode !== '2d');
     document.getElementById('view-3d').classList.toggle('hidden', mode !== '3d');
@@ -635,7 +651,7 @@ function setPlaceType2D(type) {
 const MODE_BADGES = { select: 'Mode : sélection', wall: 'Mode : tracer un mur', place: 'Mode : pose d’appareil', text: 'Mode : ajout de texte', pan: 'Mode : déplacer la vue' };
 
 function currentModeKey() {
-    if (currentMode === '3d') return activePlacementType === 'wall' ? 'wall' : (activePlacementType ? 'place' : 'select');
+    if (currentMode === '3d') return activePlacementType === 'wall' ? 'wall' : activePlacementType === 'text' ? 'text' : (activePlacementType ? 'place' : 'select');
     return MODE_BADGES[currentTool] ? currentTool : 'select';
 }
 
@@ -654,7 +670,25 @@ function modeHint(key) {
     if (key === 'place') return placementHintText(currentMode === '3d' ? activePlacementType : document.getElementById('place-type').value);
     if (key === 'text') return 'Cliquez sur le plan, à l’endroit du texte (Échap pour arrêter).';
     if (key === 'pan') return 'Faites glisser le plan avec le bouton gauche de la souris.';
-    return 'Cliquez un élément pour le sélectionner. Glissez dans le vide pour en encadrer plusieurs. Ctrl ou Maj + clic pour ajouter.';
+    return 'Cliquez un élément pour le sélectionner. Pour en choisir plusieurs : Ctrl+clic ou Maj+clic sur chacun, ou glissez dans le vide pour encadrer.';
+}
+
+// Aide du mode courant : titre et consigne en cours (se met à jour pendant qu'elle est ouverte)
+function updateModeHelp() {
+    const p = document.getElementById('mode-help');
+    if (!p || p.classList.contains('hidden')) return;
+    const key = currentModeKey();
+    const live = document.getElementById('drawing-instruction-hint');
+    document.getElementById('mode-help-title').textContent = MODE_BADGES[key];
+    document.getElementById('mode-help-text').textContent = (live && live.textContent) || modeHint(key);
+}
+// « ? » du bloc de mode : ouvre ou ferme l'aide. Seul l'utilisateur la ferme (ce bouton ou la croix).
+function toggleModeHelp(e) {
+    if (e) e.stopPropagation();
+    const p = document.getElementById('mode-help');
+    if (!p) return;
+    p.classList.toggle('hidden');
+    updateModeHelp();
 }
 
 // Libellé du mode et phrase d'aide : mêmes emplacements en 2D et en 3D (haut de la sidebar gauche, coin haut-gauche du plan)
@@ -663,7 +697,9 @@ function refreshToolHint() {
     let hint = modeHint(key);
     const n = selectionCount();
     if (key === 'select' && n) {
-        hint = (n === 1 ? '1 élément sélectionné' : n + ' éléments sélectionnés') + ' : glissez pour déplacer, Suppr pour effacer, Échap pour désélectionner.';
+        hint = n === 1
+            ? '1 élément sélectionné : glissez pour le déplacer, Ctrl+clic ou Maj+clic pour en ajouter, Suppr pour l’effacer, Échap pour désélectionner.'
+            : n + ' éléments sélectionnés : Ctrl+clic ou Maj+clic pour en ajouter ou retirer, Suppr pour les effacer, Échap pour désélectionner.';
     }
     if (currentMode !== '3d') {
         if (draggingWall) {
@@ -674,6 +710,10 @@ function refreshToolHint() {
             hint = 'Glissez le long du mur ; relâchez pour valider (Ctrl+Z pour annuler).';
         } else if (selectionBoxStart) {
             hint = 'Relâchez pour sélectionner ce qui est encadré (Ctrl ou Maj pour ajouter).';
+        } else if (key === 'wall' && drawingStartPoint && mouseCurrentPos) {
+            // patch 76 : même phrase qu'en 3D (longueur en cours)
+            const lenM = Math.hypot(mouseCurrentPos.x - drawingStartPoint.x, mouseCurrentPos.y - drawingStartPoint.y) / 100;
+            hint = 'Pose : Mur ; longueur ' + lenM.toFixed(2).replace('.', ',') + ' m ; clic pour valider, clic droit pour terminer (Échap pour arrêter)';
         }
     }
     updateStopPlacementButton(key);
@@ -682,6 +722,7 @@ function refreshToolHint() {
     const badgeText = MODE_BADGES[key];
     if (badge.textContent !== badgeText) badge.textContent = badgeText;
     if (hintEl.textContent !== hint) hintEl.textContent = hint;
+    updateModeHelp();
 }
 
 // Bloc du mode (et des boutons Désélection / Supprimer) : posé en haut à droite du plan, en 2D comme en 3D
@@ -868,7 +909,7 @@ function updateSelectedWallLength(valStr) {
 // C2 : suppression de toute la sélection 2D (murs, appareils, ouvertures)
 // Suppr : supprime la sélection courante, en 2D comme en 3D (murs, appareils, ouvertures, trémies, escaliers)
 function deleteCurrentSelection() {
-    if (currentMode === '2d' && textById(selected3DId)) return deleteText2D();
+    if (textById(selected3DId)) return deleteText2D();
     const shaftSelected = [...(projectData.shafts || []), ...(projectData.stairs || [])].some(s => s.id === selected3DId);
     if (currentMode === '3d' && selected3DId) return deleteSelected3DElement();   // élément 3D : prioritaire
     if (selectedWallIds.length || (currentMode === '2d' && (selectedDeviceIds.length || selectedOpeningIds.length || shaftSelected))) return deleteMultiSelection();
@@ -887,15 +928,16 @@ async function deleteMultiSelection() {
     const wallIds = new Set(projectData.wallsLocked ? [] : selectedWallIds);
     if (selectedWallIds.length && projectData.wallsLocked) showNotification('Murs verrouillés : les murs sélectionnés ne seront pas supprimés.', 'info');
     const devIds = new Set(selectedDeviceIds);
-    const opIds = new Set(selectedOpeningIds);
-    const shIds = new Set([...(projectData.shafts || []), ...(projectData.stairs || [])].filter(s => s.id === selected3DId).map(s => s.id));
+    // trémies et escaliers sont dans la sélection d'ouvertures : on les retire ici, pas comme ouvertures
+    const shIds = new Set([...(projectData.shafts || []), ...(projectData.stairs || [])].filter(s => s.id === selected3DId || selectedOpeningIds.includes(s.id)).map(s => s.id));
+    const opIds = new Set(selectedOpeningIds.filter(id => !shIds.has(id)));
     const n = wallIds.size + devIds.size + opIds.size + shIds.size;
     if (!n) return;
     const parts = [];
     if (wallIds.size) parts.push(wallIds.size > 1 ? wallIds.size + ' murs' : 'le mur sélectionné');
     if (devIds.size) parts.push(devIds.size > 1 ? devIds.size + ' appareils' : 'l’appareil sélectionné');
     if (opIds.size) parts.push(opIds.size > 1 ? opIds.size + ' ouvertures' : 'l’ouverture sélectionnée');
-    if (shIds.size) parts.push('la trémie ou l’escalier sélectionné');
+    if (shIds.size) parts.push(shIds.size > 1 ? shIds.size + ' trémies ou escaliers' : 'la trémie ou l’escalier sélectionné');
     if (!(await confirmDeletion(parts.join(' et ')))) return;
     saveStateToUndo();
     projectData.walls = projectData.walls.filter(w => !wallIds.has(w.id));
@@ -3268,18 +3310,20 @@ function placeSharedTools() {
 
 // Choix d'un outil : en 2D, l'outil 2D ; en 3D, « Tracer mur » lance la pose de mur, « Sélectionner » sort de la pose
 function setModeTool(tool) {
-    if (currentMode !== '3d') { setTool(tool); return; }
-    if (tool === 'wall') {
-        if (activePlacementType !== 'wall') setPlacementType('wall');
-    } else if (activePlacementType) {
-        setPlacementType(activePlacementType);   // même type : désactive le mode de pose
+    if (currentMode !== '3d') {
+        // 2D : un second clic sur Tracer mur ou Texte revient à Sélectionner
+        setTool(currentTool === tool && (tool === 'wall' || tool === 'text') ? 'select' : tool);
+        return;
     }
+    // 3D : setPlacementType bascule déjà (même type = désactivation)
+    if (tool === 'wall' || tool === 'text') setPlacementType(tool);
+    else if (activePlacementType) setPlacementType(activePlacementType);
     refreshToolButtons();
 }
 
 // Surbrillance de l'outil actif, dans la sidebar commune
 function refreshToolButtons(override) {
-    const active = override || (currentMode === '3d' ? (activePlacementType === 'wall' ? 'wall' : 'select') : currentTool);
+    const active = override || (currentMode === '3d' ? (activePlacementType === 'wall' ? 'wall' : activePlacementType === 'text' ? 'text' : 'select') : currentTool);
     document.querySelectorAll('.tool-btn').forEach(btn => {
         const on = btn.id === 'btn-tool-' + active;
         btn.className = 'tool-btn px-2 py-2 rounded-xl border bg-slate-800 hover:bg-slate-700 text-[11px] font-medium flex items-center gap-2 transition ' +
@@ -3860,14 +3904,14 @@ function syncElementInspectors() {
     const emptyDock2d = document.getElementById('inspector-dock-empty-2d');
     if (emptyDock2d) emptyDock2d.classList.toggle('hidden', isSelected);
     const dockInspector = document.getElementById('inspector-3d');
-    if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected || shaftSel || txSel);
+    if (dockInspector) dockInspector.classList.toggle('hidden', !isSelected || shaftSel);
     // un appareil relié à un circuit : l'onglet Circuits s'ouvre pour montrer ce circuit
     if (el && selectedCircuitId && rightTabCurrent !== 'circuits') setRightTab('circuits');
     updateLightingAssociations(el);
     syncOpeningControls(op);
     if (isSelected) {
         document.getElementById('inspector-3d-element-name').textContent =
-            el ? electricalDisplayName(el) : shaftSel ? 'Trémie' : stairSel ? 'Escalier' : op.type === 'door_single' ? 'Porte' : 'Fenêtre';
+            el ? electricalDisplayName(el) : shaftSel ? 'Trémie' : stairSel ? 'Escalier' : txSel ? 'Texte' : op.type === 'door_single' ? 'Porte' : 'Fenêtre';
     }
     // une boîte posée a son propre choix de circuit ; la prise dédiée a son bloc calibre + appareil
     const dedicated = !!(el && isDedicatedOutlet(el));
@@ -3880,6 +3924,25 @@ function syncElementInspectors() {
     if (txBox) {
         txBox.classList.toggle('hidden', !txSel);
         if (txSel) document.getElementById('text-value-2d').value = txSel.text || '';
+    }
+    // Texte (3D) : seulement le contenu et la hauteur au sol
+    const txBox3 = document.getElementById('text-inspector-3d');
+    if (txBox3) {
+        txBox3.classList.toggle('hidden', !txSel);
+        if (txSel) document.getElementById('text-value-3d').value = txSel.text || '';
+    }
+    if (txSel) {
+        ['position-distance-container', 'side-toggle-container', 'circuit-select-container', 'dedicated-container', 'door-hinge-3d-container'].forEach(cid => {
+            const c = document.getElementById(cid);
+            if (c) c.classList.add('hidden');
+        });
+        const hc = document.getElementById('height-control-container');
+        if (hc) hc.classList.remove('hidden');
+        const h = txSel.height || 150;
+        const hi = document.getElementById('inspector-height-3d-input');
+        hi.min = 10; hi.max = 380; hi.value = h;
+        document.getElementById('inspector-height-3d-val').textContent = (h / 100).toFixed(2) + ' m';
+        document.getElementById('height-control-label').textContent = 'Hauteur au sol';
     }
     const box = document.getElementById('el-inspector-2d');
     if (box) {
@@ -4311,6 +4374,14 @@ function syncSelectionSliders() {
     document.getElementById('height-control-label').textContent = m && m.kind === 'trémie' ? 'Hauteur au sol boîte' : 'Hauteur au sol';
     show(document.getElementById('height-hint-2d'), !in3d && !!m && m.kind === 'mural');
     show(document.getElementById('shaft-height-hint-2d'), !in3d && !!m && m.kind === 'trémie');
+    if (m && m.kind === 'texte') {   // patch 72 : un texte n'a que la hauteur au sol
+        show(dist, false); show(side, false); show(height, in3d);
+        const th = m.item.height || 150;
+        const thi = document.getElementById('inspector-height-3d-input');
+        thi.min = 10; thi.max = 380; thi.value = th;
+        document.getElementById('inspector-height-3d-val').textContent = (th / 100).toFixed(2) + ' m';
+        return;
+    }
     if (!m || m.kind === 'escalier' || m.kind === 'plafonnier') { show(dist, false); show(height, false); show(side, false); return; }
     const it = m.item;
     if (m.kind === 'trémie') {
@@ -4888,3 +4959,8 @@ function triggerLoadProject(event) {
         };
     }
 }
+// Un clic dans le plan valide le champ « Contenu » du texte, sans attendre Entrée
+document.addEventListener('mousedown', e => {
+    const a = document.activeElement;
+    if (a && (a.id === 'text-value-2d' || a.id === 'text-value-3d') && e.target !== a) a.blur();
+}, true);
