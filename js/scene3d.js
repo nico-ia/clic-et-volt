@@ -66,36 +66,57 @@ const SCREEN_LABELS_3D = [];
 // opts.bold (vrai par défaut), opts.halo (contour autour des lettres, 4 px), opts.dark (couleur en thème sombre)
 function makeScreenLabel3D(text, fontPx, opts = {}) {
     const S = SCREEN_LABEL_SCALE;
-    const light = currentTheme === 'light';
     const font = (opts.bold === false ? '' : 'bold ') + (fontPx * S) + 'px Inter, sans-serif';
     const measure = document.createElement('canvas').getContext('2d');
     measure.font = font;
     const haloW = opts.halo ? 4 * S : 0;
     const pad = haloW + 2 * S;
-    const W = Math.ceil(measure.measureText(text).width + 2 * pad);
-    const H = Math.ceil(fontPx * S + 2 * pad);
+    const nArrows = (text.match(/[↑↓↔]/g) || []).length;
+    const W = Math.ceil(measure.measureText(text).width + 2 * pad + nArrows * fontPx * S * 0.8);
+    const H = Math.ceil(fontPx * S * 1.6 + 2 * pad);
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
-    ctx.font = font;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
-    if (opts.halo) {
-        ctx.lineWidth = haloW;
-        ctx.strokeStyle = light ? '#ffffff' : '#020617';
-        ctx.strokeText(text, W / 2, H / 2);
-    }
-    ctx.fillStyle = light ? '#0f172a' : (opts.dark || '#f8fafc');
-    ctx.fillText(text, W / 2, H / 2);
+    // dessine l'étiquette ; frameOn : liseré pointillé autour (texte sélectionné)
+    const draw = frameOn => {
+        const light = currentTheme === 'light';
+        ctx.clearRect(0, 0, W, H);
+        ctx.font = font;
+        if (opts.halo) {
+            ctx.lineWidth = haloW;
+            ctx.strokeStyle = light ? '#ffffff' : '#020617';
+            ctx.strokeText(text, W / 2, H / 2);
+        }
+        ctx.fillStyle = light ? (opts.light || '#0f172a') : (opts.dark || '#f8fafc');
+        drawArrowText(ctx, text, W / 2, H / 2, fontPx * S, 1.6, 'Inter, sans-serif');
+        if (frameOn) {
+            ctx.save();
+            ctx.setLineDash([4 * S, 3 * S]);
+            ctx.strokeStyle = light ? '#047857' : '#f8fafc';
+            ctx.lineWidth = 1.5 * S;
+            ctx.strokeRect(S, S, W - 2 * S, H - 2 * S);
+            ctx.restore();
+        }
+    };
+    draw(!!opts.frame);
     const tex = new THREE.CanvasTexture(canvas);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
     sprite.renderOrder = 11;
+    sprite.userData.frameOn = !!opts.frame;
+    // active ou retire le liseré sans reconstruire la scène
+    sprite.userData.setFrame = on => {
+        if (sprite.userData.frameOn === on) return;
+        sprite.userData.frameOn = on;
+        draw(on);
+        tex.needsUpdate = true;
+    };
     SCREEN_LABELS_3D.push({ sprite, wPx: W / S, hPx: H / S });
     return sprite;
 }
-
 // Taille monde d'un pixel écran à la distance de l'objet (caméra en perspective)
 function worldPerScreenPx3D(pos) {
     const dist = threeCamera.position.distanceTo(pos);
@@ -123,6 +144,7 @@ function animate3D() {
 
     if (threeControls && !dragging3DElementId) threeControls.update();
     updateScreenLabels3D();
+    updateDashedBoxes3D();
 
     if (threeRenderer && threeScene && threeCamera) {
         threeRenderer.render(threeScene, threeCamera);
@@ -212,7 +234,7 @@ function createShaftGhost3D(sh, cx, cy) {
     const pos = new THREE.Vector3(sp.x - cx, span.base + span.height / 2, sp.y - cy);
     const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: '#f8fafc' }));
     box.position.copy(pos);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: '#f8fafc' }));
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: shaftColour() }));
     edges.position.copy(pos);
     group.add(box, edges);
     return group;
@@ -389,7 +411,7 @@ const CABLE_CFG = {
     crossPenalty: 12,   // coût fictif (cm) : on ne perce un mur que si cela fait gagner de la longueur
     passageCost: 150,   // coût fictif (cm) d'un passage à plafond entre deux pièces fermées
     passageStep: 20,    // pas de contrôle du passage (cm)
-    openMargin: 8,      // marge autour des ouvertures (rayon de gaine + cadre)
+    openMargin: 0,      // marge autour des ouvertures (rayon de gaine + cadre)
     maxDegree: 3,       // câbles maximum arrivant sur un même boîtier d'appareil (repiquage)
     lightLinks: 3,      // points de raccordement testés par plafonnier
     maxRadius: 5
@@ -890,7 +912,9 @@ function buildCableNetwork(passage) {
     // le pseudo-tableau d'une trémie est traité comme un appareil du niveau
     const allEls = (panel.isFeed ? els.concat([panel]) : els).concat(crossProxies, derivPts);
 
-    const ceilZ = Math.min(...walls.map(w => w.height || 250)) - C.ceilGap;
+      // plafond de chaque mur : un mur plus bas ne fait descendre que ses propres câbles
+    const wallCeil = w => (w.height || 250) - C.ceilGap;
+    const ceilZ = Math.min(...walls.map(wallCeil));   // plafond le plus bas de l'étage (contrôles de ligne de vue)
     // trous d'escalier : plafond du niveau bas, sol de l'étage haut. Aucun tronçon ne les traverse,
     // sauf les pistes qui longent un mur collé à un escalier, côté escalier (câble dans le placo)
     const holes = stairHoleRectsOn(activeLevelId);
@@ -900,20 +924,15 @@ function buildCableNetwork(passage) {
         return list.some(R => segmentHitsRect(a, b, R));
     };
     const levels = [{ kind: 'low', z: C.lowZ }, { kind: 'ceil', z: ceilZ }];
-
-    // 1. Pistes : une par mur et par face, décalées de la face du mur
+    const levelsAt = z => [{ kind: 'low', z: C.lowZ }, { kind: 'ceil', z }];
+    
     const tracks = [];
     walls.forEach(w => {
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, len = Math.hypot(dx, dy);
-        const ux = dx / len, uy = dy / len, nx = uy, ny = -ux, th = w.thickness || 10;
+        const ux = dx / len, uy = dy / len, th = w.thickness || 10;
         const ext = th + 10;   // prolongement pour retrouver les angles
-        const outs = outFaces.faces.get(w.id) || [];
-        [1, -1].forEach(side => {
-            if (outs.length === 1 && outs[0] === side) return;   // mur extérieur : pas de piste sur la face extérieure
-            const off = side * (th / 2 + C.trackOffset);
-            // stations seulement sur le mur : aucun tronçon ne dépasse un angle vers l'extérieur
-            tracks.push({ wall: w, side, len, ux, uy, ox: w.x1 + nx * off, oy: w.y1 + ny * off, t0: -ext, t1: len + ext, st: [0, len] });
-        });
+        // une seule piste par mur, au centre de l'épaisseur : plus de distinction intérieur / extérieur
+        tracks.push({ wall: w, side: 0, len, ux, uy, ox: w.x1, oy: w.y1, t0: -ext, t1: len + ext, st: [0, len], ceilZ: wallCeil(w) });
     });
     const P = (t, s) => ({ x: t.ox + t.ux * s, y: t.oy + t.uy * s });
     // mur extérieur : la face extérieure n'a pas de piste, on prend la piste intérieure
@@ -955,7 +974,7 @@ function buildCableNetwork(passage) {
     });
     // gaine horizontale à la hauteur z entre s0 et s1 ?
     // un blocage d'escalier ne vaut que pour sa face ; une ouverture (sans face) bloque les deux
-    const sameFace = (sp, side) => side === undefined || sp.side === undefined || sp.side === side;
+    const sameFace = (sp, side) => side === undefined || side === 0 || sp.side === undefined || sp.side === side;
   
     const blockedH = (wid, s0, s1, z, side) => (spans.get(wid) || []).some(sp => sameFace(sp, side) && s1 > sp.lo + 0.01 && s0 < sp.hi - 0.01 && z > sp.z0 && z < sp.z1);
     const blockedV = (wid, s, za, zb, side) => (spans.get(wid) || []).some(sp => sameFace(sp, side) && s > sp.lo && s < sp.hi && Math.max(za, zb) > sp.z0 && Math.min(za, zb) < sp.z1);
@@ -970,7 +989,7 @@ function buildCableNetwork(passage) {
                 const s = Math.max(0, Math.min(t.len, (el.free.x - t.ox) * t.ux + (el.free.y - t.oy) * t.uy));
                 const F = P(t, s);
                 const d = Math.hypot(el.free.x - F.x, el.free.y - F.y);
-                const zF = Math.max(C.lowZ, Math.min(ceilZ, el.height || 150));
+                const zF = Math.max(C.lowZ, Math.min(t.ceilZ, el.height || 150));
                 if (d < bestD && !segmentCrossesStairVolume({ x: el.free.x, y: el.free.y, z: zF }, { x: F.x, y: F.y, z: zF })) { bestD = d; bestT = t; bestS = s; }
             });
             // trémie au bout d'un mur (coin) : le point d'attache tomberait sur une extrémité non reliée aux autres pistes.
@@ -986,7 +1005,7 @@ function buildCableNetwork(passage) {
                 return;
             }
             bestT.st.push(bestS);
-            const zFree = Math.max(C.lowZ, Math.min(ceilZ, el.height || 150));
+            const zFree = Math.max(C.lowZ, Math.min(bestT.ceilZ, el.height || 150));
             place.set(el.id, { t: bestT, E: { x: el.free.x, y: el.free.y, z: zFree }, dist: bestS, r: bestS, zEl: zFree, free: true, label: el.shaftId });
             return;
         }
@@ -997,7 +1016,7 @@ function buildCableNetwork(passage) {
         const E = getElCoords(el);
         let dist = el.distanceFromStart !== undefined ? el.distanceFromStart : t.len / 2;
         dist = Math.max(10, Math.min(t.len - 10, dist));
-        const zEl = Math.max(C.lowZ, Math.min(ceilZ, E.z));
+        const zEl = Math.max(C.lowZ, Math.min(t.ceilZ, E.z));
         const list = spans.get(w.id);
         const own = list.find(sp => dist > sp.lo && dist < sp.hi && E.z >= sp.z0 && E.z <= sp.z1) || null;
         const stubOK = (r) => !list.some(sp => sp !== own && Math.max(r, dist) > sp.lo && Math.min(r, dist) < sp.hi && E.z >= sp.z0 && E.z <= sp.z1);
@@ -1005,7 +1024,7 @@ function buildCableNetwork(passage) {
         const cands = [dist];
         list.forEach(sp => cands.push(sp.lo - 0.5, sp.hi + 0.5));
         const valid = cands
-            .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, ceilZ, t.side) && stubOK(r))
+            .filter(r => r >= 10 && r <= t.len - 10 && !blockedV(w.id, r, C.lowZ, t.ceilZ, t.side) && stubOK(r))
             .sort((p, q) => Math.abs(p - dist) - Math.abs(q - dist) || q - p);
         let r = valid.length ? valid[0] : Math.max(10, Math.min(t.len - 10, dist));
         if (!valid.length) warnAt('Aucune descente possible pour ' + electricalDisplayName(el), el.id);
@@ -1039,14 +1058,13 @@ function buildCableNetwork(passage) {
     // Passage : stations face à l'extérieur, là où un câble peut traverser le mur à plafond
     if (passage) {
         tracks.forEach(t => {
-            const k = 2 * t.side * ((t.wall.thickness || 10) / 2 + C.trackOffset);
+            const th = (t.wall.thickness || 10) / 2 + C.trackOffset;
             for (let s = C.crossStep; s < t.len; s += C.crossStep) {
                 const p = P(t, s);
-                if (outFaces.isOutside(p.x - k * t.uy, p.y + k * t.ux)) t.st.push(s);
+                if (outFaces.isOutside(p.x - th * t.uy, p.y + th * t.ux) || outFaces.isOutside(p.x + th * t.uy, p.y - th * t.ux)) t.st.push(s);
             }
         });
     }
-
     // 7. Graphe
     const nodes = new Map();
     const nodeBuckets = new Map();
@@ -1113,6 +1131,19 @@ function buildCableNetwork(passage) {
         }
         return false;
     };
+
+    // comme insideBody, en ignorant le mur donné (une piste est au centre de son propre mur)
+    const insideBodyExcept = (x, y, wall) => {
+        for (let i = 0; i < wallGeo.length; i++) {
+            if (walls[i] === wall) continue;
+            const g = wallGeo[i];
+            const s = (x - g.x1) * g.ux + (y - g.y1) * g.uy;
+            const d = Math.abs(-(x - g.x1) * g.uy + (y - g.y1) * g.ux);
+            if (s > -0.5 && s < g.len + 0.5 && d < g.half) return true;
+        }
+        return false;
+    };
+
     const segmentHitsWall = (x1, y1, x2, y2) => {
         for (let i = 1; i < 12; i++) {
             const f = i / 12;
@@ -1139,18 +1170,22 @@ function buildCableNetwork(passage) {
     tracks.forEach(t => {
         const ss = t.st.slice().sort((p, q) => p - q).filter((s, i, arr) => i === 0 || s - arr[i - 1] > 0.3);
         const tWalls = stubWalls.get(t) || [];
+        // murs qui rejoignent cette piste à son extrémité : leur épaisseur déborde normalement au coin
+        const cornerWalls = junctions.filter(j => (j.a === t && (j.s <= 0.01 || j.s >= t.len - 0.01)) || (j.b === t && (j.u <= 0.01 || j.u >= t.len - 0.01)))
+            .map(j => (j.a === t ? j.b : j.a).wall);
+        const inCorner = p => cornerWalls.some(w => inWallBody(w, p.x, p.y));
         for (let k = 0; k < ss.length - 1; k++) {
             const s0 = ss[k], s1 = ss[k + 1];
             if (s1 - s0 < 0.5) continue;
             const samples = [0.25, 0.5, 0.75].map(f => P(t, s0 + (s1 - s0) * f));
             // ne traverse jamais un mur, sauf l'épaisseur du mur où la piste est enfoncée en T
             const inTWall = p => s0 >= 0 && s1 <= t.len && tWalls.some(w => inWallBody(w, p.x, p.y));
-            if (samples.some(p => insideBody(p.x, p.y) && !inTWall(p))) continue;
+            if (samples.some(p => insideBodyExcept(p.x, p.y, t.wall) && !inTWall(p) && !inCorner(p))) continue;
             const p0 = P(t, s0), p1 = P(t, s1);
-            levels.forEach(L => {
+            levelsAt(t.ceilZ).forEach(L => {
                 if (blockedH(t.wall.id, s0, s1, L.z, t.side)) return;   // ni devant une porte, ni devant une fenêtre
                 // ni dans le trou d'un escalier, sauf le long d'un mur collé à cet escalier (placo)
-                if (!wallExempt.has(t.wall.id + '|' + t.side) && holeCrosses(p0, p1, L.kind)) return;
+                if (!(wallExempt.has(t.wall.id + '|1') || wallExempt.has(t.wall.id + '|-1')) && holeCrosses(p0, p1, L.kind)) return;
                 addEdge(node(p0.x, p0.y, L.z), node(p1.x, p1.y, L.z), L.kind);
             });
         }
@@ -1165,9 +1200,9 @@ function buildCableNetwork(passage) {
             const samples = [0.25, 0.5, 0.75].map(f => P(t, s + (sEnd - s) * f));
             if (!samples.some(p => insideBody(p.x, p.y))) return;
             if (samples.some(p => insideBody(p.x, p.y) && !inWallBody(o.wall, p.x, p.y))) return;
-            if (blockedV(o.wall.id, so, C.lowZ, ceilZ, o.side)) return;
+            if (blockedV(o.wall.id, so, C.lowZ, o.ceilZ, o.side)) return;
             const p0 = P(t, s), p1 = P(t, sEnd);
-            levels.forEach(L => {
+            levelsAt(t.ceilZ).forEach(L => {
                 if (blockedH(t.wall.id, Math.min(s, sEnd), Math.max(s, sEnd), L.z, t.side)) return;
                 if (holeCrosses(p0, p1, L.kind)) return;
                 addEdge(node(p0.x, p0.y, L.z), node(p1.x, p1.y, L.z), L.kind, C.crossPenalty);
@@ -1184,7 +1219,7 @@ function buildCableNetwork(passage) {
             if (s < 10 || s > tA.len - 10) return;
             const pa = P(tA, s), pb = P(tB, s);
             if (insideBody(pa.x, pa.y) || insideBody(pb.x, pb.y)) return;
-            levels.forEach(L => {
+            levelsAt(wallCeil(w)).forEach(L => {
                 if (blockedH(w.id, s - 0.01, s + 0.01, L.z)) return;
                 const na = findNode(pa.x, pa.y, L.z), nb = findNode(pb.x, pb.y, L.z);
                 if (na && nb) addEdge(na, nb, 'cross', C.crossPenalty);
@@ -1192,23 +1227,34 @@ function buildCableNetwork(passage) {
         });
     });
 
-    // Passage à plafond entre pièces fermées : le câble traverse le mur d'une pièce à hauteur de plafond,
-    // franchit l'espace extérieur, puis retraverse le mur de l'autre pièce. Chaque traversée est pénalisée.
+    // Point d'un tronçon à la hauteur de l'air H : une descente verticale relie le point à son plafond,
+    // sauf devant une porte ou une fenêtre (null = pas de raccord possible)
+    const airNodeAt = (n, H, t, s) => {
+        if (Math.abs(n.z - H) < 0.01) return n;
+        if (t && blockedV(t.wall.id, s, n.z, H, t.side)) return null;
+        const u = node(n.x, n.y, H);
+        addEdge(n, u, 'riser');
+        return u;
+    };
+    // Passage à plafond entre pièces fermées : le câble traverse le mur à hauteur de SON plafond, franchit
+    // l'espace extérieur à la plus haute des deux hauteurs, et descend au mur le plus bas à son point de sortie.
     if (passage) {
         const exits = [];
         tracks.forEach(t => {
-            const k = 2 * t.side * ((t.wall.thickness || 10) / 2 + C.trackOffset);
+            const th = (t.wall.thickness || 10) / 2 + C.trackOffset;
             t.st.forEach(s => {
                 if (s < 0 || s > t.len) return;
                 const p = P(t, s);
-                const q = { x: p.x - k * t.uy, y: p.y + k * t.ux };
-                if (!outFaces.isOutside(q.x, q.y)) return;
-                const inner = findNode(p.x, p.y, ceilZ);
-                if (!inner || blockedH(t.wall.id, s - 0.01, s + 0.01, ceilZ, t.side)) return;
-                const outN = node(q.x, q.y, ceilZ);
-                const pe = addEdge(inner, outN, 'passage', C.passageCost);
-                if (pe) pe.room = true;
-                exits.push({ n: outN, wall: t.wall });
+                [1, -1].forEach(sd => {
+                    const q = { x: p.x - sd * th * t.uy, y: p.y + sd * th * t.ux };
+                    if (!outFaces.isOutside(q.x, q.y)) return;
+                    const inner = findNode(p.x, p.y, t.ceilZ);
+                    if (!inner || blockedH(t.wall.id, s - 0.01, s + 0.01, t.ceilZ, t.side)) return;
+                    const outN = node(q.x, q.y, t.ceilZ);
+                    const pe = addEdge(inner, outN, 'passage', C.passageCost);
+                    if (pe) pe.room = true;
+                    exits.push({ n: outN, wall: t.wall, t, s });
+                });
             });
         });
         const clearOutside = (a, b) => {
@@ -1227,7 +1273,10 @@ function buildCableNetwork(passage) {
                 const d = Math.hypot(b.n.x - a.n.x, b.n.y - a.n.y);
                 if (d < 0.5) continue;
                 if (!clearOutside(a.n, b.n)) continue;
-                const pe = addEdge(a.n, b.n, 'passage', 0);
+                const H = Math.max(a.n.z, b.n.z);   // l'air se traverse à la plus haute des deux hauteurs
+                const na = airNodeAt(a.n, H, a.t, a.s), nb = airNodeAt(b.n, H, b.t, b.s);
+                if (!na || !nb) continue;
+                const pe = addEdge(na, nb, 'passage', 0);
                 if (pe) pe.room = true;
             }
         }
@@ -1241,8 +1290,10 @@ function buildCableNetwork(passage) {
     const joinWalls = (wa, wb) => comp.set(root(wa.id), root(wb.id));
     junctions.forEach(j => joinWalls(j.a.wall, j.b.wall));
     coincident.forEach(([a, b]) => joinWalls(a.wall, b.wall));
-    const envelope = new Set(walls.filter(w => (outFaces.faces.get(w.id) || []).length).map(w => root(w.id)));
-    const isolated = w => !envelope.has(root(w.id));
+    // mur isolé = mur d'un groupe qui n'est relié à aucun autre mur (sans distinction intérieur / extérieur)
+    const groupSize = new Map();
+    walls.forEach(w => { const r = root(w.id); groupSize.set(r, (groupSize.get(r) || 0) + 1); });
+    const isolated = w => groupSize.get(root(w.id)) === 1;
     
     const airClearCalc = (a, b) => {
         const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
@@ -1265,12 +1316,12 @@ function buildCableNetwork(passage) {
             if (segmentHitsRect(a, b, stairRect(st))) return false;
         }
         // Garder la vérification du volume 3D pour les autres cas
-        if (segmentCrossesStairVolume({ x: a.x, y: a.y, z: ceilZ }, { x: b.x, y: b.y, z: ceilZ })) return false;
+        if (segmentCrossesStairVolume({ x: a.x, y: a.y, z: a.z }, { x: b.x, y: b.y, z: b.z })) return false;
         return true;
     };    
     // signature de ce qui influence airClear : murs, escaliers, niveaux, hauteur du plafond
     const airMemoSig = JSON.stringify([
-        walls.map(w => [w.x1, w.y1, w.x2, w.y2, w.thickness, w.levelId]),
+        walls.map(w => [w.x1, w.y1, w.x2, w.y2, w.thickness, w.levelId, w.height]),
         projectData.stairs || [],
         (projectData.levels || []).map(l => [l.id, l.elevation]),
         activeLevelId, ceilZ
@@ -1281,7 +1332,7 @@ function buildCableNetwork(passage) {
     }
     // clé exacte (nombres complets) : deux points différents ne partagent jamais une entrée
     const airClear = (a, b) => {
-        const key = a.x + ',' + a.y + ',' + b.x + ',' + b.y;
+        const key = a.x + ',' + a.y + ',' + a.z + ',' + b.x + ',' + b.y + ',' + b.z;
         const memo = AIR_CLEAR_MEMO.map;
         if (!memo.has(key)) memo.set(key, airClearCalc(a, b));
         return memo.get(key);
@@ -1290,15 +1341,19 @@ function buildCableNetwork(passage) {
     tracks.forEach(a => {
         if (!isolated(a.wall)) return;
         a.st.forEach(s => {
-            if (s < 0 || s > a.len || blockedH(a.wall.id, s - 0.01, s + 0.01, ceilZ, a.side)) return;
+            if (s < 0 || s > a.len || blockedH(a.wall.id, s - 0.01, s + 0.01, a.ceilZ, a.side)) return;
             const p = P(a, s);
-            const na = node(p.x, p.y, ceilZ);
+            const na = node(p.x, p.y, a.ceilZ);
             tracks.forEach(b => {
                 if (b.wall === a.wall) return;
                 b.st.forEach(u => {
-                    if (u < 0 || u > b.len || blockedH(b.wall.id, u - 0.01, u + 0.01, ceilZ, b.side)) return;
+                    if (u < 0 || u > b.len || blockedH(b.wall.id, u - 0.01, u + 0.01, b.ceilZ, b.side)) return;
                     const q = P(b, u);
-                    if (airClear(p, q)) islandEdge(na, node(q.x, q.y, ceilZ));
+                    const H = Math.max(a.ceilZ, b.ceilZ);   // l'air se traverse à la plus haute des deux hauteurs
+                    if (!airClear({ x: p.x, y: p.y, z: H }, { x: q.x, y: q.y, z: H })) return;
+                    const pa = airNodeAt(na, H, a, s);
+                    const pb = airNodeAt(node(q.x, q.y, b.ceilZ), H, b, u);
+                    if (pa && pb) islandEdge(pa, pb);
                 });
             });
         });
@@ -1325,18 +1380,24 @@ function buildCableNetwork(passage) {
             if (insideBody(a.p.x, a.p.y) || insideBody(b.p.x, b.p.y)) continue;
             if (segmentHitsWall(a.p.x, a.p.y, b.p.x, b.p.y)) continue;
             if (holeCrosses(a.p, b.p, 'riser')) continue;            
-            levels.forEach(L => addEdge(node(a.p.x, a.p.y, L.z), node(b.p.x, b.p.y, L.z), L.kind));
-            [a, b].forEach(q => addEdge(node(q.p.x, q.p.y, C.lowZ), node(q.p.x, q.p.y, ceilZ), 'riser'));
+            addEdge(node(a.p.x, a.p.y, C.lowZ), node(b.p.x, b.p.y, C.lowZ), 'low');
+            if (Math.abs(a.t.ceilZ - b.t.ceilZ) < 0.01) addEdge(node(a.p.x, a.p.y, a.t.ceilZ), node(b.p.x, b.p.y, b.t.ceilZ), 'ceil');
+            [a, b].forEach(q => addEdge(node(q.p.x, q.p.y, C.lowZ), node(q.p.x, q.p.y, q.t.ceilZ), 'riser'));
         }
     }
 
     // Colonnes verticales dans les angles / jonctions (sauf devant une ouverture)
     junctions.forEach(j => {
-        if (blockedV(j.a.wall.id, j.s, C.lowZ, ceilZ, j.a.side) || blockedV(j.b.wall.id, j.u, C.lowZ, ceilZ, j.b.side)) return;
-        const lo = findNode(j.p.x, j.p.y, C.lowZ), hi = findNode(j.p.x, j.p.y, ceilZ);
-        if (lo && hi && !holeCrosses(j.p, j.p, 'riser')) addEdge(lo, hi, 'riser');
+        const lo = findNode(j.p.x, j.p.y, C.lowZ);
+        const hiA = findNode(j.p.x, j.p.y, j.a.ceilZ), hiB = findNode(j.p.x, j.p.y, j.b.ceilZ);
+        // la montée ne dépend que des ouvertures du mur qui monte : une porte sur le mur voisin ne la bloque pas
+        if (lo && hiA && !blockedV(j.a.wall.id, j.s, C.lowZ, j.a.ceilZ, j.a.side) && !holeCrosses(j.p, j.p, 'riser')) addEdge(lo, hiA, 'riser');
+        if (lo && hiB && !blockedV(j.b.wall.id, j.u, C.lowZ, j.b.ceilZ, j.b.side) && !holeCrosses(j.p, j.p, 'riser')) addEdge(lo, hiB, 'riser');
+        // murs de hauteurs différentes : descente entre les deux plafonds, à la jonction
+        if (hiA && hiB && hiA !== hiB && !holeCrosses(j.p, j.p, 'riser')) addEdge(hiA, hiB, 'riser');
     });
 
+   
     // 8. Raccordement des appareils
     const stubLen = pts => {
         let l = 0;
@@ -1347,16 +1408,17 @@ function buildCableNetwork(passage) {
         const pl = place.get(el.id);
         if (pl) {
             const A = P(pl.t, pl.r), F = P(pl.t, pl.dist);
-            const lo = node(A.x, A.y, C.lowZ), hi = node(A.x, A.y, ceilZ);
+            const cz = pl.t.ceilZ;   // plafond du mur de cet appareil
+            const lo = node(A.x, A.y, C.lowZ), hi = node(A.x, A.y, cz);
             // trémie : la sortie monte jusqu'au plafond dans la trémie, puis file au plafond jusqu'au mur (patch 24).
             // Jamais d'horizontale à mi-hauteur ni au sol. Les appareils fixés sur un mur ne sont pas concernés.
             if (pl.free) {
                 addEdge(lo, hi, 'riser');
-                return { node: hi, stub: [pl.E, { x: pl.E.x, y: pl.E.y, z: ceilZ }, { x: A.x, y: A.y, z: ceilZ }] };
+                return { node: hi, stub: [pl.E, { x: pl.E.x, y: pl.E.y, z: cz }, { x: A.x, y: A.y, z: cz }] };
             }
             let at;
             if (pl.zEl - C.lowZ < 1) { at = lo; addEdge(lo, hi, 'riser'); }
-            else if (ceilZ - pl.zEl < 1) { at = hi; addEdge(lo, hi, 'riser'); }
+            else if (cz - pl.zEl < 1) { at = hi; addEdge(lo, hi, 'riser'); }
             else { at = node(A.x, A.y, pl.zEl); addEdge(lo, at, 'riser'); addEdge(at, hi, 'riser'); }
             const stub = [pl.E, { x: F.x, y: F.y, z: pl.E.z }, { x: A.x, y: A.y, z: pl.E.z }];
             if (Math.abs(pl.zEl - pl.E.z) > 0.3) stub.push({ x: A.x, y: A.y, z: pl.zEl });
@@ -1384,9 +1446,12 @@ function buildCableNetwork(passage) {
                 return opts.find(q => !segmentHitsWall(E.x, E.y, q[0], q[1]) && !segmentHitsWall(q[0], q[1], c.px, c.py)) || null;
             };
             const usable = list.filter(c => c.perp).length ? list.filter(c => c.perp) : list;
+            // le plafonnier se raccorde au plafond du mur le plus proche
+            const zc = usable[0] ? usable[0].e.a.z : ceilZ;
             const picks = [];
             for (const c of usable) {
                 if (picks.length >= C.lightLinks) break;
+                if (Math.abs(c.e.a.z - zc) > 0.01) continue;   // un seul plafond par plafonnier
                 if (picks.length && c.d > usable[0].d + 200) break;
                 const via = lpath(c);
                 if (via === null) continue;
@@ -1397,20 +1462,20 @@ function buildCableNetwork(passage) {
                 picks.push(c);
             }
             if (!picks.length) return null;
-            const ln = node(E.x, E.y, ceilZ);
+            const ln = node(E.x, E.y, zc);
             ln.light = true;
             picks.forEach(c => {
                 let nd;
                 if (c.u * c.e.len < 1) nd = c.e.a;
                 else if ((1 - c.u) * c.e.len < 1) nd = c.e.b;
                 else {
-                    nd = node(c.px, c.py, ceilZ);
+                    nd = node(c.px, c.py, zc);
                     c.e.dead = true;
                     addEdge(c.e.a, nd, 'ceil');
                     addEdge(nd, c.e.b, 'ceil');
                 }
                 if (c.via.length) {
-                    const mn = node(c.via[0], c.via[1], ceilZ);
+                    const mn = node(c.via[0], c.via[1], zc);
                     addEdge(ln, mn, 'stub');
                     addEdge(mn, nd, 'stub');
                 } else {
@@ -1418,7 +1483,7 @@ function buildCableNetwork(passage) {
                 }
             });
             const stub = [E];
-            if (Math.abs(ceilZ - E.z) > 0.3) stub.push({ x: E.x, y: E.y, z: ceilZ });
+            if (Math.abs(zc - E.z) > 0.3) stub.push({ x: E.x, y: E.y, z: zc });
             return { node: ln, stub };
         }
         return null;
@@ -1431,10 +1496,12 @@ function buildCableNetwork(passage) {
 
     // Liens libres au plafond : droite entre deux points du plafond qui ne traverse aucun mur.
     // « murs » ne les utilise pas ; « plafond » et « mixte » oui. Un passage direct est alors une seule arête.
-    const ceilNodes = [...nodes.values()].filter(n => Math.abs(n.z - ceilZ) < 0.01);
+    const ceilHeights = tracks.map(t => t.ceilZ);
+    const ceilNodes = [...nodes.values()].filter(n => ceilHeights.some(z => Math.abs(n.z - z) < 0.01));
     for (let i = 0; i < ceilNodes.length; i++) {
         for (let j = i + 1; j < ceilNodes.length; j++) {
             const a = ceilNodes[i], b = ceilNodes[j];
+            if (Math.abs(a.z - b.z) > 0.01) continue;   // liens libres à même hauteur seulement
             if (!airClear(a, b)) continue;
             const e = addEdge(a, b, 'air');
             if (e) e.air = true;
@@ -1443,17 +1510,23 @@ function buildCableNetwork(passage) {
 
     // 9. Plus courts chemins (Dijkstra, un passage par un plafonnier n'est jamais un raccourci)
     // Liens par le plafond au-dessus des îlots : « plafond » et « mixte » les utilisent, « murs » non, sauf pour un
-    // appareil imposé (mur isolé). En « mixte », chaque passage au plafond (îlot ou lien libre) coûte MIX_ISLAND_PENALTY cm de plus :
-    // le câble ne quitte les murs que s'il n'a pas de chemin raisonnable. Le tableau et les points de raccord restent « par les murs ».
-    const MIX_ISLAND_PENALTY = 500;
+    // appareil imposé (mur isolé). En « mixte », un passage au plafond (îlot ou lien libre) n'est permis que s'il évite
+    // un détour trop long par les murs (voir mixJumpOk). Le tableau et les points de raccord restent « par les murs ».
+    // mode mixte : un saut dans l'air n'est permis que si marcher le long des murs entre ses extrémités
+    // fait plus de MIX_DETOUR_RATIO fois la ligne droite ET plus de MIX_DETOUR_MIN cm de plus
+    const MIX_DETOUR_RATIO = 3;
+    const MIX_DETOUR_MIN = 100;
     // route d'une liaison : mode du circuit (murs / plafond / mixte) et autorisation de passage entre pièces fermées
     const routeFor = (A, B, cid) => {
         const c = cid ? projectData.circuits.find(x => x.id === cid) : null;
         const routing = c ? c.cableRouting : undefined;
         let mode = 'walls';
+        let islands = false;
         if (routing === 'mixte') mode = 'mix';
-        else if (routing === 'plafond' || result.forced.has(A.id) || result.forced.has(B.id)) mode = 'ceil';
-        return { mode, room: !!(c && c.roomCrossing) };
+        else if (routing === 'plafond') mode = 'ceil';
+        // appareil sur mur isolé : seul le passage au-dessus de ce mur (îlot) est ajouté, le reste suit le mode du circuit
+        else if (result.forced.has(A.id) || result.forced.has(B.id)) islands = true;
+        return { mode, room: !!(c && c.roomCrossing), islands };
     };
     const mapCaches = new Map();
     // Dijkstra sur tableaux indexés (B2) : même tas, mêmes relaxations dans le même ordre => mêmes distances et chemins
@@ -1461,10 +1534,10 @@ function buildCableNetwork(passage) {
     let nodeIdx = 0;
     nodes.forEach(n => { n.idx = nodeIdx++; });
     const mapFor = (src, route) => {
-        const key = route.mode + (route.room ? '+room' : '');
+        const key = route.mode + (route.room ? '+room' : '') + (route.islands ? '+isl' : '');
         if (!mapCaches.has(key)) mapCaches.set(key, new Map());
         const cache = mapCaches.get(key);
-        const penalty = route.mode === 'mix' ? MIX_ISLAND_PENALTY : 0;
+
         let r = cache.get(src);
         if (r) return r;
         const D = new Float64Array(nodeCount).fill(Infinity);
@@ -1478,9 +1551,10 @@ function buildCableNetwork(passage) {
             if (n.light && n !== src) continue;
             for (const e of n.adj) {
                 const above = e.island || e.air;
-                if (e.dead || (above && route.mode === 'walls') || (e.room && !route.room)) continue;
+                if (e.dead || (above && route.mode === 'walls' && !(route.islands && e.island)) || (e.room && !route.room)) continue;
+                if (above && route.mode === 'mix' && !mixJumpOk(e)) continue;
                 const o = e.a === n ? e.b : e.a;
-                const nd = d + e.cost + (above ? penalty : 0);
+                const nd = d + e.cost;
                 if (nd < D[o.idx]) {
                     D[o.idx] = nd;
                     P[o.idx] = [n, e];
@@ -1498,6 +1572,21 @@ function buildCableNetwork(passage) {
         cache.set(src, r);
         return r;
     };
+
+    // saut mixte : marcher le long des murs entre les deux extrémités, passages entre pièces compris (mur non fini)
+    // doit être un détour de plus de MIX_DETOUR_RATIO fois la ligne droite, et de plus de MIX_DETOUR_MIN cm.
+    // Pas de chemin par les murs entre les deux extrémités : le saut est permis.
+    const mixJumpOk = (e) => {
+        if (e.mixOk === undefined) {
+            const straight = Math.hypot(e.a.x - e.b.x, e.a.y - e.b.y, e.a.z - e.b.z);
+            const walk = mapFor(e.a, { mode: 'walls', room: true }).dist.get(e.b);
+            e.mixOk = walk === undefined
+                || (walk > MIX_DETOUR_RATIO * straight && walk - straight > MIX_DETOUR_MIN);
+        }
+        return e.mixOk;
+    };
+
+
     const rdist = (A, B, cid) => {
         const ra = R.get(A.id), rb = R.get(B.id);
         if (!ra || !rb) return Infinity;
@@ -1628,13 +1717,14 @@ function buildCableNetwork(passage) {
         const path = [];
         if (ra.node !== rb.node) {
             const mp = mapFor(ra.node, routeFor(A, B, cid));
-            if (!mp.dist.has(rb.node)) return null;
+
             for (let cur = rb.node; cur !== ra.node;) {
                 const [p, e] = mp.prev.get(cur);
                 path.push(e);
                 cur = p;
             }
             path.reverse();
+
         }
         addPriv(ra.stub, wires, cid, relationId);
         addPriv(rb.stub, wires, cid, relationId);
@@ -2256,6 +2346,152 @@ function ghostCableNetwork(levelId) {
     return net;
 }
 
+// Une trémie et ses pièces : cadre, colonne, zone cliquable, volume de sélection, étiquette, point de dérivation
+function addShaft3D(sh, cx, cy) {
+        const s = sh.size || 40;
+        const frame = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
+              new THREE.LineBasicMaterial({ color: shaftColour() }));
+        const sp = shaftPos2D(sh);
+        frame.position.set(sp.x - cx, 1, sp.y - cy);
+        frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
+        frame.userData.shaftFrame = true;   // repère du déplacement direct
+        threeScene.add(frame);
+        wallMeshes3D.push(frame);
+        // colonne visible en permanence (même aspect qu'à la sélection) : repère la trémie en 3D
+        const span = shaftSpan3D(sh);
+        const column = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
+            new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.85 }));
+        column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+        column.userData.shaftId = sh.id;
+        threeScene.add(column);
+        wallMeshes3D.push(column);
+        // zone invisible de la trémie (hauteur de la pièce) : permet de la sélectionner au clic en 3D
+        const hit = new THREE.Mesh(
+            new THREE.BoxGeometry(s, span.height, s),
+            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+        hit.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+        hit.userData = { type: 'shaft', id: sh.id };
+        threeScene.add(hit);
+        wallMeshes3D.push(hit);
+        interactiveObjects3D.push(hit);
+        // trémie sélectionnée : volume blanc translucide dans la colonne (en plus du cadre de sélection)
+        if (sh.id === selected3DId) {
+            const sel = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
+                new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.3, depthWrite: false }));
+            sel.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+            sel.renderOrder = 5;
+            sel.userData = { shaftId: sh.id };
+            threeScene.add(sel);
+            wallMeshes3D.push(sel);
+        }
+        // noms des niveaux reliés : taille du réglage « Noms des niveaux reliés », texte seul, sans fond
+        const label = makeScreenLabel3D(shaftLevelNames(sh).join(' ↔ '), textSizePx('niveau'), { bold: true, halo: false });
+        // l'étiquette se place en bas de la trémie si elle relie un niveau plus bas, en haut sinon
+        const elevOf = lvId => ((projectData.levels || []).find(l => l.id === lvId) || {}).elevation || 0;
+        const otherId = (sh.levelIds || [sh.levelId]).find(lvId => lvId !== activeLevelId);
+        const goesDown = otherId !== undefined && elevOf(otherId) < elevOf(activeLevelId);
+        const labelY = goesDown ? 40 : Math.min(230, levelCeilingOf(activeLevelId) - 20);
+        label.position.set(frame.position.x, labelY, frame.position.z);
+        label.renderOrder = 11;
+        label.userData = { type: 'shaftLabel', id: sh.id };
+        threeScene.add(label);
+        wallMeshes3D.push(label);
+        // point de dérivation : chaque niveau relié prend ses circuits à ce point de la gaine (hauteur 1,50 m)
+        // boîte : 10 cm d'épaisseur (perpendiculaire au mur) et 14 cm de long, orientée comme le mur
+        const derivation = new THREE.Mesh(new THREE.BoxGeometry(10, DERIV_BOX_H, 14), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+        // la boîte est collée à la face du mur, côté pièce de la trémie (jamais dans le mur)
+        const dp = derivFacePos2D(sh) || { x: sh.x, y: sh.y, angle: 0 };
+        derivation.position.set(dp.x - cx, derivHeightOf(sh, activeLevelId), dp.y - cy);
+        derivation.rotation.y = -dp.angle + Math.PI / 2;
+        derivation.renderOrder = 6;
+        derivation.userData = { type: 'derivation', id: sh.id, derivation: true };
+        interactiveObjects3D.push(derivation);
+        threeScene.add(derivation);
+        wallMeshes3D.push(derivation);
+}
+
+// Reconstruit seulement une trémie (taille, hauteur de dérivation) ; renvoie false si la trémie n'est pas du niveau affiché
+function rebuildShaft3D(sh) {
+    if (!shaftsOn().some(x => x.id === sh.id)) return false;
+    const { cx, cy } = scene3DCentre();
+    const drop = o => o.userData && (o.userData.shaftId === sh.id || ((o.userData.type === 'shaft' || o.userData.type === 'shaftLabel' || o.userData.type === 'derivation') && o.userData.id === sh.id));
+    for (let i = threeScene.children.length - 1; i >= 0; i--) if (drop(threeScene.children[i])) threeScene.remove(threeScene.children[i]);
+    for (let i = wallMeshes3D.length - 1; i >= 0; i--) if (drop(wallMeshes3D[i])) wallMeshes3D.splice(i, 1);
+    for (let i = interactiveObjects3D.length - 1; i >= 0; i--) if (drop(interactiveObjects3D[i])) interactiveObjects3D.splice(i, 1);
+    addShaft3D(sh, cx, cy);
+    if (selected3DId === sh.id) {
+        const hit = interactiveObjects3D.find(o => o.userData && o.userData.type === 'shaft' && o.userData.id === sh.id);
+        if (hit) updateSelectionHighlight(hit);
+    }
+    return true;
+}
+
+// Un mur : volume, arêtes, zone cliquable et cote de longueur. levelWalls : murs de l'étage (coupe d'angle)
+function addWall3D(w, levelWalls, cx, cy) {
+    const height = w.height || 250;
+    const wallGeo = wallSolidGeometry(mitredWallOutline(w, levelWalls, cx, cy), height);
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: '#0f766e',
+        transparent: true,
+        opacity: 0.22,
+        roughness: 0.8,
+        metalness: 0,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+    wallMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(wallGeo), new THREE.LineBasicMaterial({ color: '#2dd4bf', transparent: true, opacity: 0.8 })));
+    wallMesh.renderOrder = 5;
+    wallMesh.userData = { type: 'wall', id: w.id };
+    threeScene.add(wallMesh);
+    wallMeshes3D.push(wallMesh);
+    clickableWalls3D.push(wallMesh);
+    // cote de longueur : même texte que le plan 2D (« 4,00 m »), taille fixe à l'écran
+    const wallLen = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+    if (wallLen >= 1) {
+        const cote = makeScreenLabel3D((wallLen / 100).toFixed(2).replace('.', ',') + ' m', textSizePx('cote'), { bold: true, halo: false, dark: '#f1f5f9' });
+        // posée à mi-hauteur, du côté +normale du mur, à demi-épaisseur + 12 cm
+        const ux = (w.x2 - w.x1) / wallLen, uz = (w.y2 - w.y1) / wallLen;
+        const off = (w.thickness || 10) / 2 + 12;
+        cote.position.set((w.x1 + w.x2) / 2 - cx + uz * off, height / 2, (w.y1 + w.y2) / 2 - cy - ux * off);
+        cote.userData = { type: 'wallLabel', id: w.id };
+        threeScene.add(cote);
+        wallMeshes3D.push(cote);
+    }
+}
+
+// Reconstruit seulement les murs réglés et ceux qui se raccordent à eux ; false si aucun n'est à l'étage affiché
+function rebuildWalls3D(ids) {
+    const onLevel = wallsOn();
+    const targets = onLevel.filter(w => ids.includes(w.id));
+    if (!targets.length) return false;
+    const near = (a, b) => [[a.x1, a.y1], [a.x2, a.y2]].some(([px, py]) =>
+        [[b.x1, b.y1], [b.x2, b.y2]].some(([qx, qy]) => Math.hypot(px - qx, py - qy) < 1));
+    const redo = new Set(targets.map(w => w.id));
+    targets.forEach(t => onLevel.forEach(o => { if (near(t, o)) redo.add(o.id); }));
+    for (let i = wallMeshes3D.length - 1; i >= 0; i--) {
+        const m = wallMeshes3D[i];
+        const u = m.userData || {};
+        const mine = (u.type === 'wall' || u.type === 'wallLabel') && redo.has(u.id);
+        if (!mine && u.type !== 'wallSel') continue;
+        threeScene.remove(m);
+        if (u.type === 'wallLabel') {
+            const k = SCREEN_LABELS_3D.findIndex(l => l.sprite === m);
+            if (k >= 0) SCREEN_LABELS_3D.splice(k, 1);
+        }
+        const ci = clickableWalls3D.indexOf(m);
+        if (ci >= 0) clickableWalls3D.splice(ci, 1);
+        disposeSceneObject(m);
+        wallMeshes3D.splice(i, 1);
+    }
+    const { cx, cy } = scene3DCentre();
+    onLevel.filter(w => redo.has(w.id)).forEach(w => addWall3D(w, onLevel, cx, cy));
+    addWallSelectionHighlights();   // cadres et poignées des murs sélectionnés, reposés sur les nouveaux volumes
+    return true;
+}
+
 function build3DScene() {
     if (!threeScene) return;
     if (selectedCircuitId && !circuitById(selectedCircuitId)) selectedCircuitId = null;
@@ -2398,118 +2634,14 @@ function build3DScene() {
     threeScene.add(ceilingMesh3D);
     wallMeshes3D.push(ceilingMesh3D);
 
-    // Trémies (D5) : cadre clair au sol, à la place de chaque trémie du niveau affiché
-    shaftsOn().forEach(sh => {
-        const s = sh.size || 40;
-        const frame = new THREE.LineSegments(
-            new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)),
-              new THREE.LineBasicMaterial({ color: shaftColour() }));
-        const sp = shaftPos2D(sh);
-        frame.position.set(sp.x - cx, 1, sp.y - cy);
-        frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
-        threeScene.add(frame);
-        wallMeshes3D.push(frame);
-        // colonne visible en permanence (même aspect qu'à la sélection) : repère la trémie en 3D
-        const span = shaftSpan3D(sh);
-        const column = new THREE.LineSegments(
-            new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
-            new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.85 }));
-        column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
-        column.userData.shaftId = sh.id;
-        threeScene.add(column);
-        wallMeshes3D.push(column);
-        // zone invisible de la trémie (hauteur de la pièce) : permet de la sélectionner au clic en 3D
-        const hit = new THREE.Mesh(
-            new THREE.BoxGeometry(s, span.height, s),
-            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
-        hit.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
-        hit.userData = { type: 'shaft', id: sh.id };
-        threeScene.add(hit);
-        wallMeshes3D.push(hit);
-        interactiveObjects3D.push(hit);
-        // trémie sélectionnée : volume blanc translucide dans la colonne (en plus du cadre de sélection)
-        if (sh.id === selected3DId) {
-            const sel = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
-                new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.3, depthWrite: false }));
-            sel.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
-            sel.renderOrder = 5;
-            threeScene.add(sel);
-            wallMeshes3D.push(sel);
-        }
-        // étiquette visible au-dessus de la trémie : les niveaux qu'elle relie
-
-        // noms des niveaux reliés : taille fixe à l'écran (12 px), texte seul, sans fond
-        const label = makeScreenLabel3D(shaftLevelNames(sh).join(' ↔ '), 12, { bold: true, halo: false });
-        // l'étiquette se place en bas de la trémie si elle relie un niveau plus bas, en haut sinon ;
-        // elle est masquée par les murs et les gaines (pas de passage par-dessus)
-
-
-
-        const elevOf = lvId => ((projectData.levels || []).find(l => l.id === lvId) || {}).elevation || 0;
-        const otherId = (sh.levelIds || [sh.levelId]).find(lvId => lvId !== activeLevelId);
-        const goesDown = otherId !== undefined && elevOf(otherId) < elevOf(activeLevelId);
-        const labelY = goesDown ? 40 : Math.min(230, levelCeilingOf(activeLevelId) - 20);
-        label.position.set(frame.position.x, labelY, frame.position.z);
-        label.renderOrder = 11;
-        threeScene.add(label);
-        wallMeshes3D.push(label);
-        // point de dérivation : chaque niveau relié prend ses circuits à ce point de la gaine (hauteur 1,50 m)
-        // boîte : 10 cm d'épaisseur (perpendiculaire au mur) et 14 cm de long, orientée comme le mur
-        const derivation = new THREE.Mesh(new THREE.BoxGeometry(10, DERIV_BOX_H, 14), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-        // même remède que pour les appareils : la boîte est posée à 1,5 cm de la face du mur (pas sur l'axe de la paroi
-        // transparente) et son ordre de dessin est fixe, sinon le tri des transparents la fait scintiller
-        // la boîte est collée à la face du mur, côté pièce de la trémie (jamais dans le mur)
-        const dp = derivFacePos2D(sh) || { x: sh.x, y: sh.y, angle: 0 };
-        derivation.position.set(dp.x - cx, derivHeightOf(sh, activeLevelId), dp.y - cy);
-        derivation.rotation.y = -dp.angle + Math.PI / 2;
-        derivation.renderOrder = 6;
-        derivation.userData = { type: 'derivation', id: sh.id, derivation: true };
-        interactiveObjects3D.push(derivation);
-        threeScene.add(derivation);
-        wallMeshes3D.push(derivation);
-
-    });
+    shaftsOn().forEach(sh => addShaft3D(sh, cx, cy));
 
     // Escaliers : marches pleines de la marche basse à la marche haute, emprise au sol, zone cliquable
     stairsOn().forEach(st => addStair3D(st, cx, cy));
 
     const levelWalls = wallsOn();
-    levelWalls.forEach(w => {
-        const height = w.height || 250;
-        const wallGeo = wallSolidGeometry(mitredWallOutline(w, levelWalls, cx, cy), height);
-        const wallMat = new THREE.MeshStandardMaterial({
-            color: '#0f766e',
-            transparent: true,
-            opacity: 0.22,
-            roughness: 0.8,
-            metalness: 0,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        });
-        const wallMesh = new THREE.Mesh(wallGeo, wallMat);
-        // arêtes : même lecture que les murs fantômes des autres étages
-        wallMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(wallGeo), new THREE.LineBasicMaterial({ color: '#2dd4bf', transparent: true, opacity: 0.8 })));
-        // Ordre fixe : les murs transparents sont dessinés après les autres transparents, quel que soit l'angle de vue
-        // (sinon le tri par distance de Three.js change d'ordre pendant la rotation et fait scintiller les appareils)
-        wallMesh.renderOrder = 5;
-        wallMesh.userData = { type: 'wall', id: w.id };
-        threeScene.add(wallMesh);
-        wallMeshes3D.push(wallMesh);
-
-        clickableWalls3D.push(wallMesh);
-        // cote de longueur : même texte que le plan 2D (« 4,00 m »), taille fixe à l'écran
-        const wallLen = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
-        if (wallLen >= 1) {
-            const cote = makeScreenLabel3D((wallLen / 100).toFixed(2).replace('.', ',') + ' m', 11, { bold: true, halo: false, dark: '#f1f5f9' });
-            // posée à mi-hauteur, du côté +normale du mur, à demi-épaisseur + 12 cm
-            const ux = (w.x2 - w.x1) / wallLen, uz = (w.y2 - w.y1) / wallLen;
-            const off = (w.thickness || 10) / 2 + 12;
-            cote.position.set((w.x1 + w.x2) / 2 - cx + uz * off, height / 2, (w.y1 + w.y2) / 2 - cy - ux * off);
-            threeScene.add(cote);
-            wallMeshes3D.push(cote);
-        }
-
-    });
+    
+    levelWalls.forEach(w => addWall3D(w, levelWalls, cx, cy));
 
     openingsOn().forEach(op => {
         const wall = wallsOn().find(w => w.id === op.wallId);
@@ -2533,10 +2665,10 @@ function build3DScene() {
 
     // Textes ajoutables (patch 72) : étiquette à taille fixe, à la hauteur choisie, cliquable
     textsOn().forEach(tx => {
-        const s = makeScreenLabel3D(tx.text || '', 12, { bold: true, halo: false, dark: '#f8fafc' });
+        const s = makeScreenLabel3D(tx.text || '', textSizePx('text'), { bold: true, halo: false, light: '#1e3a8a', dark: '#fde68a', frame: tx.id === selected3DId });
         s.position.set(tx.x - cx, tx.height || 150, tx.y - cy);
         s.renderOrder = 11;
-        s.userData = { type: 'texte', id: tx.id };
+        Object.assign(s.userData, { type: 'texte', id: tx.id });
         threeScene.add(s);
         wallMeshes3D.push(s);
         interactiveObjects3D.push(s);
@@ -2546,6 +2678,7 @@ function build3DScene() {
     addCollisionHighlights();
     renderCableNetwork(cx, cy);
 
+    addMultiHighlights3D();   // patch 79 : cadres de la sélection multiple
     if (selected3DId) {
         let foundObj = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === selected3DId);
         if (foundObj) {
@@ -2644,7 +2777,7 @@ function createOpeningMesh3D(op, wall, cx, cy) {
         group.add(glass);
     }
 
-    group.userData = { type: 'opening', id: op.id, opType: op.type, wallId: wall.id };
+    group.userData = { type: 'opening', id: op.id, opType: op.type, wallId: wall.id, side: op.side, hingeSide: op.hingeSide };
     group.traverse(child => {
         child.userData = group.userData;
     });
@@ -2692,6 +2825,7 @@ function applianceModel(el) {
     const accent = accentHex || '#94a3b8';
     const white = mMat('#f8fafc', { rough: 0.35 });
     const ivory = mMat('#e2e8f0', { rough: 0.45 });
+    const grey = mMat('#797c80', { rough: 0.5 });
     const dark = mMat('#0f172a', { rough: 0.6 });
     const metal = mMat('#cbd5e1', { rough: 0.25, metal: 0.8 });
     const accentMat = mMat(accent, { rough: 0.4 });
@@ -2699,13 +2833,12 @@ function applianceModel(el) {
     if (el.type === 'outlet_16a' || el.type === 'outlet_20a' || el.type === 'outlet_20a_classic' || el.type === 'outlet_switched') {
         // prise 2P+T encastrée : plaque carrée, collerette ronde, deux alvéoles et broche de terre
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        cylZ(5.4, 5.6, 0.8, ivory, 0, 0, 0.6);
+        cylZ(5.6, 5.6, 0.8, accentMat, 0, 0, 0.6);   // bague colorée (couleur du circuit)
         cylZ(4.2, 4.2, 0.4, white, 0, 0, 1.1);
-        cylZ(0.62, 0.62, 0.5, dark, -1.0, -0.2, 1.3);
-        cylZ(0.62, 0.62, 0.5, dark, 1.0, -0.2, 1.3);
+        cylZ(0.62, 0.62, 0.5, dark, -1.5, -0.2, 1.3);
+        cylZ(0.62, 0.62, 0.5, dark, 1.5, -0.2, 1.3);
         cylZ(0.4, 0.4, 1.8, metal, 0, 2.5, 1.6);                              // broche de terre
-        if (el.type === 'outlet_switched') cylZ(1.1, 1.1, 0.4, accentMat, 4.2, 4.2, 0.6);   // repère : prise commandée
-        else box(5.5, 1.1, 0.5, accentMat, 0, ['outlet_20a', 'outlet_20a_classic'].includes(el.type) ? 4.7 : -4.8, 0.4);   // repère de calibre
+        if (el.type === 'outlet_switched') cylZ(0.9, 0.9, 0.4, accentMat, 4.9, 4.9, 0.6);   // point de commande, dans le coin
     } else if (el.type === 'outlet_dedicated_20' || el.type === 'outlet_dedicated_32') {
         // prise dédiée (20 ou 32 A) : même gabarit ; la couleur de la bague distingue le calibre
         cylZ(7.4, 7.6, 1.3, white, 0, 0, -0.35);
@@ -2716,9 +2849,16 @@ function applianceModel(el) {
     } else if (el.type === 'doorbell_button') {
         // bouton de sonnette : plaque et poussoir lumineux
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
-        cylZ(3.6, 3.8, 1.4, white, 0, 0, 1.0);
-        cylZ(2.0, 2.0, 0.4, accentMat, 0, 0, 1.8);
+        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        box(6.4, 6.4, 1.2, white, 0, 0, 1.0);                                              // centre carré blanc
+        box(4.4, 0.3, 0.4, dark, 0, 0, 1.7);                                            // grille du haut-parleur
+        box(4.4, 0.3, 0.4, dark, 0, -0.7, 1.7);
+        box(4.4, 0.3, 0.4, dark, 0, 0.7, 1.7);
+        box(4.4, 0.3, 0.4, dark, 0, -1.4, 1.7); 
+        box(4.4, 0.3, 0.4, dark, 0, 1.4, 1.7);
+        box(4.4, 0.3, 0.4, dark, 0, -2.1, 1.7);
+        box(4.4, 0.3, 0.4, dark, 0, 2.1, 1.7);
+        
     } else if (el.type === 'doorbell_chime') {
         // sonnerie : boîtier rond avec grille de haut-parleur
         cylZ(6.0, 6.2, 2.0, white, 0, 0, 0.2);
@@ -2727,7 +2867,7 @@ function applianceModel(el) {
     } else if (el.type === 'shutter_control') {
         // commande de volet : plaque avec deux poussoirs (monter / descendre)
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
+        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
         box(4.6, 3.6, 1.2, white, 0, 2.6, 1.0);
         box(4.6, 3.6, 1.2, white, 0, -2.6, 1.0);
         box(0.8, 1.6, 0.4, accentMat, 0, 2.6, 1.8);                           // flèche haut
@@ -2740,57 +2880,66 @@ function applianceModel(el) {
     } else if (el.type === 'switch_simple' || el.type === 'switch_va_et_vient') {
         // Interrupteur mécanique : plaque, cadre et bascule.
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
+        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
         const rocker = box(6.2, 8.4, 1.0, white, 0, 0, 1.0);
         rocker.rotation.x = -0.16;
-        box(5.2, 0.5, 0.35, ivory, 0, 0, 1.55);                                // creux de la bascule
-        cylZ(0.5, 0.5, 0.4, accentMat, 0, -5.0, 0.5);                           // voyant
+        box(5.2, 0.5, 0.35, grey, 0, 0, 1.55);                                // creux de la bascule
         if (el.type === 'switch_va_et_vient') {
-            box(0.8, 2.0, 0.45, accentMat, 0, -2.6, 1.75);
-            box(0.8, 2.0, 0.45, accentMat, 0, 2.6, 1.75);
+            box(0.8, 2.0, 2.2, accentMat, 0, -2.6, 1.0);
+            box(0.8, 2.0, 2.2, accentMat, 0, 2.6, 1.0);
         }
     } else if (el.type === 'switch_pushbutton') {
+        // bouton-poussoir : plaque, cadre et bouton     
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
-        cylZ(3.4, 3.8, 1.6, white, 0, 0, 1.0);
-        cylZ(2.2, 2.2, 0.5, accentMat, 0, 0, 2.0);
+        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        cylZ(4.0, 4.0, 0.4, grey, 0, 0, 1.0);                                             // anneau chromé à la base
+        cylZ(3.4, 3.8, 1.6, white, 0, 0, 1.0);                                             // bouton rond
+        cylZ(2.2, 2.2, 0.5, accentMat, 0, 0, 2.0);                                             // axe de rotation
     } else if (el.type === 'switch_dimmer') {
         // variateur : plaque, grosse molette et repère de réglage
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
-        cylZ(4.2, 4.2, 0.5, ivory, 0, 0, 0.9);                                  // collerette
+        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
         cylZ(3.4, 3.6, 1.4, white, 0, 0, 1.6);                                  // molette
         box(0.8, 2.2, 0.4, accentMat, 0, 2.2, 2.35);                            // repère
+        cylZ(4.0, 4.0, 0.4, grey, 0, 0, 1.0);                                             // anneau chromé à la base
     } else if (el.type === 'motion_timer') {
         // détecteur de mouvement : plaque, boîtier arrondi et lentille de Fresnel
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(8.2, 10.4, 0.5, ivory, 0, 0, 0.45);
-        cylZ(3.8, 4.4, 2.0, white, 0, 0, 1.2);
-        cylZ(2.4, 2.4, 0.4, mMat('#93c5fd', { rough: 0.2 }), 0, 0, 2.3);
+        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        cylZ(4.0, 4.0, 0.5, ivory, 0, 0, 1.0);                                   // cadran
+        for (let i = 0; i < 12; i++) {                                            // graduations : 12 points autour du cadran
+            const a = i * Math.PI / 6;
+            cylZ(0.35, 0.35, 0.3, dark, Math.sin(a) * 3.2, Math.cos(a) * 3.2, 1.3);
+        }
+        cylZ(2.2, 2.2, 0.8, white, 0, 0, 1.6);                                    // molette centrale
+        cylZ(2.5, 2.5, 0.5, grey, 0, 0, 1.2);                                 // axe de rotation
+        box(0.5, 2.0, 0.3, accentMat, 0, 1.0, 2.1);                               // aiguille à la couleur du circuit
     } else if (el.type === 'wall_light') {
         // applique : platine ronde, bras, vasque ouverte vers le haut, ampoule
         cylZ(4.8, 5.0, 1.4, metal, 0, 0, -0.3);
         cylZ(1.0, 1.0, 7.0, mMat('#64748b', { rough: 0.3, metal: 0.7 }), 0, 0, 3.7);
-        const bowl = new THREE.Mesh(mGeo('sph', 6.2, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat('#fff7ed', { rough: 0.3, emissive: '#fde68a', emissiveIntensity: 0.35, double: true }));
-        bowl.position.set(0, 2.2, 10.5);
+        const bowl = new THREE.Mesh(mGeo('sph', 6.2, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat('#facc15', { rough: 0.3, emissive: '#facc15', emissiveIntensity: 0.35, double: true }));        bowl.position.set(0, 2.2, 10.5);
         g.add(bowl);
-        const bulb = new THREE.Mesh(mGeo('sph', 2.5, 16, 12), mMat('#fde047', { emissive: '#fde047', emissiveIntensity: 1 }));
+        const bulb = new THREE.Mesh(mGeo('sph', 2.5, 16, 12), mMat('#fdfdfd', { emissive: '#ca8a04', emissiveIntensity: 1 }));
         bulb.position.set(0, 1.2, 10.5);
         g.add(bulb);
     } else if (el.type === 'light_spot') {
         // spot encastré : collerette affleurante et verre ambré
-        cylY(5.4, 5.4, 1.0, white, 0, 0.5, 0);
+        cylY(5.4, 5.4, 1.0, mMat('#facc15', { rough: 0.35 }), 0, 0.5, 0);
         cylY(3.9, 3.9, 0.8, mMat('#fffbeb', { rough: 0.2, emissive: '#fde68a', emissiveIntensity: 0.6 }), 0, -0.3, 0);
     } else if (el.type === 'smoke_detector') {
         // DAAF : boîtier rond plat, grille et voyant LED
+        const liseré = mMat('#64748b', { rough: 0.4 });
         cylY(6.2, 6.2, 3.0, white, 0, 1.2, 0);
+        cylY(6.3, 6.3, 0.5, liseré, 0, -0.3, 0);   // liseré gris bas
+        cylY(6.3, 6.3, 0.5, liseré, 0, 2.7, 0);    // liseré gris haut
         cylY(4.2, 4.2, 0.4, ivory, 0, -0.5, 0);
         cylY(0.7, 0.7, 0.5, accentMat, 2.6, -0.6, 0);
     } else if (el.type === 'light_ceiling') {
         // plafonnier : rosace au plafond, couronne, diffuseur en demi-sphère opaline
-        cylY(5.0, 5.0, 1.0, white, 0, 4.7, 0);
-        cylY(12.8, 12.8, 0.9, mMat('#d4a017', { rough: 0.3, metal: 0.6 }), 0, 4.1, 0);
-        const dome = new THREE.Mesh(mGeo('sph', 12.4, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat('#fffbeb', { rough: 0.2, emissive: '#fde68a', emissiveIntensity: 0.55, opacity: 0.93, double: true }));
+        cylY(5.0, 5.0, 1.0, mMat('#facc15', { rough: 0.35 }), 0, 4.7, 0);
+        cylY(12.8, 12.8, 0.9, mMat('#eec265', { rough: 0.3, metal: 0.3 }), 0, 4.1, 0);
+        const dome = new THREE.Mesh(mGeo('sph', 12.4, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mMat('#fde047', { rough: 0.2, emissive: '#fde047', emissiveIntensity: 0.55, opacity: 0.93, double: true }));
         dome.position.set(0, 3.9, 0);
         g.add(dome);
     } else if (el.type === 'junction_box') {
@@ -3194,11 +3343,39 @@ function on3DPointerDown(e) {
             }
         }
     } else {
+        // patch 79 : Ctrl / Maj + clic ajoute ou retire un appareil, une ouverture, une trémie ou un escalier
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            const multiHits = orderInteractiveHits(raycaster.intersectObjects(interactiveObjects3D, true));
+            const multiDeriv = multiHits.find(i => i.object.userData && i.object.userData.derivation);
+            let multiTarget = multiDeriv ? multiDeriv.object : (multiHits.length ? multiHits[0].object : null);
+            while (multiTarget && multiTarget.parent && multiTarget.parent !== threeScene) multiTarget = multiTarget.parent;
+            const mid = multiTarget && multiTarget.userData ? multiTarget.userData.id : null;
+            // murs, textes et éléments sans identifiant : rien ne se passe (pas de glissement)
+            if (mid && !textById(mid) && !(projectData.walls || []).some(w => w.id === mid)) {
+                const isDev = electricalOn().some(x => x.id === mid);
+                // l'élément seul déjà sélectionné rejoint la sélection multiple
+                const prev = selected3DId;
+                if (prev && prev !== mid) {
+                    if (electricalOn().some(x => x.id === prev) && !selectedDeviceIds.includes(prev)) selectedDeviceIds = [...selectedDeviceIds, prev];
+                    else if (isOpeningLikeId(prev) && !selectedOpeningIds.includes(prev)) selectedOpeningIds = [...selectedOpeningIds, prev];
+                }
+                if (isDev) selectedDeviceIds = selectedDeviceIds.includes(mid) ? selectedDeviceIds.filter(x => x !== mid) : [...selectedDeviceIds, mid];
+                else if (isOpeningLikeId(mid)) selectedOpeningIds = selectedOpeningIds.includes(mid) ? selectedOpeningIds.filter(x => x !== mid) : [...selectedOpeningIds, mid];
+                selected3DId = null;
+                selectedCircuitId = null;
+                syncElementInspectors();
+                updateCircuitsUI();
+                build3DScene();
+                refreshToolHint();
+            }
+            return;
+        }
         const interactiveIntersects = orderInteractiveHits(raycaster.intersectObjects(interactiveObjects3D, true));
         const derivHit = interactiveIntersects.find(i => i.object.userData && i.object.userData.derivation);
         if (derivHit) {
             // un clic sur la boîte sélectionne la trémie (sa hauteur se règle dans le panneau)
             setSelectedWalls([]);
+            clearMultiSelection3D();   // patch 79
             select3DElement(derivHit.object.userData.id, derivHit.object);
             return;
         }
@@ -3210,6 +3387,7 @@ function on3DPointerDown(e) {
                 const targetId = target.userData.id;
                 const wasSelected = selected3DId === target.userData.id;   // élément déjà sélectionné avant ce clic
                 setSelectedWalls([]);   // un mur sélectionné ne reste pas ouvert quand un autre élément est choisi
+                clearMultiSelection3D();   // patch 79 : un clic simple vide la sélection multiple
                 select3DElement(targetId, target);
                 if ((projectData.shafts || []).some(s => s.id === targetId)) {
                     build3DScene();   // volume de sélection visible dès le clic
@@ -3267,6 +3445,7 @@ function on3DPointerDown(e) {
             if (wid && projectData.walls.some(w => w.id === wid) && !projectData.wallsLocked) {
                 const wasSelected = selectedWallIds.includes(wid);
                 if (selected3DId) { selected3DId = null; selectedCircuitId = null; }
+                clearMultiSelection3D();   // patch 79
                 setSelectedWalls([wid]);
                 syncElementInspectors();
                 // règle « sélectionner d'abord » : le glissement du mur demande qu'il soit déjà sélectionné ;
@@ -3363,6 +3542,8 @@ function on3DPointerMove(e) {
             item.x = Math.round(planeIntersectPoint.x - (g.x * cosA - g.z * sinA) + cx);
             item.y = Math.round(planeIntersectPoint.z - (g.x * sinA + g.z * cosA) + cy);
             if (stairDrag) snapStairToWalls(stairDrag, prevSt);   // seul l'escalier s'aimante aux murs
+            if (stairDrag && moveStairLive3D(stairDrag)) return;   // déplacement direct, sans reconstruction
+            if (shaftDrag && moveShaftLive3D(shaftDrag)) return;   // trémie : déplacement direct
             scheduleBuild3D();
             return;
         }
@@ -3370,14 +3551,23 @@ function on3DPointerMove(e) {
         if (textDrag) {
             textDrag.x = Math.round(planeIntersectPoint.x + cx);
             textDrag.y = Math.round(planeIntersectPoint.z + cy);
-            scheduleBuild3D();
+            // déplacement direct du sprite : pas de reconstruction de la scène, donc fluide
+            const txSprite = wallMeshes3D.find(o => o.userData && o.userData.type === 'texte' && o.userData.id === textDrag.id);
+            if (txSprite) { txSprite.position.x = textDrag.x - cx; txSprite.position.z = textDrag.y - cy; }
+            else scheduleBuild3D();
             return;
         }
         let ceilingEl = projectData.electrical.find(el => el.id === dragging3DElementId && CEILING_TYPES.includes(el.type));
         if (ceilingEl) {
             ceilingEl.x = planeIntersectPoint.x + cx;
             ceilingEl.z = planeIntersectPoint.z + cy;
-            scheduleBuild3D();
+            // déplacement direct du modèle ; les câbles sont recalculés au relâchement
+            const grp = interactiveObjects3D.find(o => o.userData && o.userData.type === 'electrical' && o.userData.id === ceilingEl.id);
+            if (grp) {
+                grp.position.x = ceilingEl.x - cx;
+                grp.position.z = ceilingEl.z - cy;
+                if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+            } else scheduleBuild3D();
             return;
         }
 
@@ -3426,7 +3616,7 @@ function on3DPointerMove(e) {
                 if (distInput) distInput.value = closestDistCm;
                 if (distVal) distVal.textContent = closestDistCm + ' cm';
                 // appareil posé sur un mur : seul son groupe bouge pendant le geste ; sinon reconstruction habituelle
-                if (!moveElementGroup3D(item)) scheduleBuild3D();
+                if (!moveElementGroup3D(item) && !moveOpeningLive3D(item)) scheduleBuild3D();
             }
         }
     }
@@ -3446,8 +3636,12 @@ function startWallDrag3D(e, wid, wasSelected) {
     const d1 = Math.hypot(p.x - wall.x1, p.y - wall.y1);
     const d2 = Math.hypot(p.x - wall.x2, p.y - wall.y2);
     if (wasSelected && Math.min(d1, d2) < 30) mode = d1 <= d2 ? 'end1' : 'end2';
+    // murs qui touchent le mur au départ : leur coupe d'angle change pendant le geste
+    const touchesAtStart = o => o.id !== wid && [[wall.x1, wall.y1], [wall.x2, wall.y2]].some(([px, py]) =>
+        [[o.x1, o.y1], [o.x2, o.y2]].some(([qx, qy]) => Math.hypot(px - qx, py - qy) < 1));
+    const neighbourIds = wallsOn().filter(touchesAtStart).map(o => o.id);
     wallDrag3D = { wallId: wid, mode, startWall: { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 },
-        origin: p, down: { x: e.clientX, y: e.clientY }, moved: false };
+        origin: p, down: { x: e.clientX, y: e.clientY }, moved: false, neighbourIds };
     if (threeControls) threeControls.enabled = false;
 }
 
@@ -3489,7 +3683,132 @@ function updateWallDrag3D(e) {
     if (li) li.value = L.toFixed(2);
     const lv = document.getElementById('inspector-length-val');
     if (lv) lv.textContent = L.toFixed(2) + ' m';
-    scheduleBuild3D();
+    scheduleWallLive3D(d);
+}
+
+// Déplacement direct d'un escalier et de son étiquette ; renvoie false si les objets ne sont pas trouvés (reconstruction)
+function moveStairLive3D(st) {
+    const { cx, cy } = scene3DCentre();
+    const grp = threeScene.children.find(o => o.userData && o.userData.type === 'stair' && o.userData.id === st.id);
+    if (!grp) return false;
+    grp.position.x = st.x - cx;
+    grp.position.z = st.y - cy;
+    const lab = threeScene.children.find(o => o.userData && o.userData.type === 'stairLabel' && o.userData.id === st.id);
+    if (lab) { lab.position.x = st.x - cx; lab.position.z = st.y - cy; }
+    if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+    return true;
+}
+
+// Déplacement direct d'une trémie : toutes ses pièces sont décalées du même écart ; renvoie false si le repère n'est pas trouvé
+function moveShaftLive3D(sh) {
+    const { cx, cy } = scene3DCentre();
+    const sp = shaftPos2D(sh);
+    const frame = threeScene.children.find(o => o.userData && o.userData.shaftId === sh.id && o.userData.shaftFrame);
+    if (!frame) return false;
+    const dx = (sp.x - cx) - frame.position.x;
+    const dz = (sp.y - cy) - frame.position.z;
+    threeScene.children.forEach(o => {
+        const u = o.userData;
+        if (!u) return;
+        const mine = u.shaftId === sh.id || (u.type === 'shaft' && u.id === sh.id) || (u.type === 'shaftLabel' && u.id === sh.id);
+        if (mine) { o.position.x += dx; o.position.z += dz; }
+    });
+    if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+    return true;
+}
+// Déplacement direct d'une porte ou fenêtre le long de son mur (même formule que createOpeningMesh3D) ; renvoie false si le groupe n'est pas trouvé
+function moveOpeningLive3D(op) {
+    const wall = projectData.walls.find(w => w.id === op.wallId);
+    const grp = threeScene.children.find(o => o.userData && o.userData.type === 'opening' && o.userData.id === op.id);
+    if (!wall || !grp) return false;
+    // mur, côté ou sens d'ouverture changé : l'orientation et le pivot changent, on reconstruit
+    if (grp.userData.wallId !== op.wallId || grp.userData.side !== op.side || grp.userData.hingeSide !== op.hingeSide) return false;
+    const { cx, cy } = scene3DCentre();
+    const wx1 = wall.x1 - cx, wz1 = wall.y1 - cy, wx2 = wall.x2 - cx, wz2 = wall.y2 - cy;
+    const wallLen = Math.hypot(wx2 - wx1, wz2 - wz1);
+    let d = op.distanceFromStart !== undefined ? op.distanceFromStart : (op.positionRatio !== undefined ? op.positionRatio * wallLen : wallLen / 2);
+    d = Math.max(10, Math.min(wallLen - 10, d));
+    const t = wallLen > 0 ? d / wallLen : 0.5;
+    grp.position.x = wx1 + t * (wx2 - wx1);
+    grp.position.z = wz1 + t * (wz2 - wz1);
+    // fenêtre : centre à allège + demi-hauteur (même formule que createOpeningMesh3D) ; la porte garde sa hauteur
+    if (op.type !== 'door_single') grp.position.y = (op.sillHeight !== undefined ? op.sillHeight : 90) + (op.height || 120) / 2;
+    if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+    return true;
+}
+
+// Plafonnier : déplacement direct du groupe sur le plan
+function moveCeilingLive3D(el) {
+    const { cx, cy } = scene3DCentre();
+    const grp = interactiveObjects3D.find(o => o.userData && o.userData.type === 'electrical' && o.userData.id === el.id);
+    if (!grp) return false;
+    grp.position.x = el.x - cx;
+    grp.position.z = el.z - cy;
+    return true;
+}
+// Texte : déplacement direct du sprite sur le plan
+function moveTextLive3D(tx) {
+    const { cx, cy } = scene3DCentre();
+    const s = wallMeshes3D.find(o => o.userData && o.userData.type === 'texte' && o.userData.id === tx.id);
+    if (!s) return false;
+    s.position.x = tx.x - cx;
+    s.position.z = tx.y - cy;
+    return true;
+}
+// Choisit le déplacement direct selon le type d'élément ; reconstruction si aucun ne s'applique
+function refreshNudge3D(m) {
+    if (currentMode !== '3d') { refreshSelectedView(); return; }
+    const it = m.item;
+    let ok = false;
+    if (m.kind === 'mural') ok = moveElementGroup3D(it);
+    else if (m.kind === 'plafonnier') ok = moveCeilingLive3D(it);
+    else if (m.kind === 'escalier') ok = moveStairLive3D(it);
+    else if (m.kind === 'trémie') ok = moveShaftLive3D(it);
+    else if (m.kind === 'texte') ok = moveTextLive3D(it);
+    else if (m.kind === 'ouverture') ok = moveOpeningLive3D(it);
+    if (!ok) { refreshSelectedView(); return; }
+    if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+}
+
+// Reconstruit seulement le groupe 3D d'une porte ou fenêtre (largeur, hauteur, allège) ; renvoie false si le mur ou le groupe est introuvable
+function rebuildOpening3D(op) {
+    const wall = projectData.walls.find(w => w.id === op.wallId);
+    const old = threeScene.children.find(o => o.userData && o.userData.type === 'opening' && o.userData.id === op.id);
+    if (!wall || !old) return false;
+    const { cx, cy } = scene3DCentre();
+    const mesh = createOpeningMesh3D(op, wall, cx, cy);
+    if (!mesh) return false;
+    const inW = wallMeshes3D.indexOf(old), inI = interactiveObjects3D.indexOf(old);
+    if (inW >= 0) wallMeshes3D[inW] = mesh;
+    if (inI >= 0) interactiveObjects3D[inI] = mesh;
+    threeScene.remove(old);
+    threeScene.add(mesh);
+    if (selected3DId === op.id) updateSelectionHighlight(mesh);
+    if (selectedOpeningIds.includes(op.id)) addMultiHighlights3D();
+    return true;
+}
+
+// Le groupe réel d'un escalier : celui qui a des zones cliquables (les fantômes des autres niveaux n'en ont pas)
+function findRealStair3D(id) {
+    return threeScene.children.find(o => o.userData && o.userData.type === 'stair' && o.userData.id === id && o.children.some(c => interactiveObjects3D.includes(c))) || null;
+}
+// Reconstruit seulement l'escalier réglé (forme, étiquette, zones cliquables) ; renvoie false s'il n'est pas trouvé
+function rebuildStair3D(st) {
+    const real = findRealStair3D(st.id);
+    if (!real) return false;
+    const { cx, cy } = scene3DCentre();
+    const kids = real.children;
+    const lab = threeScene.children.find(o => o.userData && o.userData.type === 'stairLabel' && o.userData.id === st.id) || null;
+    threeScene.remove(real);
+    if (lab) threeScene.remove(lab);
+    const drop = o => o === real || o === lab || kids.includes(o);
+    for (let i = wallMeshes3D.length - 1; i >= 0; i--) if (drop(wallMeshes3D[i])) wallMeshes3D.splice(i, 1);
+    for (let i = interactiveObjects3D.length - 1; i >= 0; i--) if (drop(interactiveObjects3D[i])) interactiveObjects3D.splice(i, 1);
+    addStair3D(st, cx, cy);
+    const nouveau = findRealStair3D(st.id);
+    if (selected3DId === st.id && nouveau) updateSelectionHighlight(nouveau);
+    if (selectedOpeningIds.includes(st.id)) addMultiHighlights3D();
+    return true;
 }
 
 // Une reconstruction par image au plus pendant le glissement
@@ -3499,6 +3818,22 @@ function scheduleBuild3D() {
     requestAnimationFrame(() => { wallDragFrame3D = false; build3DScene(); });
 }
 
+// Glissement d'un mur : une mise à jour par image, limitée au mur, à ses voisins et à ce qui est posé dessus
+let wallLiveFrame3D = false;
+function scheduleWallLive3D(d) {
+    if (wallLiveFrame3D) return;
+    wallLiveFrame3D = true;
+    requestAnimationFrame(() => {
+        wallLiveFrame3D = false;
+        if (!wallDrag3D || wallDrag3D !== d) return;   // geste terminé entre-temps : endWallDrag3D reconstruit
+        if (!rebuildWalls3D([d.wallId, ...(d.neighbourIds || [])])) { build3DScene(); return; }
+        let ok = true;
+        openingsOn().filter(op => op.wallId === d.wallId).forEach(op => { if (!moveOpeningLive3D(op)) ok = false; });
+        electricalOn().filter(el => el.wallId === d.wallId && !CEILING_TYPES.includes(el.type))
+            .forEach(el => { if (!moveElementGroup3D(el)) ok = false; });
+        if (!ok) build3DScene();   // ouverture ou appareil dont le groupe ne peut pas être déplacé seul
+    });
+}
 function endWallDrag3D() {
     const d = wallDrag3D;
     const old = wallCentreLock3D;
@@ -3512,10 +3847,23 @@ function endWallDrag3D() {
         const dx = old.cx - now.cx, dz = old.cy - now.cy;
         if (threeCamera) { threeCamera.position.x += dx; threeCamera.position.z += dz; }
         if (threeControls && threeControls.target) { threeControls.target.x += dx; threeControls.target.z += dz; }
-        showUndoBar(wallMoveMessage(d.linksBefore, d.mode === 'move' ? 'déplacé' : 'étiré'));
         if (threeControls) threeControls.update();
     }
     build3DScene();
+    if (d.moved) {
+        // message de fin de geste et alerte de superposition dans la même barre (sinon l'alerte est masquée)
+        const msg = wallMoveMessage(d.linksBefore, d.mode === 'move' ? 'déplacé' : 'étiré');
+        const clashes = computeWallOpeningClashes();
+        if (clashes.length) {
+            const alert = clashes.length === 1
+                ? 'SUPERPOSITION : ce mur traverse une porte ou une fenêtre (surlignée en rouge).'
+                : clashes.length + ' superpositions : des murs traversent des portes ou fenêtres (surlignées en rouge).';
+            showUndoBar(msg + ' — ' + alert);
+            showNotification(alert, 'error');
+        } else {
+            showUndoBar(msg);
+        }
+    }
 }
 // Déplacement en direct d'un appareil posé sur un mur : seul son groupe 3D bouge, sans reconstruire la scène.
 // Mêmes formules que createElementMesh3D. Renvoie false si ce cas ne s'applique pas (la scène est alors reconstruite).
@@ -3591,7 +3939,7 @@ function addGhostShaft3D(sh, cx, cy) {
     const span = shaftSpan3D(sh);
     const base = span.base;
     const add = obj => { threeScene.add(obj); wallMeshes3D.push(obj); return obj; };
-    const colMat = new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.35, depthWrite: false });
+    const colMat = new THREE.LineBasicMaterial({ color: shaftColour(), transparent: true, opacity: 0.35, depthWrite: false });
     const frame = add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(s, 1, s)), colMat));
     frame.position.set(p.x - cx, base + 1, p.y - cy);
     frame.renderOrder = 3;
@@ -3700,6 +4048,16 @@ function buildStair3D(st, cx, cy, ghost = false) {
 // Escalier réel (ou fantôme d'un autre niveau) : ajouté à la scène, avec sa zone cliquable si ce n'est pas un fantôme
 function addStair3D(st, cx, cy, ghost = false) {
     const group = buildStair3D(st, cx, cy, ghost);
+        // nom des niveaux reliés : au-dessus de l'escalier, taille du réglage « Noms des niveaux reliés »
+    if (!ghost) {
+        const lab = makeScreenLabel3D(stairLevelLabel(st), textSizePx('niveau'), { bold: true, halo: false, light: '#6d28d9', dark: '#c4b5fd' });
+        lab.position.set(st.x - cx, group.position.y + Math.max(stairRiseCm(st), 1) - 10, st.y - cy);
+        lab.userData = { type: 'stairLabel', id: st.id };
+        lab.renderOrder = 11;
+        lab.userData = { type: 'stairLabel', id: st.id };
+        threeScene.add(lab);
+        wallMeshes3D.push(lab);
+    }
     // zone cliquable : chaque marche visible (horizontale et contremarche), pas le volume entier de la montée
     if (!ghost) {
         group.children.forEach(child => {
@@ -3822,8 +4180,98 @@ function toggleSelectedElementSide() {
     syncElementInspectors();
     showNotification(`${door ? 'Porte' : 'Appareillage'} basculé(e) (${item.side === 1 ? 'Côté A' : 'Côté B'})`, "success");
 }
+// patch 79 : cadres de la sélection multiple 3D (en plus du cadre de l'élément sélectionné seul)
+let multiHighlights3D = [];
+
+const DASH_PX = 4, GAP_PX = 2, MARGIN_PX = 2;   // tailles en pixels écran (constantes quel que soit le zoom)
+
+// Taille en cm d'un pixel écran, pour un point situé à la position pos
+function worldPerPixel3D(pos) {
+    const h = threeRenderer.domElement.clientHeight || 1;
+    const d = threeCamera.position.distanceTo(pos);
+    return 2 * d * Math.tan(THREE.MathUtils.degToRad(threeCamera.fov / 2)) / h;
+}
+
+// (Re)calcule la géométrie du cadre pointillé selon le zoom courant
+function fillDashedBox3D(box) {
+    const target = box.userData.dashTarget;
+    const bb = new THREE.Box3().setFromObject(target);
+    if (bb.isEmpty()) return;
+    const wpp = worldPerPixel3D(bb.getCenter(new THREE.Vector3()));
+    box.userData.wpp = wpp;
+    bb.expandByScalar(MARGIN_PX * wpp);
+    const mn = bb.min, mx = bb.max;
+    const c = [
+        new THREE.Vector3(mn.x, mn.y, mn.z), new THREE.Vector3(mx.x, mn.y, mn.z),
+        new THREE.Vector3(mx.x, mn.y, mx.z), new THREE.Vector3(mn.x, mn.y, mx.z),
+        new THREE.Vector3(mn.x, mx.y, mn.z), new THREE.Vector3(mx.x, mx.y, mn.z),
+        new THREE.Vector3(mx.x, mx.y, mx.z), new THREE.Vector3(mn.x, mx.y, mx.z)
+    ];
+    const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    const DASH = DASH_PX * wpp, GAP = GAP_PX * wpp;
+    const pts = [];
+    edges.forEach(([a, b]) => {
+        const A = c[a], B = c[b];
+        const len = A.distanceTo(B);
+        for (let d = 0; d < len; d += DASH + GAP) {
+            const t0 = d / len, t1 = Math.min(d + DASH, len) / len;
+            pts.push(A.clone().lerp(B, t0), A.clone().lerp(B, t1));
+        }
+    });
+    box.geometry.dispose();
+    box.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+}
+
+function dashedBox3D(target, color) {
+    const box = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color }));
+    box.userData.dashTarget = target;
+    fillDashedBox3D(box);
+    return box;
+}
+
+// Appelée à chaque image : ne recalcule que si le zoom a changé de plus de 2 %
+function updateDashedBoxes3D() {
+    if (!threeCamera || !threeRenderer) return;
+    multiHighlights3D.forEach(box => {
+        const target = box.userData.dashTarget;
+        if (!target) return;
+        const bb = new THREE.Box3().setFromObject(target);
+        if (bb.isEmpty()) return;
+        const wpp = worldPerPixel3D(bb.getCenter(new THREE.Vector3()));
+        const old = box.userData.wpp || 0;
+        if (Math.abs(wpp - old) > old * 0.02) fillDashedBox3D(box);
+    });
+}
+function addMultiHighlights3D() {
+    multiHighlights3D.forEach(m => threeScene.remove(m));
+    multiHighlights3D = [];
+    new Set([...selectedDeviceIds, ...selectedOpeningIds]).forEach(id => {
+        if (id === selected3DId) return;   // déjà encadré comme sélection seule
+        const obj = interactiveObjects3D.find(o => o.userData && o.userData.id === id);
+        if (!obj) return;
+        const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
+        target.updateWorldMatrix(true, true);
+        const box = dashedBox3D(target, currentTheme === 'light' ? 0x047857 : 0xf8fafc);
+        threeScene.add(box);
+        multiHighlights3D.push(box);
+    });
+}
+// patch 79 : vide la sélection multiple (clic simple sur un élément ou un mur)
+function clearMultiSelection3D() {
+    if (!selectedDeviceIds.length && !selectedOpeningIds.length) return;
+    selectedDeviceIds = []; selectedOpeningIds = [];
+    addMultiHighlights3D();   // patch 80 : retire les cadres tout de suite, sans attendre une reconstruction
+}
+
+// Liseré pointillé seulement sur le texte sélectionné ; les autres sont nettoyés
+function setTextFrames3D() {
+    wallMeshes3D.forEach(o => {
+        if (o.userData && o.userData.type === 'texte' && o.userData.setFrame) o.userData.setFrame(o.userData.id === selected3DId);
+    });
+}
 
 function updateSelectionHighlight(obj) {
+    setTextFrames3D();
     if (selectedHighlightMesh) {
         threeScene.remove(selectedHighlightMesh);
         selectedHighlightMesh = null;
@@ -3849,7 +4297,9 @@ function updateSelected3DDistance(val) {
         if (!posUndoPending) { saveStateToUndo(); posUndoPending = true; }
         sliderDragging = true;
         item.distanceFromStart = distCm;
-        refreshSliderView();
+        if (currentMode === '3d' && (moveElementGroup3D(item) || moveOpeningLive3D(item))) {
+            if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+        } else refreshSliderView();
     }
 }
 function updateSelected3DHeight(val) {
@@ -3860,7 +4310,9 @@ function updateSelected3DHeight(val) {
     if (txH) {
         if (!posUndoPending) { saveStateToUndo(); posUndoPending = true; }
         txH.height = height;
-        build3DScene();
+        const sprT = wallMeshes3D.find(o => o.userData && o.userData.type === 'texte' && o.userData.id === txH.id);
+        if (sprT) sprT.position.y = height;
+        else build3DScene();
         return;
     }
     let el = projectData.electrical.find(e => e.id === selected3DId);
@@ -3875,7 +4327,11 @@ function updateSelected3DHeight(val) {
         sh.derivHeight = Object.assign({}, sh.derivHeight, { [activeLevelId]: Math.min(height, levelCeilingOf(activeLevelId) - DERIV_BOX_H / 2) });
     }
 
-    refreshSliderView();
+    if (el && currentMode === '3d' && moveElementGroup3D(el)) {
+        if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
+    } else if (sh && currentMode === '3d' && rebuildShaft3D(sh)) {
+        // trémie : seule sa boîte de dérivation et ses pièces sont reconstruites
+    } else refreshSliderView();
 }
 async function deleteSelected3DElement() {
     if (!selected3DId) return;
@@ -3911,6 +4367,7 @@ function selectCircuit(id) {
     selectedOpeningIds = [];
     selected3DId = null;
     updateSelectionHighlight(null);
+    addMultiHighlights3D();   // patch 80 : Échap retire aussi les cadres multiples
     syncElementInspectors();
     selectedCircuitId = id && circuitById(id)
         ? (selectedCircuitId === id && !pointFocus ? null : id)
@@ -3957,6 +4414,7 @@ function addWallSelectionHighlights() {
                 const h = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: '#38bdf8', depthTest: false }));
                 h.position.set(px - cx, 6, py - cy);
                 h.renderOrder = 13;
+                h.userData = { type: 'wallSel', id: w.id };
                 threeScene.add(h);
                 wallMeshes3D.push(h);
             });
@@ -3968,6 +4426,8 @@ function addWallSelectionHighlights() {
         const helper = new THREE.BoxHelper(m, '#38bdf8');
         helper.material.depthTest = false;
         helper.renderOrder = 12;
+        helper.userData.type = 'wallSel';
+        helper.userData.id = m.userData.id;
         helper.userData.shared = false;
         threeScene.add(helper);
         wallMeshes3D.push(helper);

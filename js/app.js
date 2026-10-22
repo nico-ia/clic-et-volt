@@ -564,6 +564,31 @@ function computeOpeningOverlaps() {
     }));
     return list;
 }
+
+// Emprise en plan d'un mur (longueur, épaisseur), même repère que openingRectOf
+function wallPlanRectOf(w) {
+    const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+    if (len < 1) return null;
+    const angle = Math.atan2(w.y2 - w.y1, w.x2 - w.x1);
+    return orientedRect((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, angle, len / 2, (w.thickness || 10) / 2);
+}
+// Mur qui traverse une porte ou une fenêtre posée sur un autre mur (même étage)
+function computeWallOpeningClashes() {
+    const list = [];
+    const walls = wallsOn();
+    openingsOn().forEach(op => {
+        const ro = openingRectOf(op);
+        if (!ro) return;
+        walls.forEach(w => {
+            if (w.id === op.wallId) return;   // l'ouverture suit son propre mur
+            const rw = wallPlanRectOf(w);
+            if (rw && rectsOverlap(ro, rw)) list.push({ wall: w, opening: op });
+        });
+    });
+    return list;
+}
+
+
 // Porte ou fenêtre dont l'emprise sur le mur rencontre le volume plein des marches de cet escalier
 // (la montée part du niveau de l'escalier ; l'espace au-dessus des marches reste permis dans le mur)
 function openingClashesSolid(op, wall, st) {
@@ -846,6 +871,7 @@ function updateSelectedWallProp(prop, val) {
     }
     if (!wallUndoPending) { saveStateToUndo(); wallUndoPending = true; }
     sliderDragging = true;
+    wallSliderTouched = true;
     if (prop === 'thickness') {
         const thickness = Math.max(5, Math.min(50, parseInt(val)));
         selectedWallIds.forEach(id => {
@@ -855,7 +881,7 @@ function updateSelectedWallProp(prop, val) {
         document.getElementById('inspector-thickness').value = thickness;
         document.getElementById('inspector-thickness-val').textContent = thickness + ' cm';
     } else if (prop === 'height') {
-        const height = Math.max(200, Math.min(400, parseInt(val)));
+        const height = Math.max(50, Math.min(400, parseInt(val)));
         selectedWallIds.forEach(id => {
             const wall = projectData.walls.find(w => w.id === id);
             if (wall) wall.height = height;
@@ -863,7 +889,7 @@ function updateSelectedWallProp(prop, val) {
         document.getElementById('inspector-height').value = height;
         document.getElementById('inspector-height-val').textContent = (height / 100).toFixed(2) + ' m';
     }
-    refreshSliderView();
+    if (!(currentMode === '3d' && rebuildWalls3D(selectedWallIds))) refreshSliderView();   // 3D : seuls les murs réglés sont reconstruits
 }
 
 function updateSelectedWallLength(valStr) {
@@ -912,7 +938,7 @@ function deleteCurrentSelection() {
     if (textById(selected3DId)) return deleteText2D();
     const shaftSelected = [...(projectData.shafts || []), ...(projectData.stairs || [])].some(s => s.id === selected3DId);
     if (currentMode === '3d' && selected3DId) return deleteSelected3DElement();   // élément 3D : prioritaire
-    if (selectedWallIds.length || (currentMode === '2d' && (selectedDeviceIds.length || selectedOpeningIds.length || shaftSelected))) return deleteMultiSelection();
+    if (selectedWallIds.length || selectedDeviceIds.length || selectedOpeningIds.length || shaftSelected) return deleteMultiSelection();
     if (selected3DId) return deleteSelected3DElement();
 }
 
@@ -1269,6 +1295,7 @@ let sliderDragging = false;
 let _sliderFrame = 0;
 let _keyHoldTimer = 0;
 let wallUndoPending = false;
+let wallSliderTouched = false;   // un curseur de mur a été réglé : contrôle des superpositions au relâchement
 let posUndoPending = false;   // distance et hauteur au sol : une annulation par réglage
 let nudgeUndoPending = false; // flèches du clavier : une annulation par série de pressions
 function refreshSliderView() {
@@ -1285,6 +1312,13 @@ function endSliderDrag() {
     _cableCache.sig = null;
     _ghostNetCache.clear();
     refreshSelectedView();
+    if (wallSliderTouched) {
+        wallSliderTouched = false;
+        const clashes = computeWallOpeningClashes();
+        if (clashes.length) showNotification(clashes.length === 1
+            ? 'Superposition : ce mur traverse une porte ou une fenêtre (surlignée en rouge). Réglez l’épaisseur ou la hauteur autrement, ou déplacez l’ouverture.'
+            : clashes.length + ' superpositions : des murs traversent des portes ou fenêtres (surlignées en rouge).', 'error');
+    }
 }
 // Flèches du clavier : une touche n'a pas de « relâchement », on termine le réglage 350 ms après la dernière pression
 function holdSliderDrag() {
@@ -1305,7 +1339,7 @@ function setShaftSize(v) {
     sliderDragging = true;
     sh.size = Math.max(20, Math.min(120, parseInt(v, 10) || 40));
     document.getElementById('shaft-size-val').textContent = sh.size + ' cm';
-    refreshSliderView();   // 2D et 3D : la taille de la trémie se voit dans les deux vues
+    if (!(currentMode === '3d' && rebuildShaft3D(sh))) refreshSliderView();   // 2D et 3D : la taille de la trémie se voit dans les deux vues
 }
 
 // Trémie sélectionnée : cases des niveaux reliés. Le niveau d'origine (où la trémie est posée) reste toujours relié.
@@ -1379,9 +1413,9 @@ function setStairProp(prop, v) {
     if (prop === 'width') st.width = Math.max(60, Math.min(150, n));
     if (prop === 'length') st.length = Math.max(150, Math.min(600, n));
     if (prop === 'angle') st.angleDeg = ((n % 360) + 360) % 360;
-    snapStairToWalls(st);
+    if (prop !== 'angle') snapStairToWalls(st);   // rotation : aimantation au relâchement seulement
     syncStairInspector(st);
-    refreshSliderView();
+    if (!(currentMode === '3d' && rebuildStair3D(st))) refreshSliderView();
 }
 
 // Avertissement avant toute suppression (2D comme 3D). L'annulation reste possible.
@@ -2056,6 +2090,9 @@ function placedDistance(el, wallId, distCm, side) {
     return snapOutletDistance(el.type, wallId, d, side, el.height || defaultHeightFor(el.type), el.id || null);
 }
 
+// Éléments cités par une alerte (interrupteur sans charge, câble non relié, superposition…) : ils clignotent en rouge
+let alertBlinkIds = new Set();
+
 function collidingElementIds() {
     const ids = new Set(computeOpeningCollisions().map(c => c.el.id));
     computeShaftCollisions().forEach(c => { ids.add(c.shaft.id); ids.add(c.other.id); });
@@ -2063,6 +2100,8 @@ function collidingElementIds() {
     computeStairCollisions().forEach(c => { ids.add(c.stair.id); ids.add(c.other.id); });
     computeOutletGangs().overflow.forEach(id => ids.add(id));
     computeStairOpeningCollisions().forEach(c => { ids.add(c.stair.id); ids.add(c.opening.id); });
+    computeWallOpeningClashes().forEach(c => ids.add(c.opening.id));
+    alertBlinkIds.forEach(id => ids.add(id));
     return ids;
 }
 
@@ -2575,6 +2614,13 @@ function computeCircuitReport() {
         const where = a.wallId === b.wallId ? ' sur le même mur' : ' au coin de deux murs';
         addAlert(levelPrefix(a.levelId) + nm(a)[0].toUpperCase() + nm(a).slice(1) + ' chevauche une ' + nm(b) + where + ' : à déplacer', { tab: 'ouvertures', elId: a.id, hint: 'Sélectionnez l’une des deux et déplacez-la le long du mur, ou réduisez sa largeur.' });
     });
+    
+        computeWallOpeningClashes().forEach(({ wall, opening }) => {
+        const nm = opening.type === 'door_single' ? 'porte' : 'fenêtre';
+        addAlert(levelPrefix(opening.levelId) + 'Mur qui traverse une ' + nm + ' posée sur un autre mur : à déplacer',
+            { tab: 'ouvertures', elId: opening.id, hint: 'Sélectionnez la ' + nm + ' et déplacez-la le long de son mur, ou déplacez le mur qui la traverse depuis la 3D.' });
+    });
+    
     computeDeviceOverlaps().forEach(({ a, b }) => {
         addAlert(levelPrefix(a.levelId) + electricalDisplayName(a) + ' chevauche ' + electricalDisplayName(b) + ' : à déplacer', { tab: 'appareillage', elId: a.id, hint: 'Sélectionnez-le et déplacez-le pour qu’il ne chevauche plus ' + electricalDisplayName(b) + '.' });
     });
@@ -2791,6 +2837,7 @@ function updateCircuitsUI() {
     });
 
     lastAlertTargets = rep.alertTargets;
+    alertBlinkIds = new Set(rep.alertTargets.filter(t => t && t.elId).map(t => t.elId));
     const alertsHtml = (rep.alerts.length
         ? '<div class="space-y-2">' + rep.alerts.map((a, i) => {
             const t = rep.alertTargets[i];
@@ -4093,7 +4140,7 @@ function setSelectedOpeningProp(prop, raw) {
         distInput.value = op.distanceFromStart;
         document.getElementById('inspector-distance-val').textContent = op.distanceFromStart + ' cm';
     }
-    refreshSliderView();
+    if (!(currentMode === '3d' && rebuildOpening3D(op))) refreshSliderView();
 }
 
 window.addEventListener('DOMContentLoaded', initOpeningControls);
@@ -4227,7 +4274,7 @@ function nudgeSelectedAlongWall(dir, stepCm) {
     if (!nudgeUndoPending) { saveStateToUndo(); nudgeUndoPending = true; }
     item.distanceFromStart = next;
     holdSliderDrag();
-    refreshSliderView();
+    if (!(currentMode === '3d' && (moveElementGroup3D(item) || moveOpeningLive3D(item)))) refreshSliderView();
     syncElementInspectors();
     return true;
 }
@@ -4310,7 +4357,7 @@ function nudgeSelected(key, stepCm) {
             it.x = Math.round(it.x + dx * stepCm);
             it.z = Math.round((it.z || 0) + dy * stepCm);   // y du plan = z de l'élément
         }
-        refreshSelectedView();
+        refreshNudge3D(m);
         syncElementInspectors();
         return true;
     }
@@ -4327,12 +4374,23 @@ function nudgeSelected(key, stepCm) {
             const h = it.height || defaultHeightFor(it.type);
             it.height = Math.max(10, Math.min(380, Math.round(h - vert * stepCm)));   // haut = plus haut, comme le curseur
         }
-        refreshSelectedView();
+        refreshNudge3D(m);
+        syncElementInspectors();
+        return true;
+    }
+    if (m.kind === 'ouverture' && vert !== 0 && it.type !== 'door_single') {
+        // fenêtre : haut / bas = hauteur d'allège
+        saveStateToUndo();
+        const winH = it.height || 120;
+        const maxSill = Math.max(0, levelCeilingOf(activeLevelId) - winH);
+        const sill = it.sillHeight !== undefined ? it.sillHeight : 90;
+        it.sillHeight = Math.max(0, Math.min(maxSill, Math.round(sill - vert * stepCm)));
+        refreshNudge3D(m);
         syncElementInspectors();
         return true;
     }
     if (m.kind === 'ouverture' || m.kind === 'trémie') {
-        if (horiz === 0) return false;
+        if (horiz === 0) return true;   // haut / bas : sans effet sur une porte, une fenêtre ou une trémie, mais la touche ne fait pas bouger la caméra
         const w = projectData.walls.find(x => x.id === it.wallId);
         return nudgeSelectedAlongWall(horiz * (w ? wallScreenSign(w, ax) : 1), stepCm);
     }
@@ -4959,8 +5017,25 @@ function triggerLoadProject(event) {
         };
     }
 }
+
 // Un clic dans le plan valide le champ « Contenu » du texte, sans attendre Entrée
 document.addEventListener('mousedown', e => {
     const a = document.activeElement;
     if (a && (a.id === 'text-value-2d' || a.id === 'text-value-3d') && e.target !== a) a.blur();
 }, true);
+
+// Réglage d'une taille d'écriture (8 à 32 px), enregistré dans le projet, puis redessin 2D ou 3D
+function setTextSize(kind, value) {
+    const v = Math.min(32, Math.max(8, Math.round(Number(value)) || TEXT_SIZE_DEFAULTS[kind]));
+    if (!projectData.textSizes) projectData.textSizes = {};
+    projectData.textSizes[kind] = v;
+    syncTextSizeInputs();
+    if (currentMode === '3d') build3DScene(); else redraw2D();
+}
+
+// Remplit les trois champs de la barre gauche (2D et 3D) avec les tailles courantes
+function syncTextSizeInputs() {
+    ['text', 'cote', 'niveau'].forEach(kind => {
+        document.querySelectorAll('[data-text-size="' + kind + '"]').forEach(inp => { inp.value = textSizePx(kind); });
+    });
+}

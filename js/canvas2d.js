@@ -844,7 +844,20 @@ function on2DMouseUp(e) {
         selectionBoxStart = null;
         selectionBoxEnd = null;
     }
-    if (draggingWall && draggingWall.moved) showUndoBar(wallMoveMessage(draggingWall.linksBefore, draggingWall.mode === 'move' ? 'déplacé' : 'étiré'));
+    if (draggingWall && draggingWall.moved) {
+        // même message qu'en 3D : fin de geste et superposition dans la même barre
+        const msg = wallMoveMessage(draggingWall.linksBefore, draggingWall.mode === 'move' ? 'déplacé' : 'étiré');
+        const clashes = computeWallOpeningClashes();
+        if (clashes.length) {
+            const alert = clashes.length === 1
+                ? 'SUPERPOSITION : ce mur traverse une porte ou une fenêtre (surlignée en rouge).'
+                : clashes.length + ' superpositions : des murs traversent des portes ou fenêtres (surlignées en rouge).';
+            showUndoBar(msg + ' — ' + alert);
+            showNotification(alert, 'error');
+        } else {
+            showUndoBar(msg);
+        }
+    }
     if (draggingWall) draggingWall = null;
     resetWallSnap();
     if (draggingEl2D) draggingEl2D = null;
@@ -1349,7 +1362,7 @@ function drawElementSymbol2D(el) {
 function drawWallLengthLabels() {
     // k : taille d'un pixel écran en unités du plan, pour que police, marges et halo restent fixes à l'écran
     const k = 1 / zoom;
-    ctx2D.font = 'bold ' + (11 * k) + 'px Inter, sans-serif';
+    ctx2D.font = 'bold ' + (textSizePx('cote') * k) + 'px Inter, sans-serif';
     ctx2D.textAlign = 'center';
     ctx2D.textBaseline = 'middle';
     const hh = 7 * k;
@@ -1446,7 +1459,7 @@ function blinkHalo2D(draw, w) {
 }
 
 // Dessin d'une porte ou d'une fenêtre sur le mur. ghostColor : fantôme de pose (translucide, couleur donnée)
-function drawOpening2D(op, ghostColor) {
+function drawOpening2D(op, ghostColor, colliding) {
         const p = openingPos2D(op);
         if (!p) return;
         const isDoor = op.type === 'door_single';
@@ -1481,8 +1494,25 @@ function drawOpening2D(op, ghostColor) {
             ctx2D.lineTo(w / 2, 0);
         }
         ctx2D.stroke();
-        if (!ghostColor && !isPrintRendering && (op.id === selected3DId || selectedOpeningIds.includes(op.id))) {
+        // porte ou fenêtre en superposition ou citée par une alerte : contour rouge clignotant, comme les appareils
+        if (!ghostColor && !isPrintRendering && blinkOn && colliding && colliding.has(op.id)) {
+            ctx2D.strokeStyle = '#ef4444';
+            ctx2D.lineWidth = 2;
+            ctx2D.beginPath();
+            ctx2D.rect(-w / 2 - 3, -p.th / 2 - 3, w + 6, p.th + 6);
+            ctx2D.stroke();
+        }
+        if (!ghostColor && !isPrintRendering && op.id === selected3DId) {
             blinkHalo2D(() => ctx2D.rect(-w / 2 - 6 / zoom, -p.th / 2 - 6 / zoom, w + 12 / zoom, p.th + 12 / zoom), 1.5 / zoom);
+        } else if (!ghostColor && !isPrintRendering && selectedOpeningIds.includes(op.id)) {
+            // patch 80 : sélection multiple en pointillés, comme les appareils
+            ctx2D.beginPath();
+            ctx2D.rect(-w / 2 - 6 / zoom, -p.th / 2 - 6 / zoom, w + 12 / zoom, p.th + 12 / zoom);
+            ctx2D.lineWidth = 2 / zoom;
+            ctx2D.strokeStyle = currentTheme === 'light' ? '#047857' : '#ffffff';
+            ctx2D.setLineDash([4 / zoom, 3 / zoom]);
+            ctx2D.stroke();
+            ctx2D.setLineDash([]);
         }
         ctx2D.restore();
 }
@@ -1608,13 +1638,15 @@ function draw2DEquipment() {
     }
 
     // 2. Ouvertures
-    openingsOn().forEach(op => drawOpening2D(op));
+    // calculé une fois par image, puis partagé par toutes les ouvertures
+    const collidingOpen = !isPrintRendering && blinkOn ? collidingElementIds() : null;
+    openingsOn().forEach(op => drawOpening2D(op, null, collidingOpen));
 
     // 2 bis. Trémies (D5) : carré en pointillés, aligné sur le mur
     shaftsOn().forEach(sh => {
         const p = shaftPos2D(sh);
         if (!p) return;
-        const s = sh.size || 40, hot = sh.id === selected3DId || selectedOpeningIds.includes(sh.id);
+        const s = sh.size || 40, hot = sh.id === selected3DId;
         ctx2D.save();
         ctx2D.translate(p.x, p.y);
         ctx2D.rotate(p.angle);
@@ -1624,6 +1656,14 @@ function draw2DEquipment() {
         ctx2D.lineWidth = 3 / zoom;
         ctx2D.fillRect(-s / 2, -s / 2, s, s);
         ctx2D.strokeRect(-s / 2, -s / 2, s, s);
+        if (!isPrintRendering && sh.id !== selected3DId && selectedOpeningIds.includes(sh.id)) {
+            // patch 80 : sélection multiple en pointillés
+            ctx2D.setLineDash([4 / zoom, 3 / zoom]);
+            ctx2D.strokeStyle = currentTheme === 'light' ? '#047857' : '#ffffff';
+            ctx2D.lineWidth = 2 / zoom;
+            ctx2D.strokeRect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom);
+            ctx2D.setLineDash([]);
+        }
         if (hot) blinkHalo2D(() => ctx2D.rect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom), 1.5 / zoom);
         // chevauchement avec une ouverture ou un appareil : contour rouge clignotant, comme les appareils
         if (!isPrintRendering && blinkOn && collidingElementIds().has(sh.id)) {
@@ -1643,10 +1683,10 @@ function draw2DEquipment() {
         ctx2D.fill();
         ctx2D.stroke();
         ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f8fafc';
-        ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
+        ctx2D.font = 'bold ' + (textSizePx('niveau') / zoom) + 'px sans-serif';
         ctx2D.textAlign = 'center';
         ctx2D.textBaseline = 'middle';
-        ctx2D.fillText(shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - 6 / zoom);
+        drawArrowText(ctx2D, shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - (textSizePx('niveau') / 2 + 20) / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
         ctx2D.restore();
     });
 
@@ -1703,7 +1743,7 @@ function stairArrowSign(st) {
 }
 // Escalier en 2D : emprise orientée, traits de marches, flèche vers la marche haute, nom des niveaux reliés
 function drawStair2D(st, colliding) {
-    const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId || selectedOpeningIds.includes(st.id);
+    const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId;
     ctx2D.save();
     ctx2D.translate(st.x, st.y);
     ctx2D.rotate((st.angleDeg || 0) * Math.PI / 180);
@@ -1715,6 +1755,14 @@ function drawStair2D(st, colliding) {
     if (st.levelId !== activeLevelId) ctx2D.setLineDash([6 / zoom, 4 / zoom]);
     ctx2D.strokeRect(-L / 2, -W / 2, L, W);
     ctx2D.setLineDash([]);
+    if (!isPrintRendering && !hot && selectedOpeningIds.includes(st.id)) {
+        // patch 80 : sélection multiple en pointillés
+        ctx2D.setLineDash([4 / zoom, 3 / zoom]);
+        ctx2D.strokeStyle = currentTheme === 'light' ? '#047857' : '#ffffff';
+        ctx2D.lineWidth = 1.5 / zoom;
+        ctx2D.strokeRect(-L / 2 - 6 / zoom, -W / 2 - 6 / zoom, L + 12 / zoom, W + 12 / zoom);
+        ctx2D.setLineDash([4 / zoom, 3 / zoom]);
+    }
     ctx2D.beginPath();
     for (let i = 1; i < n; i++) {
         const x = -L / 2 + i * L / n;
@@ -1743,12 +1791,12 @@ function drawStair2D(st, colliding) {
     ctx2D.restore();
     ctx2D.save();
     ctx2D.fillStyle = currentTheme === 'light' ? '#6d28d9' : '#c4b5fd';
-    ctx2D.font = 'bold ' + (12 / zoom) + 'px sans-serif';
+    ctx2D.font = 'bold ' + (textSizePx('niveau') / zoom) + 'px sans-serif';
     ctx2D.textAlign = 'center';
     // demi-hauteur de l'emprise tournée (en cm) ; l'étiquette est à 30 px à l'écran au-dessus de son bord haut
     const aRad = (st.angleDeg || 0) * Math.PI / 180;
     const hy = Math.abs(Math.sin(aRad)) * L / 2 + Math.abs(Math.cos(aRad)) * W / 2;
-    ctx2D.fillText(stairLevelLabel(st), st.x, st.y - hy - 30 / zoom);
+    drawArrowText(ctx2D, stairLevelLabel(st), st.x, st.y - hy - 30 / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
     ctx2D.restore();
 }
 
@@ -1961,7 +2009,12 @@ function dragElement2D(coords) {
 }
 // ---------- Textes ajoutables (noms de pièces), patch 71 ----------
 // Données : projectData.annotations, { id, kind: 'texte', levelId, x, y, text }. Hors câblage et collisions.
-const TEXT_FONT_PX = 12;
+// Tailles des écritures (px à l'écran), réglées dans la barre gauche et enregistrées avec le projet
+const TEXT_SIZE_DEFAULTS = { text: 12, cote: 12, niveau: 12 };
+function textSizePx(kind) {
+    const v = Number(projectData.textSizes && projectData.textSizes[kind]);
+    return v >= 8 && v <= 32 ? v : TEXT_SIZE_DEFAULTS[kind];
+}
 function textsOn() {
     return (projectData.annotations || []).filter(a => a.kind === 'texte' && a.levelId === activeLevelId);
 }
@@ -1971,8 +2024,8 @@ function textById(id) {
 }
 // Taille approximative du texte dans le plan (cm), pour la sélection au clic
 function textBox2D(tx) {
-    ctx2D.font = 'bold ' + (TEXT_FONT_PX / zoom) + 'px Inter, sans-serif';
-    return { w: ctx2D.measureText(tx.text || '').width, h: TEXT_FONT_PX / zoom };
+    ctx2D.font = 'bold ' + (textSizePx('text') / zoom) + 'px Inter, sans-serif';
+    return { w: ctx2D.measureText(tx.text || '').width, h: textSizePx('text') / zoom };
 }
 function textGrab2D(id, coords) {
     const tx = textById(id);
@@ -1985,10 +2038,10 @@ function drawTexts2D() {
         ctx2D.save();
         ctx2D.translate(tx.x, tx.y);
         ctx2D.rotate(-rot2D);
-        ctx2D.font = 'bold ' + (TEXT_FONT_PX / zoom) + 'px Inter, sans-serif';
+        ctx2D.font = 'bold ' + (textSizePx('text') / zoom) + 'px Inter, sans-serif';
         ctx2D.textAlign = 'center';
         ctx2D.textBaseline = 'middle';
-        ctx2D.fillStyle = light ? '#0f172a' : '#f8fafc';
+        ctx2D.fillStyle = light ? '#1e3a8a' : '#fde68a';
         ctx2D.fillText(tx.text || '', 0, 0);
         if (!isPrintRendering && selected3DId === tx.id) {
             const b = textBox2D(tx);
@@ -2055,4 +2108,17 @@ function deleteText2D() {
         syncElementInspectors();
         refreshAfterText();
     });
+}
+
+// Texte centré dont les flèches (↑ ↓ ↔) sont agrandies ; px en unités du contexte, arrowScale = facteur des flèches
+function drawArrowText(ctx, text, x, y, px, arrowScale, family) {
+    const parts = text.split(/([↑↓↔])/).filter(s => s !== '');
+    const fontFor = s => 'bold ' + (('↑↓↔'.includes(s) && s.length === 1) ? px * arrowScale : px) + 'px ' + family;
+    const align = ctx.textAlign;
+    ctx.textAlign = 'left';
+    let total = 0;
+    parts.forEach(s => { ctx.font = fontFor(s); total += ctx.measureText(s).width; });
+    let cur = x - total / 2;
+    parts.forEach(s => { ctx.font = fontFor(s); ctx.fillText(s, cur, y); cur += ctx.measureText(s).width; });
+    ctx.textAlign = align;
 }
