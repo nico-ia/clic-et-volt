@@ -1,3 +1,5 @@
+/* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
+
 // Fenêtres de dialogue de l'application : remplacent confirm() et prompt() du navigateur.
 // Une seule fenêtre à la fois. Entrée valide, Échap annule. Les touches de l'application sont bloquées tant qu'elle est ouverte.
 let appDialogSettle = null;

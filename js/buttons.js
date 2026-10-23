@@ -1,3 +1,5 @@
+/* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
+
 // Boutons de pose des barres de droite (2D et 3D) : une seule liste, deux barres.
 // Chaque entrée décrit un bouton :
 //   type   : identifiant passé à pickPlacement() et placé en data-type

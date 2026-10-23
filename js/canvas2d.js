@@ -1,3 +1,5 @@
+/* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
+
 // Gestion du canvas 2D et du plan 2D (vue, zoom, pan, souris, dessin des équipements).
 // Script classique : les fonctions sont globales et utilisent l'état partagé défini dans index.html
 // (projectData, zoom, panX, panY, rot2D, canvas2D, ctx2D, currentTool, ...).

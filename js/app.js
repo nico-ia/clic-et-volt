@@ -1,3 +1,5 @@
+/* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
+
 // Application principale : état global, undo/redo, thème, sidebars, circuits, métré, inspecteurs,
 // sauvegarde/chargement JSON et initialisation (DOMContentLoaded). Chargé après canvas2d.js et scene3d.js.
 

@@ -1,3 +1,5 @@
+/* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
+
 // Guide intégré à Clic & Volt (parties 1 à 3 : Plan 2D, Vue 3D et câblage, Métré & contrôles).
 // Les symboles des animations sont ceux de l'appli : mêmes formes et mêmes couleurs que les boutons
 // de la colonne de droite et que le plan (canvas2d.js, drawElementSymbol2D).

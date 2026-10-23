@@ -1,3 +1,5 @@
+/* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
+
 // Scène 3D (Three.js) : initialisation, caméra, maillages, câblage automatique et interactions souris.
 // Script classique : les fonctions sont globales et utilisent l'état partagé défini dans index.html
 // (threeScene, threeCamera, threeRenderer, threeControls, projectData, interactiveObjects3D, ...).
