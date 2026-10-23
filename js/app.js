@@ -3173,30 +3173,7 @@ function adjustCircuit(id, field, dir) {
     c[field] = next;
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
 }
-async function editCircuit(id) {
-    const c = projectData.circuits.find(x => x.id === id);
-    if (!c) return;
-    const num = v => parseFloat(String(v).replace(',', '.'));
-    const standardLimit = CIRCUIT_POINT_LIMITS[circuitRoot(c).id];
-    const values = await askFields('Circuit « ' + c.name + ' »', [
-        { id: 'breaker', label: 'Calibre du disjoncteur (A)', value: String(c.breakerRating), inputmode: 'decimal' },
-        { id: 'section', label: 'Section du fil (mm²)', value: String(c.wireSection), inputmode: 'decimal' },
-        { id: 'points', label: 'Points maximum', value: String(c.maxPoints), inputmode: 'numeric' }
-    ], 'Enregistrer', v => {
-        const b = num(v.breaker), s = num(v.section), m = num(v.points);
-        if (!(b > 0) || !(s > 0) || !(m >= 1)) return 'Valeurs invalides (ex. : 16 ; 2,5 ; 8).';
-        if (standardLimit !== undefined && Math.round(m) > standardLimit) return 'Limite NF C 15-100 dépassée : ' + standardLimit + ' points maximum pour ce circuit.';
-        return null;
-    });
-    if (values === null) return;
-    const b = num(values.breaker), s = num(values.section), m = num(values.points);
-    saveStateToUndo();
-    c.breakerRating = b;
-    c.wireSection = s;
-    c.maxPoints = Math.round(m);
-    if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
-    showNotification('Circuit mis à jour', 'success');
-}
+
 // ---------- Inspecteurs d'éléments (3D + 2D) ----------
 // Inspecteurs communs : un seul panneau gauche est visible à la fois, donc on déplace les blocs
 // dans la sidebar du mode courant (les identifiants restent uniques, le code ne change pas)

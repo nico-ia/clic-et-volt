@@ -671,7 +671,7 @@ function shaftFeedFor(levelId) {
 }
 
 // Pseudo-élément placé à la trémie qui joint deux niveaux
-function shaftProxyOn(levelId, otherLevelId, proxyId, type, height, refs) {
+function shaftProxyOn(levelId, otherLevelId, proxyId, type, refs) {
     const sh = shaftCandidatesBetween(levelId, otherLevelId, refs)[0];
     if (!sh) return null;
     return Object.assign(freeDerivationItem(sh, proxyId, type, levelId), { isProxy: true });
@@ -697,7 +697,7 @@ function crossLevelControlProxies(result) {
             if (hereIds.has(lid)) return;
             const light = projectData.electrical.find(e => e.id === lid && CONTROLLED_LOAD_TYPES.includes(e.type) && canControl(sw, e));
             if (!light) return;
-            const pos = shaftProxyOn(activeLevelId, light.levelId, 'xl|' + lid, light.type, 110, [sw, light]);
+            const pos = shaftProxyOn(activeLevelId, light.levelId, 'xl|' + lid, light.type, [sw, light]);
             if (!pos) {
                 // warnAt n'est pas visible ici (fonction distincte) : même effet inline
                 result.warnings.push('Commande de ' + electricalDisplayName(light) + ' (autre niveau) : aucune trémie entre les deux niveaux');
@@ -711,8 +711,7 @@ function crossLevelControlProxies(result) {
     projectData.electrical.filter(e => isControl(e) && !hereIds.has(e.id)).forEach(sw => {
         const mine = (Array.isArray(sw.controlledLightIds) ? sw.controlledLightIds : []).filter(lid => lightsHere.some(l => l.id === lid && canControl(sw, l)));
         if (!mine.length) return;
-        const pos = shaftProxyOn(activeLevelId, sw.levelId, 'xs|' + sw.id, sw.type, 110,
-            [sw, lightsHere.find(l => l.id === mine[0])]);
+        const pos = shaftProxyOn(activeLevelId, sw.levelId, 'xs|' + sw.id, sw.type, [sw, lightsHere.find(l => l.id === mine[0])]);
         if (!pos) return;
         pos.realId = sw.id;
         pos.controlledLightIds = mine;
@@ -896,7 +895,6 @@ function buildCableNetwork(passage) {
         const list = kind === 'ceil' ? holes.ceil : kind === 'low' ? holes.floor : holes.ceil.concat(holes.floor);
         return list.some(R => segmentHitsRect(a, b, R));
     };
-    const levels = [{ kind: 'low', z: C.lowZ }, { kind: 'ceil', z: ceilZ }];
     const levelsAt = z => [{ kind: 'low', z: C.lowZ }, { kind: 'ceil', z }];
     
     const tracks = [];
@@ -3256,7 +3254,6 @@ function on3DPointerDown(e) {
                         if (activePlacementType === 'wall_light') defaultH = 180;
                         if (activePlacementType === 'doorbell_chime') defaultH = 200;
                         if (activePlacementType === 'shutter_motor') defaultH = 210;
-                        if (activePlacementType.startsWith('outlet')) outlet_dedicated = 30;
                         if (activePlacementType === 'outlet_dedicated_20' || activePlacementType === 'outlet_dedicated_32') defaultH = 30;
 
                         projectData.electrical.push({ levelId: activeLevelId,
@@ -4010,7 +4007,6 @@ function addStair3D(st, cx, cy, ghost = false) {
         lab.position.set(st.x - cx, group.position.y + Math.max(stairRiseCm(st), 1) - 10, st.y - cy);
         lab.userData = { type: 'stairLabel', id: st.id };
         lab.renderOrder = 11;
-        lab.userData = { type: 'stairLabel', id: st.id };
         threeScene.add(lab);
         wallMeshes3D.push(lab);
     }

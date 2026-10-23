@@ -1299,7 +1299,7 @@ function drawElementSymbol2D(el) {
         ctx2D.fillStyle = paper;
         ctx2D.fill();
         ctx2D.lineWidth = (2) * LW;
-        ctx2D.strokeStyle = '#64748b';   // liseré gris foncé, visible sur fond clair comme sombre;
+        ctx2D.strokeStyle = '#64748b';   // liseré gris foncé, visible sur fond clair comme sombre
         ctx2D.stroke();
         line(-4, 0, 4, 0, 1.2, ink);
         line(0, -4, 0, 4, 1.2, ink);
