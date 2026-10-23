@@ -232,7 +232,7 @@ function createShaftGhost3D(sh, cx, cy) {
     const s = sh.size || 40;
     const group = new THREE.Group();
     const pos = new THREE.Vector3(sp.x - cx, span.base + span.height / 2, sp.y - cy);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: '#f8fafc' }));
+    const box = new THREE.Mesh(new THREE.BoxGeometry(s, span.height, s), new THREE.MeshBasicMaterial({ color: shaftVolumeColour() }));
     box.position.copy(pos);
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: shaftColour() }));
     edges.position.copy(pos);
@@ -374,24 +374,6 @@ function getElCoords(el) {
         y: posY + perpY * side * offsetDist,
         z: el.height || (el.type === 'panel' ? 150 : el.type === 'wall_light' ? 180 : el.type === 'doorbell_chime' ? 200 : el.type === 'shutter_motor' ? 210 : el.type.startsWith('outlet') ? 30 : 110)
     };
-}
-
-function findNearestElement(target, allowedTypes) {
-    let nearest = null;
-    let minDistance = Infinity;
-    const targetCoords = getElCoords(target);
-
-    electricalOn().forEach(el => {
-        if (allowedTypes.includes(el.type) && el.id !== target.id) {
-            const elCoords = getElCoords(el);
-            const dist = Math.hypot(elCoords.x - targetCoords.x, elCoords.y - targetCoords.y);
-            if (dist < minDistance && dist < 600) {
-                minDistance = dist;
-                nearest = el;
-            }
-        }
-    });
-    return nearest;
 }
 
 // =====================================================================
@@ -567,17 +549,6 @@ function derivHeightOf(sh, levelId) {
     const h = sh.derivHeight && sh.derivHeight[levelId];
     const wanted = Number.isFinite(h) ? h : 150;
     return Math.min(wanted, levelCeilingOf(levelId) - DERIV_BOX_H / 2);
-}
-
-// Position du point de dérivation le long du mur de la trémie, par niveau (cm) ; par défaut, celle de la trémie
-// Le point reste dans l'ouverture de la trémie (la gaine ne se prolonge pas au-delà) : bord de la boîte compris
-function clampDerivDist(sh, d) {
-    const half = (sh.size || 40) / 2;
-    return Math.max(sh.distanceFromStart - half + DERIV_BOX_H / 2, Math.min(sh.distanceFromStart + half - DERIV_BOX_H / 2, d));
-}
-// La boîte de dérivation reste fixe dans la largeur de la trémie : elle est toujours au centre
-function derivDistOf(sh, levelId) {
-    return sh.distanceFromStart;
 }
 
 // Trémies reliant deux niveaux, de la plus proche à la plus éloignée des appareils de référence (somme des distances en plan)
@@ -935,9 +906,6 @@ function buildCableNetwork(passage) {
         tracks.push({ wall: w, side: 0, len, ux, uy, ox: w.x1, oy: w.y1, t0: -ext, t1: len + ext, st: [0, len], ceilZ: wallCeil(w) });
     });
     const P = (t, s) => ({ x: t.ox + t.ux * s, y: t.oy + t.uy * s });
-    // mur extérieur : la face extérieure n'a pas de piste, on prend la piste intérieure
-    const trackOf = (w, side) => tracks.find(t => t.wall === w && t.side === side) || tracks.find(t => t.wall === w);
-    const twoFaces = w => tracks.filter(t => t.wall === w).length === 2;
 
     // 2. Intersections entre pistes (angles, T, croisements)
     const junctions = [];
@@ -1012,7 +980,7 @@ function buildCableNetwork(passage) {
         if (CEILING_TYPES.includes(el.type)) return;
         const w = walls.find(x => x.id === el.wallId);
         if (!w) return;
-        const t = trackOf(w, el.side === -1 ? -1 : 1);
+        const t = tracks.find(tr => tr.wall === w);
         const E = getElCoords(el);
         let dist = el.distanceFromStart !== undefined ? el.distanceFromStart : t.len / 2;
         dist = Math.max(10, Math.min(t.len - 10, dist));
@@ -1044,17 +1012,6 @@ function buildCableNetwork(passage) {
         push(b, a, sb);
     });
 
-    // 6. Stations de passage de cloison : les deux faces d'un mur partagent les mêmes stations
-    walls.forEach(w => {
-        if (!twoFaces(w)) return;
-        const tA = trackOf(w, 1), tB = trackOf(w, -1);
-        const S = new Set();
-        [tA, tB].forEach(t => t.st.forEach(s => S.add(Math.round(s * 100) / 100)));
-        for (let s = C.crossStep; s < tA.len - 10; s += C.crossStep) S.add(s);
-        S.forEach(s => {
-            if (s >= tA.t0 && s <= tA.t1) { tA.st.push(s); tB.st.push(s); }
-        });
-    });
     // Passage : stations face à l'extérieur, là où un câble peut traverser le mur à plafond
     if (passage) {
         tracks.forEach(t => {
@@ -1206,23 +1163,6 @@ function buildCableNetwork(passage) {
                 if (blockedH(t.wall.id, Math.min(s, sEnd), Math.max(s, sEnd), L.z, t.side)) return;
                 if (holeCrosses(p0, p1, L.kind)) return;
                 addEdge(node(p0.x, p0.y, L.z), node(p1.x, p1.y, L.z), L.kind, C.crossPenalty);
-            });
-        });
-    });
-
-    // Passages de cloison : un par station et par niveau, là où le mur est plein
-    walls.forEach(w => {
-        if (!twoFaces(w)) return;
-        const tA = trackOf(w, 1), tB = trackOf(w, -1);
-        const ss = tA.st.slice().sort((p, q) => p - q).filter((s, i, arr) => i === 0 || s - arr[i - 1] > 0.3);
-        ss.forEach(s => {
-            if (s < 10 || s > tA.len - 10) return;
-            const pa = P(tA, s), pb = P(tB, s);
-            if (insideBody(pa.x, pa.y) || insideBody(pb.x, pb.y)) return;
-            levelsAt(wallCeil(w)).forEach(L => {
-                if (blockedH(w.id, s - 0.01, s + 0.01, L.z)) return;
-                const na = findNode(pa.x, pa.y, L.z), nb = findNode(pb.x, pb.y, L.z);
-                if (na && nb) addEdge(na, nb, 'cross', C.crossPenalty);
             });
         });
     });
@@ -1974,15 +1914,8 @@ function ghostConduitMat(cid) {
     return CABLE_RES.ghostMats[hex] || (CABLE_RES.ghostMats[hex] = markShared(new THREE.MeshBasicMaterial({ color: hex })));
 }
 
-// Un point (x, y en plan) est-il dans le carré en plan d'une trémie ?
-function insideShaftXY(p, sh) {
-    const h = (sh.size || 40) / 2 + 0.5;
-    return Math.abs(p.x - sh.x) <= h && Math.abs(p.y - sh.y) <= h;
-}
-
 // Rayon des gaines fantômes (cm) : fines, indépendantes du rayon des gaines réelles
 const GHOST_CONDUIT_R = 0.5;
-
 
 // Trémie sélectionnée (sans circuit sélectionné) : seule cette trémie est affichée, par ce qui est dans son carré
 function shaftBoxSel() {
@@ -2043,7 +1976,7 @@ function renderCableNetwork(cx, cy) {
     if (!showCables2D) return;   // câbles masqués (réglage commun avec la 2D)
     if (!G && net.unrouted > 0) {
         console.warn(net.unrouted + ' liaison(s) non routée(s)');
-        if (typeof showNotification === 'function') showNotification(net.unrouted + ' appareil(s) n\'ont pas pu être reliés au tableau', 'error');
+        showNotification(net.unrouted + ' appareil(s) n\'ont pas pu être reliés au tableau', 'error');
     }
     if (!net.segments.length) return net;
     const selectedElement = projectData.electrical.find(el => el.id === selected3DId);
@@ -2354,7 +2287,7 @@ function addShaft3D(sh, cx, cy) {
               new THREE.LineBasicMaterial({ color: shaftColour() }));
         const sp = shaftPos2D(sh);
         frame.position.set(sp.x - cx, 1, sp.y - cy);
-        frame.userData.shaftId = sh.id;   // la trémie sélectionnée clignote (cadre et colonne)
+        frame.userData.shaftId = sh.id;
         frame.userData.shaftFrame = true;   // repère du déplacement direct
         threeScene.add(frame);
         wallMeshes3D.push(frame);
@@ -2362,7 +2295,7 @@ function addShaft3D(sh, cx, cy) {
         const span = shaftSpan3D(sh);
         const column = new THREE.LineSegments(
             new THREE.EdgesGeometry(new THREE.BoxGeometry(s, span.height, s)),
-            new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.85 }));
+            new THREE.LineBasicMaterial({ color: shaftColour(), transparent: true, opacity: 0.85 }));
         column.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
         column.userData.shaftId = sh.id;
         threeScene.add(column);
@@ -2376,16 +2309,14 @@ function addShaft3D(sh, cx, cy) {
         threeScene.add(hit);
         wallMeshes3D.push(hit);
         interactiveObjects3D.push(hit);
-        // trémie sélectionnée : volume blanc translucide dans la colonne (en plus du cadre de sélection)
-        if (sh.id === selected3DId) {
-            const sel = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
-                new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.3, depthWrite: false }));
-            sel.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
-            sel.renderOrder = 5;
-            sel.userData = { shaftId: sh.id };
-            threeScene.add(sel);
-            wallMeshes3D.push(sel);
-        }
+        // volume translucide dans la colonne, identique sélectionnée ou non (blanc en sombre, gris en clair)
+        const volume = new THREE.Mesh(new THREE.BoxGeometry(s + 2, span.height, s + 2),
+            new THREE.MeshBasicMaterial({ color: shaftVolumeColour(), transparent: true, opacity: 0.3, depthWrite: false }));
+        volume.position.set(frame.position.x, span.base + span.height / 2, frame.position.z);
+        volume.renderOrder = 5;
+        volume.userData = { shaftId: sh.id };
+        threeScene.add(volume);
+        wallMeshes3D.push(volume);
         // noms des niveaux reliés : taille du réglage « Noms des niveaux reliés », texte seul, sans fond
         const label = makeScreenLabel3D(shaftLevelNames(sh).join(' ↔ '), textSizePx('niveau'), { bold: true, halo: false });
         // l'étiquette se place en bas de la trémie si elle relie un niveau plus bas, en haut sinon
@@ -2402,7 +2333,7 @@ function addShaft3D(sh, cx, cy) {
         // boîte : 10 cm d'épaisseur (perpendiculaire au mur) et 14 cm de long, orientée comme le mur
         const derivation = new THREE.Mesh(new THREE.BoxGeometry(10, DERIV_BOX_H, 14), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
         // la boîte est collée à la face du mur, côté pièce de la trémie (jamais dans le mur)
-        const dp = derivFacePos2D(sh) || { x: sh.x, y: sh.y, angle: 0 };
+        const dp = derivFacePos2D(sh);
         derivation.position.set(dp.x - cx, derivHeightOf(sh, activeLevelId), dp.y - cy);
         derivation.rotation.y = -dp.angle + Math.PI / 2;
         derivation.renderOrder = 6;
@@ -2688,6 +2619,7 @@ function build3DScene() {
             syncElementInspectors();
         }
     }
+    refreshToolHint();   // patch 88 : la bulle suit chaque changement de la scène 3D
 }
 
 function createOpeningMesh3D(op, wall, cx, cy) {
@@ -2833,23 +2765,23 @@ function applianceModel(el) {
     if (el.type === 'outlet_16a' || el.type === 'outlet_20a' || el.type === 'outlet_20a_classic' || el.type === 'outlet_switched') {
         // prise 2P+T encastrée : plaque carrée, collerette ronde, deux alvéoles et broche de terre
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        cylZ(5.6, 5.6, 0.8, accentMat, 0, 0, 0.6);   // bague colorée (couleur du circuit)
-        cylZ(4.2, 4.2, 0.4, white, 0, 0, 1.1);
-        cylZ(0.62, 0.62, 0.5, dark, -1.5, -0.2, 1.3);
-        cylZ(0.62, 0.62, 0.5, dark, 1.5, -0.2, 1.3);
-        cylZ(0.4, 0.4, 1.8, metal, 0, 2.5, 1.6);                              // broche de terre
+        cylZ(5.6, 5.6, 0.6, accentMat, 0, 0, 0.5);   // bague colorée (couleur du circuit)
+        cylZ(4.2, 4.2, 1.2, white, 0, 0, 1.35);
+        cylZ(0.62, 0.62, 0.5, dark, -1.5, -0.2, 1.8);
+        cylZ(0.62, 0.62, 0.5, dark, 1.5, -0.2, 1.8);
+        cylZ(0.4, 0.4, 1.8, metal, 0, 2.5, 2.1);                              // broche de terre
         if (el.type === 'outlet_switched') cylZ(0.9, 0.9, 0.4, accentMat, 4.9, 4.9, 0.6);   // point de commande, dans le coin
     } else if (el.type === 'outlet_dedicated_20' || el.type === 'outlet_dedicated_32') {
         // prise dédiée (20 ou 32 A) : même gabarit ; la couleur de la bague distingue le calibre
-        cylZ(7.4, 7.6, 1.3, white, 0, 0, -0.35);
-        cylZ(5.6, 5.8, 1.0, accentMat, 0, 0, 0.8);
-        cylZ(4.2, 4.4, 0.6, ivory, 0, 0, 1.5);
+        cylZ(7.4, 7.6, 1.2, white, 0, 0, -0.4);
+        cylZ(5.6, 5.8, 1.0, accentMat, 0, 0, 0.5);
+        cylZ(4.2, 4.4, 1.2, ivory, 0, 0, 1.35);
         [[-1.8, 0.9], [1.8, 0.9], [0, -1.7]].forEach(p => cylZ(0.75, 0.75, 0.5, dark, p[0], p[1], 1.9));
-        [[-6, 0], [6, 0]].forEach(p => cylZ(0.5, 0.5, 0.6, metal, p[0], p[1], 0.5));   // vis de fixation
+        [[-6.5, 0], [6.5, 0]].forEach(p => cylZ(0.5, 0.5, 0.4, grey, p[0], p[1], 0.5));   // vis de fixation
     } else if (el.type === 'doorbell_button') {
         // bouton de sonnette : plaque et poussoir lumineux
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        box(10, 10, 0.6, accentMat, 0, 0, 0.6);
         box(6.4, 6.4, 1.2, white, 0, 0, 1.0);                                              // centre carré blanc
         box(4.4, 0.3, 0.4, dark, 0, 0, 1.7);                                            // grille du haut-parleur
         box(4.4, 0.3, 0.4, dark, 0, -0.7, 1.7);
@@ -2858,7 +2790,6 @@ function applianceModel(el) {
         box(4.4, 0.3, 0.4, dark, 0, 1.4, 1.7);
         box(4.4, 0.3, 0.4, dark, 0, -2.1, 1.7);
         box(4.4, 0.3, 0.4, dark, 0, 2.1, 1.7);
-        
     } else if (el.type === 'doorbell_chime') {
         // sonnerie : boîtier rond avec grille de haut-parleur
         cylZ(6.0, 6.2, 2.0, white, 0, 0, 0.2);
@@ -2867,7 +2798,7 @@ function applianceModel(el) {
     } else if (el.type === 'shutter_control') {
         // commande de volet : plaque avec deux poussoirs (monter / descendre)
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        box(10, 10, 0.85, accentMat, 0, 0, 0.6);
         box(4.6, 3.6, 1.2, white, 0, 2.6, 1.0);
         box(4.6, 3.6, 1.2, white, 0, -2.6, 1.0);
         box(0.8, 1.6, 0.4, accentMat, 0, 2.6, 1.8);                           // flèche haut
@@ -2880,32 +2811,32 @@ function applianceModel(el) {
     } else if (el.type === 'switch_simple' || el.type === 'switch_va_et_vient') {
         // Interrupteur mécanique : plaque, cadre et bascule.
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
-        const rocker = box(6.2, 8.4, 1.0, white, 0, 0, 1.0);
+        box(10, 10, 0.85, accentMat, 0, 0, 0.6);
+        const rocker = box(6.2, 8.4, 2.0, white, 0, 0, 1.15);                   // bascule
         rocker.rotation.x = -0.16;
-        box(5.2, 0.5, 0.35, grey, 0, 0, 1.55);                                // creux de la bascule
+        box(5.2, 0.5, 1.25, grey, 0, 0, 1.55);                                // creux de la bascule
         if (el.type === 'switch_va_et_vient') {
-            box(0.8, 2.0, 2.2, accentMat, 0, -2.6, 1.0);
+            box(0.8, 2.0, 2.2, accentMat, 0, -2.6, 1.7);
             box(0.8, 2.0, 2.2, accentMat, 0, 2.6, 1.0);
         }
     } else if (el.type === 'switch_pushbutton') {
         // bouton-poussoir : plaque, cadre et bouton     
-        box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
-        cylZ(4.0, 4.0, 0.4, grey, 0, 0, 1.0);                                             // anneau chromé à la base
+        box(12, 12, 1.4, white, 0, 0, -0.4);
+        box(10, 10, 0.95, accentMat, 0, 0, 0.85);
+        cylZ(4.1, 4.1, 0.5, grey, 0, 0, 1.25);                                             // anneau chromé à la base
         cylZ(3.4, 3.8, 1.6, white, 0, 0, 1.0);                                             // bouton rond
         cylZ(2.2, 2.2, 0.5, accentMat, 0, 0, 2.0);                                             // axe de rotation
     } else if (el.type === 'switch_dimmer') {
         // variateur : plaque, grosse molette et repère de réglage
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        box(10, 10, 0.85, accentMat, 0, 0, 0.6);
         cylZ(3.4, 3.6, 1.4, white, 0, 0, 1.6);                                  // molette
         box(0.8, 2.2, 0.4, accentMat, 0, 2.2, 2.35);                            // repère
         cylZ(4.0, 4.0, 0.4, grey, 0, 0, 1.0);                                             // anneau chromé à la base
     } else if (el.type === 'motion_timer') {
         // détecteur de mouvement : plaque, boîtier arrondi et lentille de Fresnel
         box(12, 12, 1.2, white, 0, 0, -0.4);
-        box(10, 10, 0.5, accentMat, 0, 0, 0.45);
+        box(10, 10, 0.85, accentMat, 0, 0, 0.6);
         cylZ(4.0, 4.0, 0.5, ivory, 0, 0, 1.0);                                   // cadran
         for (let i = 0; i < 12; i++) {                                            // graduations : 12 points autour du cadran
             const a = i * Math.PI / 6;
@@ -2944,9 +2875,9 @@ function applianceModel(el) {
         g.add(dome);
     } else if (el.type === 'junction_box') {
         // boîte de dérivation posée : petit coffret blanc, couvercle et quatre vis
-        box(10, 10, 4, white, 0, 0, 2);
-        box(8.4, 8.4, 0.4, ivory, 0, 0, 4.2);
-        [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]].forEach(p => cylZ(0.5, 0.5, 0.3, metal, p[0], p[1], 4.4));
+        box(10, 10, 8.0, white, 0, 0, 2);
+        box(8.4, 8.4, 4.0, ivory, 0, 0, 4.5);
+        [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]].forEach(p => cylZ(0.5, 0.5, 3.0, metal, p[0], p[1], 5.2));
     } else if (el.type === 'panel') {
         // tableau : coffret, porte fumée, trois rangées de modules (différentiel + disjoncteurs)
         const W = 42, H = 56;
@@ -3089,7 +3020,7 @@ function floorPlanPointFrom3D(e) {
 
 function traceBannerText3D() {
     if (!wallDraft3D || !wallCursor3D) {
-        return 'Pose : Mur ; cliquez le premier point au sol (Échap pour arrêter)';
+        return 'Pose : Mur ; cliquez le premier point au sol ; clic droit pour terminer (Échap pour arrêter)';
     }
     const len = Math.hypot(wallCursor3D.x - wallDraft3D.x, wallCursor3D.y - wallDraft3D.y) / 100;
     return 'Pose : Mur ; longueur ' + len.toFixed(2).replace('.', ',') + ' m ; clic pour valider, clic droit pour terminer (Échap pour arrêter)';
@@ -3323,8 +3254,8 @@ function on3DPointerDown(e) {
                         if (activePlacementType === 'wall_light') defaultH = 180;
                         if (activePlacementType === 'doorbell_chime') defaultH = 200;
                         if (activePlacementType === 'shutter_motor') defaultH = 210;
-                        if (activePlacementType.startsWith('outlet')) defaultH = 30;
-                        if (activePlacementType === 'outlet_dedicated_20' || activePlacementType === 'outlet_dedicated_32') defaultH = 20;
+                        if (activePlacementType.startsWith('outlet')) outlet_dedicated = 30;
+                        if (activePlacementType === 'outlet_dedicated_20' || activePlacementType === 'outlet_dedicated_32') defaultH = 30;
 
                         projectData.electrical.push({ levelId: activeLevelId,
                             id: 'el_' + Date.now(),
@@ -3367,6 +3298,28 @@ function on3DPointerDown(e) {
                 updateCircuitsUI();
                 build3DScene();
                 refreshToolHint();
+            }
+            // patch 87 : aucun élément interactif touché : Ctrl/Maj + clic sur un mur ajoute ou retire le mur
+            if (!mid) {
+                const ctrlWallHit = raycaster.intersectObjects(clickableWalls3D, true);
+                let cwm = ctrlWallHit.length ? ctrlWallHit[0].object : null;
+                while (cwm && !(cwm.userData && cwm.userData.id) && cwm.parent) cwm = cwm.parent;
+                const cwid = cwm && cwm.userData && cwm.userData.id;
+                if (cwid && projectData.walls.some(w => w.id === cwid)) {
+                    // l'élément seul déjà sélectionné rejoint la sélection multiple
+                    const prevW = selected3DId;
+                    if (prevW && prevW !== cwid) {
+                        if (electricalOn().some(x => x.id === prevW) && !selectedDeviceIds.includes(prevW)) selectedDeviceIds = [...selectedDeviceIds, prevW];
+                        else if (isOpeningLikeId(prevW) && !selectedOpeningIds.includes(prevW)) selectedOpeningIds = [...selectedOpeningIds, prevW];
+                    }
+                    selected3DId = null;
+                    selectedCircuitId = null;
+                    setSelectedWalls(selectedWallIds.includes(cwid) ? selectedWallIds.filter(x => x !== cwid) : [...selectedWallIds, cwid]);
+                    syncElementInspectors();
+                    updateCircuitsUI();
+                    build3DScene();
+                    refreshToolHint();
+                }
             }
             return;
         }
@@ -3710,7 +3663,7 @@ function moveShaftLive3D(sh) {
     threeScene.children.forEach(o => {
         const u = o.userData;
         if (!u) return;
-        const mine = u.shaftId === sh.id || (u.type === 'shaft' && u.id === sh.id) || (u.type === 'shaftLabel' && u.id === sh.id);
+        const mine = u.shaftId === sh.id || (u.type === 'shaft' && u.id === sh.id) || (u.type === 'shaftLabel' && u.id === sh.id) || (u.type === 'derivation' && u.id === sh.id);
         if (mine) { o.position.x += dx; o.position.z += dz; }
     });
     if (selectedHighlightMesh && selectedHighlightMesh.update) selectedHighlightMesh.update();
@@ -3948,12 +3901,12 @@ function addGhostShaft3D(sh, cx, cy) {
     const column = add(new THREE.LineSegments(new THREE.EdgesGeometry(colGeo), colMat));
     column.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     column.renderOrder = 3;
-    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.05, depthWrite: false })));
+    const fill = add(new THREE.Mesh(colGeo, new THREE.MeshBasicMaterial({ color: shaftVolumeColour(), transparent: true, opacity: 0.05, depthWrite: false })));
     fill.position.set(p.x - cx, base + span.height / 2, p.y - cy);
     fill.renderOrder = 2;
     // boîtes de dérivation de chaque niveau relié, comme en réel (même taille, même position dans la gaine)
     levels.forEach(lv => {
-        const dp = derivFacePos2D(sh, derivDistOf(sh, lv));
+        const dp = derivFacePos2D(sh);
         if (!dp) return;
         const geo = new THREE.BoxGeometry(10, DERIV_BOX_H, 14);
         const y = elevOf(lv) - elevOf(activeLevelId) + derivHeightOf(sh, lv);
@@ -3962,6 +3915,7 @@ function addGhostShaft3D(sh, cx, cy) {
         box.position.set(dp.x - cx, y, dp.y - cy);
         box.rotation.y = -dp.angle + Math.PI / 2;
         box.renderOrder = 4;
+        box.userData = { type: 'derivation', id: sh.id, ghost: true };
     });
 
 }
@@ -4199,7 +4153,7 @@ function fillDashedBox3D(box) {
     if (bb.isEmpty()) return;
     const wpp = worldPerPixel3D(bb.getCenter(new THREE.Vector3()));
     box.userData.wpp = wpp;
-    bb.expandByScalar(MARGIN_PX * wpp);
+    bb.expandByScalar((box.userData.marginPx ?? MARGIN_PX) * wpp);   // patch 95 : décalage propre à chaque cadre
     const mn = bb.min, mx = bb.max;
     const c = [
         new THREE.Vector3(mn.x, mn.y, mn.z), new THREE.Vector3(mx.x, mn.y, mn.z),
@@ -4208,7 +4162,8 @@ function fillDashedBox3D(box) {
         new THREE.Vector3(mx.x, mx.y, mx.z), new THREE.Vector3(mn.x, mx.y, mx.z)
     ];
     const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
-    const DASH = DASH_PX * wpp, GAP = GAP_PX * wpp;
+    const DASH = (box.userData.dashPx ?? DASH_PX) * wpp, GAP = (box.userData.gapPx ?? GAP_PX) * wpp;   // patch 95
+    if (!(DASH + GAP > 0)) return;   // patch 93 : pas nul = boucle infinie, on sort
     const pts = [];
     edges.forEach(([a, b]) => {
         const A = c[a], B = c[b];
@@ -4222,9 +4177,16 @@ function fillDashedBox3D(box) {
     box.geometry = new THREE.BufferGeometry().setFromPoints(pts);
 }
 
-function dashedBox3D(target, color) {
-    const box = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color }));
+function dashedBox3D(target, color, pattern = {}) {
+    // patch 96 : matériau translucide (opacité 1) : dessiné après les murs, donc non atténué
+    const box = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color, transparent: true }));
     box.userData.dashTarget = target;
+    // patch 95 : motif et décalage propres à ce cadre (sinon ceux de la multi-sélection)
+    if (pattern.dashPx) box.userData.dashPx = pattern.dashPx;
+    if (pattern.gapPx) box.userData.gapPx = pattern.gapPx;
+    if (pattern.marginPx) box.userData.marginPx = pattern.marginPx;
+    // patch 93 : même interface que BoxHelper, pour que les glissements suivent le cadre
+    box.update = () => fillDashedBox3D(box);
     fillDashedBox3D(box);
     return box;
 }
@@ -4232,7 +4194,10 @@ function dashedBox3D(target, color) {
 // Appelée à chaque image : ne recalcule que si le zoom a changé de plus de 2 %
 function updateDashedBoxes3D() {
     if (!threeCamera || !threeRenderer) return;
-    multiHighlights3D.forEach(box => {
+    // patch 93 : tous les cadres en tirets (multi-sélection, sélection seule, murs) suivent le zoom
+    [...multiHighlights3D, selectedHighlightMesh, ...wallMeshes3D.filter(m => m.userData && m.userData.selectionFrame)]
+        .filter(b => b && b.userData && b.userData.dashTarget)
+        .forEach(box => {
         const target = box.userData.dashTarget;
         if (!target) return;
         const bb = new THREE.Box3().setFromObject(target);
@@ -4242,6 +4207,39 @@ function updateDashedBoxes3D() {
         if (Math.abs(wpp - old) > old * 0.02) fillDashedBox3D(box);
     });
 }
+// patch 93 : cadre de sélection unique, en tirets dans tous les cas (simple : 4 px / 2 px ; multiple : 2 px / 2 px).
+// Couleur de base (thème) et couleur alternée (clignotement, via blinkPalette).
+function selectionFramePalette3D() {
+    return currentTheme === 'light' ? ['#0044ff', '#000205'] : ['#f8fafc', '#00eeff'];
+}
+function makeSelectionFrame3D(target, multi) {
+    const [base, alt] = selectionFramePalette3D();
+    // patch 95 : multi-sélection = tirets 2 px / 2 px décalés de 2 px ; sélection simple = tirets 4 px / 2 px décalés de 4 px
+    const frame = multi
+        ? dashedBox3D(target, base, { dashPx: 2, gapPx: 2, marginPx: 2 })
+        : dashedBox3D(target, base, { dashPx: 4, gapPx: 2, marginPx: 4 });
+    frame.renderOrder = 12;   // patch 96 : après les murs (ordre 5)
+    frame.userData.blinkPalette = [base, alt];
+    frame.userData.selectionFrame = true;
+    return frame;
+}
+
+// patch 93 : règle unique. Plus d'un élément sélectionné (tous types) = multiple (2 px / 2 px) ; un seul = simple (4 px / 2 px)
+function selectionIsMulti3D() {
+    const ids = new Set([...(selected3DId ? [selected3DId] : []), ...selectedDeviceIds, ...selectedOpeningIds, ...selectedWallIds]);
+    return ids.size > 1;
+}
+
+// patch 93 : clignotement des cadres de sélection (couleur du thème ↔ couleur alternée), au rythme du minuteur
+function blinkSelectionFrames3D() {
+    const frames = [selectedHighlightMesh, ...multiHighlights3D, ...wallMeshes3D.filter(m => m.userData && m.userData.selectionFrame)];
+    frames.forEach(f => {
+        if (f && f.material && f.userData && f.userData.blinkPalette) {
+            f.material.color.set(blinkOn ? f.userData.blinkPalette[0] : f.userData.blinkPalette[1]);
+        }
+    });
+}
+
 function addMultiHighlights3D() {
     multiHighlights3D.forEach(m => threeScene.remove(m));
     multiHighlights3D = [];
@@ -4251,7 +4249,7 @@ function addMultiHighlights3D() {
         if (!obj) return;
         const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
         target.updateWorldMatrix(true, true);
-        const box = dashedBox3D(target, currentTheme === 'light' ? 0x047857 : 0xf8fafc);
+        const box = makeSelectionFrame3D(target, selectionIsMulti3D());   // patch 93
         threeScene.add(box);
         multiHighlights3D.push(box);
     });
@@ -4281,7 +4279,7 @@ function updateSelectionHighlight(obj) {
     // escalier : le cadre suit le groupe
     const target = obj.parent && obj.parent.userData && obj.parent.userData.type === 'stair' ? obj.parent : obj;
     target.updateWorldMatrix(true, true);
-    selectedHighlightMesh = new THREE.BoxHelper(target, '#f8fafc');
+    selectedHighlightMesh = makeSelectionFrame3D(target, selectionIsMulti3D());   // patch 93
     threeScene.add(selectedHighlightMesh);
 }
 
@@ -4402,6 +4400,37 @@ function circuitHighlightIds(selectedCircuit, pool) {
 }
 
 // Mur sélectionné : cadre bleu autour du mur en 3D, pour savoir ce qui est sélectionné (comme en 2D)
+// patch 90 : surbrillances 3D recalculées quand l'état change, sans reconstruire la scène
+let overlaySig3D = null;
+function overlaySignature3D() {
+    return [selected3DId || '', selectedWallIds.join(','), selectedDeviceIds.join(','), selectedOpeningIds.join(','), currentTheme, [...collidingElementIds()].sort().join('|')].join('#');
+}
+function refreshOverlays3D() {
+    if (currentMode !== '3d' || !threeScene) return;
+    const sig = overlaySignature3D();
+    if (sig === overlaySig3D) return;
+    overlaySig3D = sig;
+    // retire les anciens cadres : sélection simple, multiple, murs sélectionnés, collisions
+    if (selectedHighlightMesh) { threeScene.remove(selectedHighlightMesh); selectedHighlightMesh = null; }
+    multiHighlights3D.forEach(m => threeScene.remove(m));
+    multiHighlights3D = [];
+    for (let i = wallMeshes3D.length - 1; i >= 0; i--) {
+        const m = wallMeshes3D[i];
+        if (m.userData && (m.userData.type === 'wallSel' || m.userData.blink)) {
+            threeScene.remove(m);
+            wallMeshes3D.splice(i, 1);
+        }
+    }
+    // recrée ceux qui doivent être visibles
+    if (selected3DId) {
+        const foundObj = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === selected3DId);
+        if (foundObj) updateSelectionHighlight(foundObj);
+    }
+    addMultiHighlights3D();
+    addWallSelectionHighlights();
+    addCollisionHighlights();
+}
+
 function addWallSelectionHighlights() {
     if (!selectedWallIds.length) return;
     if (canEditWalls()) {
@@ -4411,7 +4440,7 @@ function addWallSelectionHighlights() {
             const w = projectData.walls.find(x => x.id === id);
             if (!w) return;
             [[w.x1, w.y1], [w.x2, w.y2]].forEach(([px, py]) => {
-                const h = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: '#38bdf8', depthTest: false }));
+                const h = new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: selectionColour3D(), depthTest: false }));
                 h.position.set(px - cx, 6, py - cy);
                 h.renderOrder = 13;
                 h.userData = { type: 'wallSel', id: w.id };
@@ -4423,7 +4452,7 @@ function addWallSelectionHighlights() {
     clickableWalls3D.forEach(m => {
         if (!m.userData || !selectedWallIds.includes(m.userData.id)) return;
         m.updateWorldMatrix(true, true);
-        const helper = new THREE.BoxHelper(m, '#38bdf8');
+        const helper = makeSelectionFrame3D(m, selectionIsMulti3D());   // patch 93
         helper.material.depthTest = false;
         helper.renderOrder = 12;
         helper.userData.type = 'wallSel';
@@ -4484,7 +4513,7 @@ function addCircuitElementHighlights() {
         helper.userData.circuitHL = true;
         // élément sélectionné depuis le circuit : son cadre clignote avec le même rythme que les alertes
         if (obj.userData.id === selected3DId) {
-            // alterne entre la couleur du circuit et le blanc (le cadre ne disparaît plus)
+            // alterne entre la couleur du circuit et sa couleur de contraste (blanc ou presque noir) : le cadre ne disparaît plus
             const cc = circuitColor(selectedCircuit);
             helper.userData.blinkPalette = [cc, contrastHex3D(cc)];
             helper.material.color.set(blinkOn ? contrastHex3D(cc) : cc);

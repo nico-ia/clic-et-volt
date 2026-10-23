@@ -110,8 +110,9 @@ function recenter2DView() {
     panY = canvas2D.height / 2 - c.y;
 }
 
-// Résolution de l'image d'impression / PNG : plus de pixels que l'écran pour rester nets sur papier
-const PRINT_RENDER_SCALE = 3;
+const PRINT_RENDER_SCALE = 3;    // Résolution de l'image d'impression / PNG : plus de pixels que l'écran pour rester nets sur papier
+const DERIV_HALF = 5;   // demi-côté du carré de dérivation (unités de plan)
+
 
 function redraw2D() {
     if (!ctx2D || !canvas2D) return;
@@ -155,32 +156,68 @@ function redraw2D() {
         }
     }
 
-    wallsOn().forEach(wall => {
-        const isSelected = !isPrintRendering && selectedWallIds.includes(wall.id);
-        
-        ctx2D.strokeStyle = isSelected ? (currentTheme === 'light' ? '#047857' : '#34d399') : (currentTheme === 'light' ? '#94a3b8' : '#334155');
-        ctx2D.lineWidth = wall.thickness + 4;
-        ctx2D.lineCap = 'round';
-        ctx2D.beginPath();
-        ctx2D.moveTo(wall.x1, wall.y1);
-        ctx2D.lineTo(wall.x2, wall.y2);
-        ctx2D.stroke();
-
-        ctx2D.strokeStyle = isSelected ? (currentTheme === 'light' ? '#059669' : '#6ee7b7') : (currentTheme === 'light' ? '#047857' : '#0f766e');
+    // murs vides avec arrondis : 1) plein (les jonctions se fondent), 2) intérieur effacé, il ne reste que le contour
+    // écran : effacement (fond transparent, la grille disparaît dans le mur) ; impression : repeint au fond
+    const wallsDrawn = wallsOn();
+    ctx2D.save();
+    ctx2D.strokeStyle = '#279289';
+    ctx2D.lineCap = 'round';
+    // baies : le mur n'est pas dessiné dans l'emplacement des ouvertures (découpe seulement, rien n'est effacé)
+    ctx2D.beginPath();
+    ctx2D.rect(-1e6, -1e6, 2e6, 2e6);
+    openingsOn().forEach(op => {
+        const wall = projectData.walls.find(x => x.id === op.wallId);
+        const p = wall && openingPos2D(op);
+        if (!p) return;
+        ctx2D.save();
+        ctx2D.translate(p.x, p.y);
+        ctx2D.rotate(p.angle);
+        const half = openingBox(op, wall).half;
+        ctx2D.rect(-half, -p.th / 2 - 1, half * 2, p.th + 2);
+        ctx2D.restore();
+    });
+    ctx2D.clip('evenodd');
+    wallsDrawn.forEach(wall => {
         ctx2D.lineWidth = wall.thickness;
         ctx2D.beginPath();
         ctx2D.moveTo(wall.x1, wall.y1);
         ctx2D.lineTo(wall.x2, wall.y2);
         ctx2D.stroke();
-
-        ctx2D.strokeStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
-        ctx2D.lineWidth = Math.max(2, wall.thickness - 8);
+    });
+    const border = 2 / zoom;   // épaisseur du contour, constante à l'écran
+    if (isPrintRendering) ctx2D.strokeStyle = currentTheme === 'light' ? '#ffffff' : '#020617';
+    else ctx2D.globalCompositeOperation = 'destination-out';
+    wallsDrawn.forEach(wall => {
+        const inner = wall.thickness - 2 * border;
+        if (inner <= 0) return;
+        ctx2D.lineWidth = inner;
         ctx2D.beginPath();
         ctx2D.moveTo(wall.x1, wall.y1);
         ctx2D.lineTo(wall.x2, wall.y2);
         ctx2D.stroke();
-
     });
+    ctx2D.restore();
+
+    // montants : le contour du mur s'arrête net sur chaque baie (trait en travers, hors du découpage)
+    ctx2D.save();
+    ctx2D.strokeStyle = '#279289';
+    ctx2D.lineWidth = 2 / zoom;
+    ctx2D.lineCap = 'butt';
+    openingsOn().forEach(op => {
+        const wall = projectData.walls.find(x => x.id === op.wallId);
+        const p = wall && openingPos2D(op);
+        if (!p) return;
+        const half = openingBox(op, wall).half;
+        ctx2D.save();
+        ctx2D.translate(p.x, p.y);
+        ctx2D.rotate(p.angle);
+        ctx2D.beginPath();
+        ctx2D.moveTo(-half, -p.th / 2); ctx2D.lineTo(-half, p.th / 2);
+        ctx2D.moveTo(half, -p.th / 2); ctx2D.lineTo(half, p.th / 2);
+        ctx2D.stroke();
+        ctx2D.restore();
+    });
+    ctx2D.restore();
 
     draw2DEquipment();
     drawTexts2D();
@@ -247,9 +284,18 @@ function redraw2D() {
         selectedWallIds.forEach(id => {
             const wall = wallsOn().find(w => w.id === id);
             if (!wall) return;
+            // cadre comme en 3D : rectangle orienté le long du mur, même règle simple / multiple
+            const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+            if (len > 0) {
+                ctx2D.save();
+                ctx2D.translate((wall.x1 + wall.x2) / 2, (wall.y1 + wall.y2) / 2);
+                ctx2D.rotate(Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1));
+                selectionFrame2D(-len / 2, -wall.thickness / 2, len, wall.thickness);
+                ctx2D.restore();
+            }
             [ [wall.x1, wall.y1], [wall.x2, wall.y2] ].forEach(([x, y]) => {
                 ctx2D.beginPath();
-                ctx2D.arc(x, y, 7 / zoom, 0, Math.PI * 2);
+                ctx2D.arc(x, y, wall.thickness / 2, 0, Math.PI * 2);
                 ctx2D.fillStyle = currentTheme === 'light' ? '#ffffff' : '#f8fafc';
                 ctx2D.fill();
                 ctx2D.lineWidth = 2 / zoom;
@@ -986,12 +1032,6 @@ function magnetWallEnd(p, F, u, excludeId) {
     return pick ? pick.pt : p;
 }
 
-function zoomCanvas(factor) {
-    zoom = Math.max(0.2, Math.min(5.0, zoom * factor));
-    document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(zoom * 100)}%`;
-    redraw2D();
-}
-
 function resetZoomPan() {
     recenter2DView();
     redraw2D();
@@ -1317,25 +1357,11 @@ function drawElementSymbol2D(el) {
         ctx2D.stroke();
         ctx2D.globalAlpha = 1;
     }
-    // élément sélectionné depuis son circuit : repère qui clignote (visible un temps sur deux)
-    // tout élément sélectionné clignote (commande, charge ou prise), au même rythme que les autres alertes
-    const blinkSel = el.id === selected3DId;
+    // sélection (simple ou multiple) : cadre comme en 3D, autour du symbole
     if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
-        const ringPath = () => {
-            if (t === 'panel') ctx2D.rect(-5, -22, 19, 44);
-            else ctx2D.arc(ringX, 0, Math.max(ringR, 10) + (blinkSel ? 6 : 4), 0, Math.PI * 2);
-        };
-        if (blinkSel) {
-            blinkHalo2D(ringPath, 1.6);
-        } else {
-            ctx2D.beginPath();
-            ringPath();
-            ctx2D.lineWidth = (2) * LW;
-            ctx2D.strokeStyle = currentTheme === 'light' || isPrintRendering ? '#047857' : '#ffffff';
-            ctx2D.setLineDash([4, 3]);
-            ctx2D.stroke();
-            ctx2D.setLineDash([]);
-        }
+        const r = Math.max(ringR, 10);
+        if (t === 'panel') selectionFrame2D(-5, -22, 19, 44);
+        else selectionFrame2D(ringX - r, -r, 2 * r, 2 * r);
     }
     ctx2D.restore();
 
@@ -1449,13 +1475,23 @@ function darkerCss2D(css) {
         return css;
     }
 }
-// Halo clignotant, quelle que soit la couleur du circuit ou du fond : deux traits (sombre et clair) qui
-// s'inversent à chaque phase. Le tracé est fourni par draw() et repris pour chaque trait.
-function blinkHalo2D(draw, w) {
-    const outer = blinkOn ? '#0f172a' : '#ffffff';
-    const inner = blinkOn ? '#ffffff' : '#0f172a';
-    ctx2D.beginPath(); draw(); ctx2D.lineWidth = w * 2; ctx2D.strokeStyle = outer; ctx2D.stroke();
-    ctx2D.beginPath(); draw(); ctx2D.lineWidth = w; ctx2D.strokeStyle = inner; ctx2D.stroke();
+// Cadre de sélection 2D : mêmes couleurs, mêmes tirets et mêmes décalages qu'en 3D (selectionFramePalette3D,
+// selectionIsMulti3D). x, y, w, h : rectangle dans le repère courant (déjà tourné pour un mur).
+function selectionFrame2D(x, y, w, h) {
+    const multi = selectionIsMulti3D();
+    const [base, alt] = selectionFramePalette3D();
+    // valeurs de la 3D, en pixels écran : multiple = tirets 2/2 décalés de 2 px ; simple = tirets 4/2 décalés de 4 px
+    const pad = (multi ? 2 : 4) / zoom;
+    const dash = (multi ? 2 : 4) / zoom;
+    const gap = 2 / zoom;
+    ctx2D.save();
+    ctx2D.beginPath();
+    ctx2D.rect(x - pad, y - pad, w + 2 * pad, h + 2 * pad);
+    ctx2D.lineWidth = 1 / zoom;
+    ctx2D.strokeStyle = blinkOn ? base : alt;
+    ctx2D.setLineDash([dash, gap]);
+    ctx2D.stroke();
+    ctx2D.restore();
 }
 
 // Dessin d'une porte ou d'une fenêtre sur le mur. ghostColor : fantôme de pose (translucide, couleur donnée)
@@ -1469,10 +1505,8 @@ function drawOpening2D(op, ghostColor, colliding) {
         if (ghostColor) ctx2D.globalAlpha = 0.7;
         ctx2D.translate(p.x, p.y);
         ctx2D.rotate(p.angle);
-        ctx2D.fillStyle = '#020617';
-        ctx2D.fillRect(-w / 2, -p.th / 2 - 1, w, p.th + 2);
-        ctx2D.strokeStyle = ghostColor || ((op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? '#f8fafc' : (isDoor ? '#b07a4a' : '#3b82f6'));
-        ctx2D.lineWidth = 2;
+        ctx2D.strokeStyle = ((op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? (isDoor ? '#b07a4a' : '#3db1ff') : (ghostColor || (isDoor ? '#a16207' : '#49b6ff')));
+        ctx2D.lineWidth = 1;
         ctx2D.beginPath();
         if (isDoor) {
             const hx = doorHingeSign(op);
@@ -1489,11 +1523,17 @@ function drawOpening2D(op, ghostColor, colliding) {
             ctx2D.moveTo(hingeX + w * Math.cos(start), p.th / 2 + w * Math.sin(start));
             ctx2D.arc(hingeX, p.th / 2, w, start, end, anticlockwise);
         } else {
-            ctx2D.rect(-w / 2, -p.th / 2 + 3, w, p.th - 6);
+            ctx2D.rect(-w / 2, -p.th / 2, w, p.th);
             ctx2D.moveTo(-w / 2, 0);
             ctx2D.lineTo(w / 2, 0);
         }
         ctx2D.stroke();
+        // liseré de l'ouverture de porte, en tirets (tracé à part : un tiret s'appliquerait à tout le chemin)
+        if (isDoor) {
+            ctx2D.setLineDash([4, 3]);
+            ctx2D.strokeRect(-w / 2, -p.th / 2, w, p.th);
+            ctx2D.setLineDash([]);
+        }
         // porte ou fenêtre en superposition ou citée par une alerte : contour rouge clignotant, comme les appareils
         if (!ghostColor && !isPrintRendering && blinkOn && colliding && colliding.has(op.id)) {
             ctx2D.strokeStyle = '#ef4444';
@@ -1502,17 +1542,8 @@ function drawOpening2D(op, ghostColor, colliding) {
             ctx2D.rect(-w / 2 - 3, -p.th / 2 - 3, w + 6, p.th + 6);
             ctx2D.stroke();
         }
-        if (!ghostColor && !isPrintRendering && op.id === selected3DId) {
-            blinkHalo2D(() => ctx2D.rect(-w / 2 - 6 / zoom, -p.th / 2 - 6 / zoom, w + 12 / zoom, p.th + 12 / zoom), 1.5 / zoom);
-        } else if (!ghostColor && !isPrintRendering && selectedOpeningIds.includes(op.id)) {
-            // patch 80 : sélection multiple en pointillés, comme les appareils
-            ctx2D.beginPath();
-            ctx2D.rect(-w / 2 - 6 / zoom, -p.th / 2 - 6 / zoom, w + 12 / zoom, p.th + 12 / zoom);
-            ctx2D.lineWidth = 2 / zoom;
-            ctx2D.strokeStyle = currentTheme === 'light' ? '#047857' : '#ffffff';
-            ctx2D.setLineDash([4 / zoom, 3 / zoom]);
-            ctx2D.stroke();
-            ctx2D.setLineDash([]);
+        if (!ghostColor && !isPrintRendering && (op.id === selected3DId || selectedOpeningIds.includes(op.id))) {
+            selectionFrame2D(-w / 2, -p.th / 2, w, p.th);
         }
         ctx2D.restore();
 }
@@ -1569,8 +1600,7 @@ function draw2DEquipment() {
         const focusMode = hasLinkFocus || !!focusCircuit;
         // câbles hors focus : couleur pâle pleine (pas de transparence, sinon les croisements se mélangent)
         const dimColor = currentTheme === 'light' ? '#d5dde8' : '#2f3e52';
-        // couleur « éteinte » du fil sélectionné : contraste avec le fond (sans effet à l'impression)
-        const focusAlt = currentTheme === 'light' ? '#0f172a' : '#f8fafc';
+
         ctx2D.lineCap = 'round';
         const deviceDiscs = electricalOn().map(el => ({ c: getElCoords(el), R: isDedicatedOutlet(el) ? 14 : 12 }));
         const ctlColors = switchedOutletCableColors(net);
@@ -1656,15 +1686,9 @@ function draw2DEquipment() {
         ctx2D.lineWidth = 3 / zoom;
         ctx2D.fillRect(-s / 2, -s / 2, s, s);
         ctx2D.strokeRect(-s / 2, -s / 2, s, s);
-        if (!isPrintRendering && sh.id !== selected3DId && selectedOpeningIds.includes(sh.id)) {
-            // patch 80 : sélection multiple en pointillés
-            ctx2D.setLineDash([4 / zoom, 3 / zoom]);
-            ctx2D.strokeStyle = currentTheme === 'light' ? '#047857' : '#ffffff';
-            ctx2D.lineWidth = 2 / zoom;
-            ctx2D.strokeRect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom);
-            ctx2D.setLineDash([]);
+        if (!isPrintRendering && (hot || selectedOpeningIds.includes(sh.id))) {
+            selectionFrame2D(-s / 2, -s / 2, s, s);
         }
-        if (hot) blinkHalo2D(() => ctx2D.rect(-s / 2 - 6 / zoom, -s / 2 - 6 / zoom, s + 12 / zoom, s + 12 / zoom), 1.5 / zoom);
         // chevauchement avec une ouverture ou un appareil : contour rouge clignotant, comme les appareils
         if (!isPrintRendering && blinkOn && collidingElementIds().has(sh.id)) {
             ctx2D.strokeStyle = '#ef4444';
@@ -1674,14 +1698,13 @@ function draw2DEquipment() {
         ctx2D.restore();
         // point de dérivation : là où ce niveau prend ses circuits dans la gaine
         ctx2D.save();
-        const dq = derivFacePos2D(sh, derivDistOf(sh, activeLevelId)) || p;
-        ctx2D.beginPath();
-        ctx2D.arc(dq.x, dq.y, 5 / zoom, 0, Math.PI * 2);
+        const dq = derivFacePos2D(sh);
+        const dh = DERIV_HALF;   // demi-côté du carré : il grossit et rétrécit avec le zoom
         ctx2D.fillStyle = '#f8fafc';
         ctx2D.strokeStyle = '#334155';
         ctx2D.lineWidth = 1.5 / zoom;
-        ctx2D.fill();
-        ctx2D.stroke();
+        ctx2D.fillRect(dq.x - dh, dq.y - dh, dh * 2, dh * 2);
+        ctx2D.strokeRect(dq.x - dh, dq.y - dh, dh * 2, dh * 2);
         ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f8fafc';
         ctx2D.font = 'bold ' + (textSizePx('niveau') / zoom) + 'px sans-serif';
         ctx2D.textAlign = 'center';
@@ -1755,14 +1778,7 @@ function drawStair2D(st, colliding) {
     if (st.levelId !== activeLevelId) ctx2D.setLineDash([6 / zoom, 4 / zoom]);
     ctx2D.strokeRect(-L / 2, -W / 2, L, W);
     ctx2D.setLineDash([]);
-    if (!isPrintRendering && !hot && selectedOpeningIds.includes(st.id)) {
-        // patch 80 : sélection multiple en pointillés
-        ctx2D.setLineDash([4 / zoom, 3 / zoom]);
-        ctx2D.strokeStyle = currentTheme === 'light' ? '#047857' : '#ffffff';
-        ctx2D.lineWidth = 1.5 / zoom;
-        ctx2D.strokeRect(-L / 2 - 6 / zoom, -W / 2 - 6 / zoom, L + 12 / zoom, W + 12 / zoom);
-        ctx2D.setLineDash([4 / zoom, 3 / zoom]);
-    }
+
     ctx2D.beginPath();
     for (let i = 1; i < n; i++) {
         const x = -L / 2 + i * L / n;
@@ -1782,7 +1798,7 @@ function drawStair2D(st, colliding) {
     ctx2D.strokeStyle = '#c4b5fd';
     ctx2D.lineWidth = 2 / zoom;
     ctx2D.stroke();
-    if (hot) blinkHalo2D(() => ctx2D.rect(-L / 2 - 6 / zoom, -W / 2 - 6 / zoom, L + 12 / zoom, W + 12 / zoom), 1.5 / zoom);
+    if (!isPrintRendering && (hot || selectedOpeningIds.includes(st.id))) selectionFrame2D(-L / 2, -W / 2, L, W);
     if (!isPrintRendering && blinkOn && colliding.has(st.id)) {
         ctx2D.strokeStyle = '#ef4444';
         ctx2D.lineWidth = 3 / zoom;
@@ -1800,6 +1816,38 @@ function drawStair2D(st, colliding) {
     ctx2D.restore();
 }
 
+// Porte : emprise = rectangle de la baie + quart de cercle balayé par le vantail (même géométrie que drawOpening2D)
+function doorHit2D(op, p, coords) {
+    const wall = projectData.walls.find(x => x.id === op.wallId);
+    if (!wall) return false;
+    const w = openingBox(op, wall).half * 2;
+    const th = p.th;
+    const dx = coords.x - p.x, dy = coords.y - p.y;
+    const c = Math.cos(p.angle), s = Math.sin(p.angle);
+    const lx = dx * c + dy * s;   // repère de la baie : x le long du mur
+    const ly = -dx * s + dy * c;  // y perpendiculaire au mur
+    const m = 6 / zoom;           // marge de clic
+    if (Math.abs(lx) <= w / 2 + m && Math.abs(ly) <= th / 2 + m) return true;
+    // vantail : arc de rayon w autour de la charnière, du même côté que le tracé
+    const hx = doorHingeSign(op);
+    const hingeX = hx * w / 2, hingeY = th / 2;
+    const swing = op.side === -1 ? 1 : -1;
+    const start = hx > 0 ? Math.PI : 0;
+    const end = hx > 0
+        ? (swing > 0 ? Math.PI / 2 : 3 * Math.PI / 2)
+        : (swing > 0 ? Math.PI / 2 : -Math.PI / 2);
+    const ux = lx - hingeX, uy = ly - hingeY;
+    if (Math.hypot(ux, uy) > w + m) return false;
+    return angleInSweep2D(Math.atan2(uy, ux), start, end);
+}
+
+// Vrai si l'angle a est dans l'arc court allant de s à e
+function angleInSweep2D(a, s, e) {
+    const norm = v => ((v % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const sweep = norm(e - s);
+    return sweep <= Math.PI ? norm(a - s) <= sweep : norm(s - a) <= norm(s - e);
+}
+
 function pickElement2D(coords) {
     let best = null, bd = Infinity;
     electricalOn().forEach(el => {
@@ -1811,7 +1859,9 @@ function pickElement2D(coords) {
         const p = openingPos2D(op);
         if (!p) return;
         const d = Math.hypot(p.x - coords.x, p.y - coords.y);
-        if (d < 40 && d < bd) { bd = d; best = { id: op.id }; }
+        // porte : emprise = baie + vantail (quart de cercle) ; fenêtre : autour de la baie
+        const inDoor = op.type === 'door_single' && doorHit2D(op, p, coords);
+        if ((d < 40 || inDoor) && d < bd) { bd = d; best = { id: op.id }; }
     });
     // Trémies (D5) : cliquables dans leur carré
     shaftsOn().forEach(sh => {
@@ -1820,10 +1870,12 @@ function pickElement2D(coords) {
         const d = Math.hypot(p.x - coords.x, p.y - coords.y);
         if (d < (sh.size || 40) / 2 + 6 && d < bd) { bd = d; best = { id: sh.id }; }
         // boîte de dérivation : un clic dessus sélectionne la trémie (et non le mur voisin)
-        const dq = derivFacePos2D(sh, derivDistOf(sh, activeLevelId));
+        const dq = derivFacePos2D(sh);
         if (dq) {
-            const dd = Math.hypot(dq.x - coords.x, dq.y - coords.y);
-            if (dd < 10 / zoom + 4 && dd < bd) { bd = dd; best = { id: sh.id }; }
+            const half = DERIV_HALF + 4 / zoom;   // carré dessiné + marge de 4 px écran
+            const dx = Math.abs(dq.x - coords.x), dy = Math.abs(dq.y - coords.y);
+            const dd = Math.hypot(dx, dy);
+            if (dx <= half && dy <= half && dd < bd) { bd = dd; best = { id: sh.id }; }
         }
     });
     if (!best) textsOn().forEach(tx => {

@@ -399,6 +399,10 @@ function applyTheme() {
 }
 // Trémie : blanche en thème sombre, noire en thème clair (une trémie blanche disparaît sur fond clair)
 function shaftColour() { return currentTheme === 'light' ? '#0f172a' : '#f8fafc'; }
+// Volume translucide de la trémie en 3D : blanc en thème sombre, gris en thème clair (toujours, sélectionnée ou non)
+function shaftVolumeColour() { return currentTheme === 'light' ? '#94a3b8' : '#f8fafc'; }
+// patch 89 : couleur de sélection 3D, comme les pointillés de la 2D
+function selectionColour3D() { return currentTheme === 'light' ? '#047857' : '#f8fafc'; }
 
 function toggleTheme() {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -539,7 +543,7 @@ function openingOverlapWith(op, wallId, distCm) {
         && Math.abs((o.distanceFromStart || 0) - distCm) < (openingWidthOf(o) + w) / 2) || null;
 }
 // Déplacement d'une porte ou fenêtre : message du refus (chevauchement ou escalier), '' si le déplacement est permis
-function openingMoveRefusal(item, wallId, distCm) {
+function openingMoveRefusal(item, wallId, distCm, side) {
     if (!item || !OPENING_TYPES.includes(item.type)) return '';
     if (openingOverlapWith(item, wallId, distCm)) return 'Porte ou fenêtre déjà à cet endroit : choisissez un autre point du mur.';
     const w = (projectData.walls || []).find(x => x.id === wallId);
@@ -551,6 +555,22 @@ function openingRectOf(op) {
     const p = w && openingPos2D(op);
     return p ? orientedRect(p.x, p.y, p.angle, openingBox(op, w).half, p.th / 2) : null;
 }
+// Carré au sol d'une porte : côté = largeur de la baie, du côté où le vantail balaie (contient le quart de cercle)
+function doorSquareOf(op) {
+    const w = (projectData.walls || []).find(x => x.id === op.wallId);
+    const p = w && openingPos2D(op);
+    if (!p || op.type !== 'door_single') return null;
+    const half = openingBox(op, w).half;
+    const sy = op.side === -1 ? 1 : -1;                  // même convention que drawOpening2D
+    const cyL = sy * (p.th / 2 + half);                  // centre du carré, repère de la baie
+    return orientedRect(p.x - cyL * Math.sin(p.angle), p.y + cyL * Math.cos(p.angle), p.angle, half, half);
+}
+// Emprise en plan d'un appareil (petit carré autour de son point)
+function applianceRectOf(el) {
+    const c = getElCoords(el);
+    return orientedRect(c.x, c.y, 0, 5, 5);
+}
+
 // Paires de portes/fenêtres qui se chevauchent : même mur (largeurs), ou murs voisins au coin (emprises en plan)
 function computeOpeningOverlaps() {
     const list = [], ops = openingsOn();
@@ -817,6 +837,7 @@ function setSelectedWalls(ids) {
     const selected = new Set(ids);
     selectedWallIds = wallsOn().filter(w => selected.has(w.id)).map(w => w.id);
     selectedWallId = selectedWallIds[0] || null;
+    if (typeof refreshOverlays3D === 'function') refreshOverlays3D();   // patch 90 : cadres mis à jour tout de suite
 
     const inspector = document.getElementById('wall-inspector');
     inspector.classList.toggle('hidden', selectedWallIds.length === 0);
@@ -940,13 +961,6 @@ function deleteCurrentSelection() {
     if (currentMode === '3d' && selected3DId) return deleteSelected3DElement();   // élément 3D : prioritaire
     if (selectedWallIds.length || selectedDeviceIds.length || selectedOpeningIds.length || shaftSelected) return deleteMultiSelection();
     if (selected3DId) return deleteSelected3DElement();
-}
-
-// Verrou des murs : aucun mur ne se supprime tant qu'ils sont verrouillés (trémies, ouvertures et appareils restent modifiables)
-function refuseIfWallsLocked() {
-    if (!projectData.wallsLocked) return false;
-    showNotification('Murs verrouillés : déverrouillez-les pour supprimer un mur.', 'error');
-    return true;
 }
 
 async function deleteMultiSelection() {
@@ -1665,8 +1679,8 @@ function dedicatedApplianceOf(el) { return DEDICATED_APPLIANCE_LABELS[el.applian
 // Clignotement des appareils en collision (plan 2D et vue 3D)
 // Élément sélectionné depuis un circuit : son repère clignote pour qu'on sache qu'il est sélectionné
 function selectionBlinkNeeded() {
-    // tout élément sélectionné ou tout circuit : le plan est redessiné à chaque phase de clignotement
-    return !!selectedCircuitId || !!selected3DId;
+    // tout élément sélectionné (seul ou en multiple) ou tout circuit : le plan est redessiné à chaque phase de clignotement
+    return !!selectedCircuitId || !!selected3DId || selectedDeviceIds.length > 0 || selectedOpeningIds.length > 0 || selectedWallIds.length > 0;
 }
 
 // Vrai si un câble traverse un escalier : le plan doit alors se redessiner à chaque clignotement
@@ -1680,16 +1694,10 @@ function startCollisionBlink() {
         // câbles qui traversent un escalier : même rythme que les autres conflits, sans reconstruire la scène
         if (CABLE_RES.stairHitMat) CABLE_RES.stairHitMat.color.set(blinkOn ? '#ef4444' : '#fecaca');
         if (currentMode === '3d') {
+            if (typeof refreshOverlays3D === 'function') refreshOverlays3D();   // patch 90 : collisions et sélections à jour
+            blinkSelectionFrames3D();   // patch 93 : les cadres de sélection alternent de couleur
             wallMeshes3D.forEach(m => { if (m.userData && m.userData.blink) m.visible = blinkOn; });
-            // cadres de sélection : alternent de couleur (blanc / couleur d'origine), toujours visibles
-            wallMeshes3D.forEach(m => {
-                if (m.userData && m.userData.blinkPalette && m.material) m.material.color.set(blinkOn ? m.userData.blinkPalette[1] : m.userData.blinkPalette[0]);
-            });
-            if (selectedHighlightMesh && selectedHighlightMesh.material) selectedHighlightMesh.material.color.set(blinkOn ? contrastHex3D('#f8fafc') : '#f8fafc');
-            // trémie sélectionnée : sa colonne et son cadre alternent avec un contraste
-            if (selected3DId) wallMeshes3D.forEach(m => {
-                if (m.userData && m.userData.shaftId === selected3DId && m.material) m.material.color.set(blinkOn ? contrastHex3D(shaftColour()) : shaftColour());
-            });
+
         } else if (currentMode === '2d' && (collidingElementIds().size || selectionBlinkNeeded() || cableStairHitNow())) {
             redraw2D();
         }
@@ -2001,6 +2009,7 @@ function ensureProjectDefaults() {
 
     // répartition recalculée dès le chargement : pas d'affichage « tout sur le premier circuit » avant le premier calcul
     ensureCircuitAssignment();
+    syncTextSizeInputs();   // patch 83 : les champs de taille reprennent la valeur du projet
 }
 
 // ---------- Contrôles par circuit + métré ----------
@@ -2093,6 +2102,24 @@ function placedDistance(el, wallId, distCm, side) {
 // Éléments cités par une alerte (interrupteur sans charge, câble non relié, superposition…) : ils clignotent en rouge
 let alertBlinkIds = new Set();
 
+// Carré au sol d'une porte qui touche un autre élément : la porte et l'élément clignotent en rouge (comme les autres conflits)
+function computeDoorZoneCollisions() {
+    const out = [];
+    openingsOn().filter(o => o.type === 'door_single').forEach(d => {
+        const sq = doorSquareOf(d);
+        if (!sq) return;
+        if (wallsOn().some(w => { const r = wallRectOf(w); return r && rectsOverlap(sq, r); })) out.push({ door: d.id, other: null });
+        openingsOn().forEach(o => {
+            if (o.id === d.id) return;
+            const r = openingRectOf(o), s = o.type === 'door_single' ? doorSquareOf(o) : null;
+            if ((r && rectsOverlap(sq, r)) || (s && rectsOverlap(sq, s))) out.push({ door: d.id, other: o.id });
+        });
+        shaftsOn().forEach(sh => { if (rectsOverlap(sq, shaftRectOf(sh))) out.push({ door: d.id, other: sh.id }); });
+        stairsOn().forEach(st => { if (rectsOverlap(sq, stairRect(st))) out.push({ door: d.id, other: st.id }); });
+        electricalOn().forEach(el => { if (rectsOverlap(sq, applianceRectOf(el))) out.push({ door: d.id, other: el.id }); });
+    });
+    return out;
+}
 function collidingElementIds() {
     const ids = new Set(computeOpeningCollisions().map(c => c.el.id));
     computeShaftCollisions().forEach(c => { ids.add(c.shaft.id); ids.add(c.other.id); });
@@ -2101,29 +2128,9 @@ function collidingElementIds() {
     computeOutletGangs().overflow.forEach(id => ids.add(id));
     computeStairOpeningCollisions().forEach(c => { ids.add(c.stair.id); ids.add(c.opening.id); });
     computeWallOpeningClashes().forEach(c => ids.add(c.opening.id));
+    computeDoorZoneCollisions().forEach(c => { ids.add(c.door); if (c.other) ids.add(c.other); });
     alertBlinkIds.forEach(id => ids.add(id));
     return ids;
-}
-
-// Appelée par le bouton « Garder cette hauteur » (index.html)
-function acceptSwitchHeightSelected() {
-    const m = selectedMovable();
-    if (m && m.item) acceptSwitchHeight(m.item);
-}
-// Crée le message et le bouton dans l'inspecteur 3D s'ils n'existent pas (ou s'ils sont incomplets)
-function ensureSwitchHeightWarning() {
-    const box = document.getElementById('height-control-container');
-    if (!box) return;
-    const old = document.getElementById('switch-height-warning');
-    if (old && old.querySelector('#switch-height-accept')) return;   // déjà complet
-    if (old) old.remove();
-    const wrap = document.createElement('div');
-    wrap.id = 'switch-height-warning';
-    wrap.className = 'hidden mt-1 text-xs text-amber-400';
-    wrap.innerHTML = '<span id="switch-height-warning-text"></span>' +
-        '<button type="button" id="switch-height-accept" class="ml-2 underline">Garder cette hauteur</button>';
-    box.appendChild(wrap);
-    document.getElementById('switch-height-accept').addEventListener('click', acceptSwitchHeightSelected);
 }
 // Emprise en plan d'une trémie (carré de sa taille, posé contre son mur)
 function shaftRectOf(sh) {
@@ -2174,7 +2181,6 @@ function computeShaftCollisions() {
     }));
     return list;
 }
-
 // ---------- Escaliers : emprise rectangulaire au sol, reliant des niveaux comme les trémies ----------
 // La montée va de la marche basse (côté -L/2) à la marche haute (côté +L/2) ; la flèche du plan la montre.
 const STAIR_RISER_CM = 17.5;
@@ -2226,7 +2232,6 @@ function wallRectOf(w) {
     if (len < 1) return null;
     return orientedRect((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2, Math.atan2(dy, dx), len / 2, (w.thickness || 10) / 2);
 }
-
 // Marches pleines d'un escalier, en repère de l'escalier (u : longueur, v : largeur, z : hauteur depuis le pied).
 // Même géométrie que buildStair3D : marche horizontale de 5 cm + contremarche. Le reste est vide (dessous, dessus).
 function stairStepSolids(st) {
@@ -2305,7 +2310,6 @@ function computeStairCollisions() {
     }));
     return list;
 }
-
 // Escaliers : se bloquent sur les murs du niveau affiché (face contre face) et s'alignent sur eux si l'orientation est proche
 const STAIR_SNAP_CM = 25;
 const STAIR_SNAP_ANGLE = 8 * Math.PI / 180;
@@ -2358,8 +2362,6 @@ function gangLabel(type, n) {
     if (gangFamily(type) === 'switch') return n > 1 ? base + ' (' + GANG_NAMES[n] + ')' : base;
     return base + ' ' + GANG_NAMES[n];
 }
-
-
 // Famille de regroupement : 'outlet', 'switch', ou null si l'appareil ne se regroupe pas
 function gangFamily(type) {
     if (GANGABLE_OUTLETS.includes(type)) return 'outlet';
@@ -2387,7 +2389,6 @@ function snapOutletDistance(type, wallId, dist, side, height, excludeId) {
     }));
     return best === null ? dist : best;
 }
-
 function computeOutletGangs() {
     const sizeOf = new Map();
     // appareils en trop : le groupe est déjà au maximum (4 prises, 2 interrupteurs)
@@ -2455,7 +2456,6 @@ function computeOutletGangs() {
     });
     return { sizeOf, tally, overflow, groupOf, overflowGroups };
 }
-
 // Réseau de câblage de chaque niveau (le métré couvre tout le projet, pas seulement le niveau affiché)
 // Les caches existants sont utilisés : sans eux, chaque image de glissement 3D refaisait le câblage
 function networksAllLevels() {
@@ -2470,7 +2470,6 @@ function networksAllLevels() {
     }
     return nets;
 }
-
 function computeCircuitReport() {
     const net = getCableNetwork();
     const nets = networksAllLevels();
@@ -2500,7 +2499,6 @@ function computeCircuitReport() {
         const unrouted = nets.reduce((s, n) => s + ((n.unroutedBy || {})[c.id] || 0), 0);
         return { circuit: c, points, cableM: cableCm / 100, maxRunM, drop, limit, warnings, unrouted };
     });
-
     const alerts = [];
     // cible de chaque alerte (même index) : onglet à ouvrir, appareil à sélectionner, conseil précis
     const alertTargets = [];
@@ -2548,7 +2546,6 @@ function computeCircuitReport() {
         const id = (net.warnTarget || {})[w] || null;
         addAlert(levelPrefix(activeLevelId) + w, { tab: routingTabFor(w), elId: id, hint: routingHintFor(w) });
     });
-
     // commandes et charges comptées sur tout le projet : une liaison peut relier deux niveaux
     const nSw = projectData.electrical.filter(isLightingControl).length;
     const nVaEtVient = projectData.electrical.filter(el => el.type === 'switch_va_et_vient').length;
@@ -2621,6 +2618,15 @@ function computeCircuitReport() {
             { tab: 'ouvertures', elId: opening.id, hint: 'Sélectionnez la ' + nm + ' et déplacez-la le long de son mur, ou déplacez le mur qui la traverse depuis la 3D.' });
     });
     
+    // emprise au sol d'une porte touchée par un élément : même détection que le clignotement rouge, une entrée par porte
+    const doorZoneSeen = new Set();
+    computeDoorZoneCollisions().forEach(({ door }) => {
+        if (doorZoneSeen.has(door)) return;
+        doorZoneSeen.add(door);
+        const d = (projectData.openings || []).find(o => o.id === door);
+        if (!d) return;
+        addAlert(levelPrefix(d.levelId) + 'Porte : un élément touche son emprise au sol : à déplacer', { tab: 'ouvertures', elId: d.id, hint: 'Le carré au sol de la porte et l’élément qui le touche clignotent en rouge : déplacez l’un des deux.' });
+    });
     computeDeviceOverlaps().forEach(({ a, b }) => {
         addAlert(levelPrefix(a.levelId) + electricalDisplayName(a) + ' chevauche ' + electricalDisplayName(b) + ' : à déplacer', { tab: 'appareillage', elId: a.id, hint: 'Sélectionnez-le et déplacez-le pour qu’il ne chevauche plus ' + electricalDisplayName(b) + '.' });
     });
@@ -2659,7 +2665,6 @@ function computeCircuitReport() {
     });
     return { rows, alerts, alertTargets, infos, sections, conduitM, counts, countLines };
 }
-
 // Cellule de réglage d'un circuit (calibre, section, éléments) : libellé au-dessus, valeur entre − et +
 function circuitCellHtml(id, field, label, value) {
     const btn = (dir, sym) => '<button onclick="event.stopPropagation();adjustCircuit(\'' + esc(id) + '\',\'' + field + '\',' + dir + ')" class="w-5 h-5 shrink-0 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 leading-none" aria-label="' + label + (dir > 0 ? ' plus' : ' moins') + '">' + sym + '</button>';
@@ -2668,7 +2673,6 @@ function circuitCellHtml(id, field, label, value) {
         '<div class="flex items-center justify-between gap-1 mt-0.5">' + btn(-1, '−') +
         '<span class="font-semibold text-slate-100 text-[11px] truncate min-w-0">' + esc(value) + '</span>' + btn(1, '+') + '</div></div>';
 }
-
 // Regroupe les lignes de circuits par niveau : chaque circuit va dans le niveau
 // où se trouve la majorité de ses appareils. Niveaux du plus haut au plus bas,
 // circuits sans appareil en dernier.
@@ -2696,7 +2700,6 @@ function groupCircuitRowsByLevel(rows) {
     if (orphan.length) groups.push({ title: 'Sans appareil', rows: orphan });
     return groups;
 }
-
 // Réglages de chaque carte de circuit : repliés par défaut, état gardé pendant la session
 // Compteur affiché à côté du libellé d'un onglet (vide si zéro)
 function setTabCount(key, n) {
@@ -2704,13 +2707,11 @@ function setTabCount(key, n) {
         s.textContent = n ? '(' + n + ')' : '';
     });
 }
-
 const expandedCircuitCards = new Set();
 function toggleCircuitCard(id) {
     if (expandedCircuitCards.has(id)) expandedCircuitCards.delete(id); else expandedCircuitCards.add(id);
     updateCircuitsUI();
 }
-
 // Passage entre pièces fermées (par circuit) : le câble peut traverser le mur au plafond, franchir l'extérieur et
 // retraverser le mur de l'autre pièce. Réglage propre à chaque circuit, désactivé par défaut.
 function roomCrossingHtml(cid, on) {
@@ -2720,7 +2721,6 @@ function roomCrossingHtml(cid, on) {
         : '<button type="button" onclick="event.stopPropagation();setCircuitRoomCrossing(\'' + esc(cid) + '\',true)" class="shrink-0 px-2 py-0.5 rounded-md border-2 border-amber-400/70 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 text-[10px]">Passer entre pièces au plafond</button>';
     return '<div class="mt-2 flex items-start gap-2"><div class="flex-1 text-[11px] ' + (on ? 'text-amber-200/90' : 'text-slate-400') + '">' + label + '</div>' + button + '</div>';
 }
-
 // Cheminement des câbles d'un circuit : murs (défaut), mixte ou plafond
 const CABLE_ROUTING = {
     murs: { label: 'Murs', title: 'par les murs', icon: 'fa-border-all', color: 'border-slate-700 bg-slate-800 text-slate-200',
@@ -2744,7 +2744,6 @@ function cableRoutingHtml(cid, routing) {
     return '<div class="mt-2"><div class="text-[10px] text-slate-400 mb-1">Cheminement des câbles</div><div class="flex gap-1">' + opts + '</div>' +
         '<div class="text-[10px] text-slate-500 mt-1">' + esc(CABLE_ROUTING[routing].help) + '</div></div>';
 }
-
 function updateCircuitsUI() {
     // la liste existe en 3D (barre gauche) et en 2D (barre droite) : les deux sont remplies
     const lists = ['circuits-list', 'circuits-list-2d'].map(id => document.getElementById(id)).filter(Boolean);
@@ -2871,11 +2870,9 @@ function updateCircuitsUI() {
         box.innerHTML = html;
     }
 }
-
 // ---------- Métré en tableaux (écran + impression) ----------
 // Quantitatif par catégories : null = ligne d'espacement entre deux catégories
 const BOM_DEVICE_ORDER = ['panel', 'light_ceiling', 'light_spot', 'wall_light', 'smoke_detector', 'switch_simple', 'switch_va_et_vient', 'switch_pushbutton', 'switch_dimmer', 'motion_timer', 'outlet_16a', 'outlet_20a', 'outlet_20a_classic', 'outlet_dedicated_20', 'outlet_dedicated_32', 'outlet_switched', 'doorbell_button', 'doorbell_chime', 'shutter_control', 'shutter_motor'];
-
 // Nombre de boîtes de dérivation de tout le projet (une par étage relié à une trémie)
 function countDerivationBoxes() {
     const saved = activeLevelId;
@@ -2887,7 +2884,6 @@ function countDerivationBoxes() {
     }
     return n;
 }
-
 function buildBomRows(rep) {
     // Comme le CSV de référence : une ligne titre par catégorie, puis les désignations (catégorie laissée vide)
     const section = (title, lines) => lines.length ? [[title, '', '', ''], ...lines.map(l => ['', l[1], l[2], l[3]])] : [];
@@ -2908,7 +2904,6 @@ function buildBomRows(rep) {
         groups.push(section(family, appliance.filter(l => test(l.type)).map(line => [family, line.label, line.count, 'u'])));
     });
     groups.push(section('Appareillages', appliance.filter(l => legendFamilyRank(l.type) === 99).map(line => ['Appareillages', line.label, line.count, 'u'])));
-
     const cables = [];
     // boîtes de dérivation : une par étage relié à une trémie (comptées sur chaque niveau, comme dans la 3D)
     const boxCount = countDerivationBoxes();
@@ -2919,7 +2914,6 @@ function buildBomRows(rep) {
     [...rep.sections.entries()].sort((x, y) => x[0] - y[0]).forEach(([sec, m]) =>
         cables.push(['Gaines et câbles', 'Câble 3G' + sec + ' mm² (marge 10 %)', Math.ceil(m * 1.1), 'm']));
     groups.push(section('Gaines et câbles', cables));
-
     const rows = [];
     groups.filter(g => g.length).forEach((g, i) => {
         if (i) rows.push(null);
@@ -2927,7 +2921,6 @@ function buildBomRows(rep) {
     });
     return rows;
 }
-
 function reportTablesHtml(rep) {
     const bom = buildBomRows(rep);
     let html = '<h3 class="rt-title">Quantitatif</h3>';
@@ -2950,7 +2943,6 @@ function reportTablesHtml(rep) {
     html += '<p class="rt-note">Longueurs de câble avec 10 % de marge. Contrôles indicatifs : à faire valider par un électricien (NF C 15-100).</p>';
     return html;
 }
-
 function printReport() {
     // Fenêtre de la taille d'une feuille A4 (ratio 210 x 297 mm), pour que l'aperçu corresponde à l'impression
     const win = window.open('', '_blank', 'width=820,height=1100,scrollbars=yes,resizable=yes');
@@ -3002,7 +2994,6 @@ function printReport() {
     win.document.close();
     win.focus();
 }
-
 // Onglet où se corrige un avertissement de câblage
 function routingTabFor(w) {
     const t = String(w);
@@ -3025,7 +3016,6 @@ function unroutedHintFor(c) {
     if (cableRoutingOf(c) === 'murs') return c.roomCrossing ? 'Passez ce circuit en « mixte » ou « plafond » sur sa carte.' : 'Passez ce circuit en « mixte » ou « plafond » sur sa carte, ou activez le passage entre pièces (bouton ci-dessous).';
     return 'Aucun chemin, même au plafond : ajoutez une trémie, ou déplacez l’appareil concerné.';
 }
-
 // Conseil précis pour un avertissement de circuit (ouvre les réglages du circuit)
 function circuitWarningHint(w) {
     const t = String(w);
@@ -3036,7 +3026,6 @@ function circuitWarningHint(w) {
     if (t.includes('chute')) return 'Réglages du circuit (⚙) : passez à une section supérieure, ou répartissez les éléments sur un second circuit.';
     return 'Réglages du circuit (⚙) : ajustez le calibre ou la section.';
 }
-
 // Ouvre l'onglet, sélectionne l'élément ou le circuit concerné par une alerte
 let lastAlertTargets = [];
 function goToAlert(i) {
@@ -3058,7 +3047,6 @@ function goToAlert(i) {
     }
     setRightTab(t.tab);
 }
-
 function solutionForWarning(message) {
     const text = String(message).toLowerCase();
     // G2 : pistes propres aux liaisons entre niveaux et aux trémies
@@ -3115,7 +3103,6 @@ function solutionForWarning(message) {
     }
     return 'Vérifiez l’élément concerné sur le plan, puis ses réglages dans l’onglet correspondant.';
 }
-
 function exportBOM() {
     const rep = computeCircuitReport();
     const rows = [['Catégorie', 'Désignation', 'Quantité', 'Unité']];
@@ -3131,15 +3118,7 @@ function exportBOM() {
     a.remove();
     showNotification('Métré exporté en CSV', 'success');
 }
-
 const CIRCUIT_STEPS = { breakerRating: [10, 16, 20, 32], wireSection: [1.5, 2.5, 6] };
-
-function stepperHtml(id, field, label, value) {
-    const btn = (dir, sym) => '<button onclick="event.stopPropagation();adjustCircuit(\'' + esc(id) + '\',\'' + field + '\',' + dir + ')" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 leading-none" aria-label="' + label + (dir > 0 ? ' +' : ' -') + '">' + sym + '</button>';
-    return '<span class="flex items-center gap-1" title="' + label + '">' + label + ' ' + btn(-1, '−') +
-        '<span class="min-w-[2.5rem] text-center font-semibold text-slate-100">' + esc(value) + '</span>' + btn(1, '+') + '</span>';
-}
-
 // Mode de câblage du circuit : « chain » (chaîné, défaut) ou « star » (étoile)
 function toggleWiringMode(id) {
     const c = projectData.circuits.find(x => x.id === id);
@@ -3150,13 +3129,11 @@ function toggleWiringMode(id) {
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
     redraw2D();
 }
-
 // Cheminement des câbles du circuit : passe au mode suivant (murs → mixte → plafond → murs)
 function toggleCircuitRouting(id) {
     const c = projectData.circuits.find(x => x.id === id);
     if (c) setCircuitRouting(id, nextCableRouting(cableRoutingOf(c)));
 }
-
 // Cheminement des câbles du circuit : « murs » (défaut), « mixte » ou « plafond »
 function setCircuitRouting(id, mode) {
     const c = projectData.circuits.find(x => x.id === id);
@@ -3167,7 +3144,6 @@ function setCircuitRouting(id, mode) {
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
     redraw2D();
 }
-
 function adjustCircuit(id, field, dir) {
     const c = projectData.circuits.find(x => x.id === id);
     if (!c) return;
@@ -3195,7 +3171,6 @@ function adjustCircuit(id, field, dir) {
     c[field] = next;
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
 }
-
 async function editCircuit(id) {
     const c = projectData.circuits.find(x => x.id === id);
     if (!c) return;
@@ -3220,7 +3195,6 @@ async function editCircuit(id) {
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
     showNotification('Circuit mis à jour', 'success');
 }
-
 // ---------- Inspecteurs d'éléments (3D + 2D) ----------
 // Inspecteurs communs : un seul panneau gauche est visible à la fois, donc on déplace les blocs
 // dans la sidebar du mode courant (les identifiants restent uniques, le code ne change pas)
@@ -3265,7 +3239,6 @@ function readRightTab() {
         return RIGHT_TABS.some(([k]) => k === v) ? v : 'ouvertures';
     } catch (e) { return 'ouvertures'; }
 }
-
 function setRightTab(key, save = true) {
     rightTabCurrent = key;
     RIGHT_SIDEBARS.forEach(id => {
@@ -3287,7 +3260,6 @@ function setRightTab(key, save = true) {
     });
     if (save) { try { localStorage.setItem(RIGHT_TAB_KEY, key || ''); } catch (e) { /* stockage indisponible */ } }
 }
-
 function buildRightTabs() {
     RIGHT_SIDEBARS.forEach(id => {
         const side = document.getElementById(id);
@@ -3327,15 +3299,12 @@ function buildRightTabs() {
     });
     setRightTab(readRightTab(), false);
 }
-
 document.addEventListener('DOMContentLoaded', () => {
     initCollapsibleSections();
     buildRightTabs();
 });
-
 const SHARED_INSPECTORS_3D = ['wall-inspector', 'default-specs-2d', 'shaft-inspector'];
 const SHARED_CONTROLS_2D = ['position-distance-container'];
-
 function sharedHomeMark(el) {
     if (!el._homeMark) {
         el._homeMark = document.createComment('home:' + el.id);
@@ -3354,7 +3323,6 @@ function placeSharedTools() {
     if (in3d && slot) slot.appendChild(block);
     else mark.parentNode.insertBefore(block, mark);
 }
-
 // Choix d'un outil : en 2D, l'outil 2D ; en 3D, « Tracer mur » lance la pose de mur, « Sélectionner » sort de la pose
 function setModeTool(tool) {
     if (currentMode !== '3d') {
@@ -3366,8 +3334,8 @@ function setModeTool(tool) {
     if (tool === 'wall' || tool === 'text') setPlacementType(tool);
     else if (activePlacementType) setPlacementType(activePlacementType);
     refreshToolButtons();
+    refreshToolHint();   // patch 86 : la bulle suit le nouvel outil (plus de « 2 éléments » périmé)
 }
-
 // Surbrillance de l'outil actif, dans la sidebar commune
 function refreshToolButtons(override) {
     const active = override || (currentMode === '3d' ? (activePlacementType === 'wall' ? 'wall' : activePlacementType === 'text' ? 'text' : 'select') : currentTool);
@@ -3377,7 +3345,6 @@ function refreshToolButtons(override) {
             (on ? 'tool-active-yellow border-yellow-400 ring-1 ring-yellow-400/60' : 'border-slate-500 text-slate-200');
     });
 }
-
 function placeSharedInspectors() {
     placeSharedTools();
     placeToolHint();
@@ -3398,7 +3365,6 @@ function placeSharedInspectors() {
     SHARED_CONTROLS_2D.forEach(id => place(id, in3d ? 'home' : slot2d));
     placeHeightControl();
 }
-
 // En 3D, la hauteur d'une trémie se règle dans son cadre (un seul cadre, pas de second « Trémie » au-dessus)
 function placeHeightControl() {
     const h = document.getElementById('height-control-container');
@@ -3409,17 +3375,14 @@ function placeHeightControl() {
     if (shaftIn3D) box.firstElementChild.after(h);
     else if (box.contains(h)) mark.parentNode.insertBefore(h, mark);
 }
-
 // Rafraîchit la vue active après une modification de l'élément sélectionné (2D ou 3D)
 function refreshSelectedView() {
     if (currentMode === '3d') build3DScene(); else redraw2D();
 }
-
 // Bouton main : un second clic désactive le déplacement et revient à la sélection
 function togglePanTool() {
     setTool(currentTool === 'pan' ? 'select' : 'pan');
 }
-
 // Garde-fous des murs (2D, et plus tard 3D) :
 // - « Modifier les murs » : interrupteur, désactivé par défaut. Sans lui, un clic sur un mur le sélectionne seulement.
 // - « Murs verrouillés » : bloque tout déplacement, étirement et saisie de longueur, même en mode modification.
@@ -3428,14 +3391,12 @@ let wallEditMode = false;
 function canEditWalls() {
     return !!wallEditMode && !projectData.wallsLocked;
 }
-
 // Message affiché quand une modification de mur est refusée
 function wallEditRefusedMessage() {
     return projectData.wallsLocked
         ? "Murs verrouillés : déverrouillez-les pour modifier les murs."
         : "Activez « Modifier les murs » pour changer ce mur.";
 }
-
 function toggleWallEdit() {
     if (projectData.wallsLocked) {
         showNotification("Les murs sont verrouillés : déverrouillez-les d’abord.", "info");
@@ -3445,14 +3406,12 @@ function toggleWallEdit() {
     updateWallEditButtons();
     showNotification(wallEditMode ? "Modification des murs activée" : "Modification des murs désactivée", "info");
 }
-
 function toggleWallsLock() {
     projectData.wallsLocked = !projectData.wallsLocked;
     if (projectData.wallsLocked) { wallEditMode = false; if (selectedWallIds.length) setSelectedWalls([]); }
     updateWallEditButtons();
     showNotification(projectData.wallsLocked ? "Murs verrouillés" : "Murs déverrouillés", "info");
 }
-
 // Autorise (ou retire) pour un seul circuit le passage du câble à plafond entre pièces fermées
 function setCircuitRoomCrossing(id, on) {
     const c = projectData.circuits.find(x => x.id === id);
@@ -3466,7 +3425,6 @@ function setCircuitRoomCrossing(id, on) {
     scheduleBuild3D();
     showNotification(on ? "Passage entre pièces autorisé pour « " + c.name + " »" : "Passage entre pièces retiré pour « " + c.name + " »", "info");
 }
-
 // Bouton à bascule (murs) : liseré coloré quand actif (jaune pour « Modifier les murs », rose pour le verrou), gris sinon
 function setActiveRing(el, on, colour = 'yellow') {
     const cls = colour === 'rose'
@@ -3476,7 +3434,6 @@ function setActiveRing(el, on, colour = 'yellow') {
     el.classList.toggle('ring-1', on);
     el.classList.toggle('border-slate-500', !on);
 }
-
 function updateWallEditButtons() {
     const allowed = canEditWalls();
     const locked = !!projectData.wallsLocked;
@@ -3511,7 +3468,6 @@ function updateWallEditButtons() {
         hint.classList.toggle('hidden', allowed);
     }
 }
-
 // Bandeau « Annuler » après une modification de mur (visible environ 6 s)
 let undoBarTimer = null;
 
@@ -3523,7 +3479,6 @@ function shaftLinksValid() {
     }));
     return ok;
 }
-
 // Message du bandeau après un geste sur un mur : signale les étages dont les câbles ne montent plus
 // Étages dont une liaison trémie fonctionnait avant le geste et ne fonctionne plus
 function shaftLinksLostSince(before) {
@@ -3538,18 +3493,15 @@ function shaftLinksLostSince(before) {
     }));
     return lost;
 }
-
 // Message de refus : le geste est annulé pour que les câbles restent en place
 function shaftRefusalMessage(lost) {
     return 'Geste refusé : la trémie ne tomberait plus sur un mur de ' + lost.join(', ') + ' et les câbles seraient coupés. Déplacez d’abord le mur de l’étage ou la trémie.';
 }
-
 function wallMoveMessage(before, verb) {
     const lost = shaftLinksLostSince(before);
     if (!lost.length) return 'Mur ' + verb;
     return 'Mur ' + verb + ' : la trémie ne tombe plus sur un mur de ' + lost.join(', ') + ' (câbles coupés). Déplacez le mur ou la trémie, ou annulez.';
 }
-
 function showUndoBar(msg) {
     const bar = document.getElementById('undo-bar');
     const text = document.getElementById('undo-bar-msg');
@@ -3559,13 +3511,11 @@ function showUndoBar(msg) {
     clearTimeout(undoBarTimer);
     undoBarTimer = setTimeout(hideUndoBar, 6000);
 }
-
 function hideUndoBar() {
     const bar = document.getElementById('undo-bar');
     if (bar) bar.classList.add('hidden');
     clearTimeout(undoBarTimer);
 }
-
 // Affiche « Désélectionner » seulement quand quelque chose est sélectionné (2D et 3D)
 function updateDeselectButtons() {
     const any = !!(selected3DId || selectedCircuitId || selectedWallIds.length || selectedDeviceIds.length || selectedOpeningIds.length);
@@ -3576,7 +3526,6 @@ function updateDeselectButtons() {
     const deletable = !!(selected3DId || selectedDeviceIds.length || selectedOpeningIds.length || (selectedWallIds.length && !projectData.wallsLocked));
     if (del) del.classList.toggle('hidden', !deletable);
 }
-
 // Vide toute sélection (murs, appareils, ouvertures, trémies, escaliers, circuit mis en évidence)
 function clearAllSelection() {
     setSelectedWalls([]);
@@ -3589,14 +3538,12 @@ function clearAllSelection() {
     updateCircuitsUI();
     if (currentMode === '3d') build3DScene(); else redraw2D();
 }
-
 // Bouton « Désélection » de la sidebar : visible pendant la pose d'un appareil ou d'une ouverture (2D et 3D)
 function updateStopPlacementButton(key) {
     const b = document.getElementById('btn-stop-placement');
     if (b) b.classList.toggle('hidden', key !== 'place' && key !== 'text' && key !== 'wall');
     updateDeselectButtons();
 }
-
 // Arrête la pose en cours et vide la sélection, comme Échap
 function stopPlacement() {
     if (currentMode === '3d') {
@@ -3604,7 +3551,6 @@ function stopPlacement() {
     } else setTool('select');
     clearAllSelection();
 }
-
 // Circuit mis en évidence au clic : celui d'un point de circuit, ou celui qu'une boîte de dérivation porte.
 // Une commande et l'appareil qu'elle pilote ne sélectionnent pas de circuit : seul leur câblage de commande s'affiche.
 function highlightCircuitOf(el) {
@@ -3613,11 +3559,9 @@ function highlightCircuitOf(el) {
     if (isControl(el) || isControlledByLink(el)) return null;
     return isCircuitPoint(el) ? circuitOf(el) : null;
 }
-
 function isControlledByLink(el) {
     return (getCableNetwork().controlLinks || []).some(link => link.lightIds.includes(el.id));
 }
-
 // Circuit d'une boîte de dérivation : celui dont elle porte les câbles (lighting par défaut)
 function boxCircuitOf(el) {
     return projectData.circuits.find(c => c.id === (el.circuitId || DEFAULT_CIRCUIT_BY_TYPE.light_ceiling)) || null;
@@ -3641,7 +3585,6 @@ function setCircuitInspectorText(el) {
         if (i) { i.textContent = info; i.classList.toggle('hidden', !isBox); }
     });
 }
-
 function fillCircuitSelect(sel, el) {
     if (!sel) return;
     const cur = el && el.type === 'junction_box' ? boxCircuitOf(el) : circuitOf(el);
@@ -3654,14 +3597,12 @@ function fillCircuitSelect(sel, el) {
         sel.appendChild(o);
     });
 }
-
 function electricalDisplayName(el) {
     const sameType = projectData.electrical.filter(candidate => candidate.type === el.type);
     const ordinal = sameType.findIndex(candidate => candidate.id === el.id) + 1;
     const base = (ELEMENT_LABELS[el.type] || el.type) + ' n°' + ordinal;
     return isDedicatedOutlet(el) ? base.replace(' n°', ' (' + DEDICATED_APPLIANCE_LABELS[dedicatedApplianceOf(el)] + ') n°') : base;
 }
-
 // Survol du plan (2D et 3D) : une étiquette indique l'élément visé (nom, étage, circuit)
 let planTooltipEl = null;
 function planHoverInfo(id) {
@@ -3701,7 +3642,6 @@ function showPlanTooltip(clientX, clientY, id) {
     planTooltipEl.classList.remove('hidden');
 }
 function hidePlanTooltip() { if (planTooltipEl) planTooltipEl.classList.add('hidden'); }
-
 function focusAssociatedElement(id) {
     // ouverture depuis une alerte ou une liste : seul cet élément reste sélectionné (ni circuit, ni autres)
     setSelectedWalls([]);
@@ -3718,13 +3658,11 @@ function focusAssociatedElement(id) {
         redraw2D();
     }
 }
-
 // Indique à quel niveau se trouve un appareil dans les listes d'association (ex. « · RDC »)
 function levelSuffix(item) {
     const lv = (projectData.levels || []).find(l => l.id === item.levelId);
     return lv ? ' <span class="text-slate-500">· ' + esc(lv.name) + '</span>' : '';
 }
-
 // G1 : préfixe « Sous-sol : » pour situer une alerte (seulement s'il y a plusieurs niveaux)
 function levelPrefix(levelId) {
     const levels = projectData.levels || [];
@@ -3732,13 +3670,11 @@ function levelPrefix(levelId) {
     const lv = levels.find(l => l.id === levelId);
     return lv ? lv.name + ' : ' : '';
 }
-
 // G3 : aide et raccourcis (bouton « ? » de la barre et touche ?)
 function bindHelpButton() {
     const b = document.getElementById('help-fab');
     if (b) b.addEventListener('click', () => toggleHelpPanel());
 }
-
 function toggleHelpPanel(force) {
     const existing = document.getElementById('help-panel');
     const open = force === undefined ? !existing : force;
@@ -3759,6 +3695,7 @@ function toggleHelpPanel(force) {
         ['Clic droit (2D)', 'Arrêter le tracé de mur en cours'],
         ['Ctrl ou Maj + clic (2D)', 'Ajouter ou retirer un élément de la sélection'],
         ['Glisser dans le vide (2D)', 'Sélection par rectangle (appareils, ouvertures)'],
+        ['Ctrl+Shift+P', 'Ouvrir le panneau de propriétés'],
         ['?', 'Ouvrir ou fermer cette aide']
     ];
     const lines = rows.map(([k, v]) => '<tr><td class="py-1.5 pr-4 align-top whitespace-nowrap"><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-emerald-300 text-xs">' + k + '</kbd></td><td class="py-1.5 text-slate-300">' + v + '</td></tr>').join('');
@@ -3771,7 +3708,6 @@ function toggleHelpPanel(force) {
     document.body.appendChild(p);
     document.getElementById('help-close').addEventListener('click', () => toggleHelpPanel(false));
 }
-
 // Liste regroupée par étage : un titre par niveau, puis les appareils de ce niveau (ordre des niveaux du projet)
 function groupByLevelHtml(items, renderItem) {
     const levels = projectData.levels || [];
@@ -3786,7 +3722,6 @@ function groupByLevelHtml(items, renderItem) {
     items.filter(it => !known.has(it.levelId)).forEach(it => { html += renderItem(it); });
     return html;
 }
-
 function updateLightingAssociations(el) {
     const boxes = [
         document.getElementById('lighting-associations'),
@@ -3797,7 +3732,6 @@ function updateLightingAssociations(el) {
         boxes.forEach(box => box.classList.add('hidden'));
         return;
     }
-
     const network = getCableNetwork();
     const links = network.controlLinks || [];
     const switches = new Map(links.map(link => [link.switchId, link]));
@@ -3878,7 +3812,6 @@ function updateLightingAssociations(el) {
         });
         content += '</div></details>';
     }
-
     boxes.forEach(box => {
         // les volets « Modifier les associations » gardent leur état ouvert / fermé après la mise à jour
         const openStates = [...box.querySelectorAll('details')].map(d => d.open);
@@ -3897,7 +3830,6 @@ function updateLightingAssociations(el) {
         });
     });
 }
-
 function setLightingAssociation(switchId, lightId, isAssociated) {
     const sw = projectData.electrical.find(candidate => candidate.id === switchId && isControl(candidate));
     const light = projectData.electrical.find(candidate =>
@@ -3906,7 +3838,6 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
         showNotification('Association impossible : commande ou charge introuvable, ou incompatible.', 'error');
         return;
     }
-
     const automaticLinks = getCableNetwork().controlLinks || [];
     const initialIds = Array.isArray(sw.controlledLightIds)
         ? sw.controlledLightIds
@@ -3922,7 +3853,6 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
     redraw2D();
     showNotification('Association d’éclairage mise à jour.', 'success');
 }
-
 // Paramètres par défaut (épaisseur, hauteur des NOUVEAUX murs) : visibles seulement pendant le tracé d'un mur,
 // et masqués dès qu'un élément ou un mur est sélectionné
 function syncDefaultSpecs() {
@@ -3932,7 +3862,6 @@ function syncDefaultSpecs() {
     const tracing = currentMode === '3d' ? activePlacementType === 'wall' : currentTool === 'wall';
     box.classList.toggle('hidden', busy || !tracing);
 }
-
 function syncElementInspectors() {
     updateNudgePads();
     syncSelectionSliders();
@@ -4035,14 +3964,12 @@ function syncElementInspectors() {
         fillCircuitSelect(document.getElementById('el2d-circuit'), el);
     }
 }
-
 // ---------- Dimensions des ouvertures (portes : largeur ; fenêtres : largeur, hauteur, allège) ----------
 const OPENING_ROWS = [
     ['width', 'Largeur'],
     ['height', 'Hauteur'],
     ['sill', 'Espace sol-fenêtre']
 ];
-
 // Même disposition que l'escalier et la trémie : libellé, slider et valeur sur une seule ligne
 function initOpeningControls() {
     ['3d', '2d'].forEach(suffix => {
@@ -4057,7 +3984,6 @@ function initOpeningControls() {
                 '</div>').join('');
     });
 }
-
 function openingLimits(op, wall) {
     const len = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
     const wallH = wall.height || 250;
@@ -4075,7 +4001,6 @@ function openingLimits(op, wall) {
         sill: { min: 0, max: Math.max(0, wallH - 5 - height), val: sill }
     };
 }
-
 function syncOpeningControls(op) {
     ['opening-controls-3d', 'opening-controls-2d'].forEach(id => {
         const box = document.getElementById(id);
@@ -4098,14 +4023,12 @@ function syncOpeningControls(op) {
         });
     });
 }
-
 let _openingUndoStamp = { key: null, t: 0 };
 function openingUndoOnce(key) {
     const now = Date.now();
     if (_openingUndoStamp.key !== key || now - _openingUndoStamp.t > 800) saveStateToUndo();
     _openingUndoStamp = { key, t: now };
 }
-
 function setSelectedOpeningProp(prop, raw) {
     const op = projectData.openings.find(o => o.id === selected3DId);
     if (!op) return;
@@ -4142,9 +4065,7 @@ function setSelectedOpeningProp(prop, raw) {
     }
     if (!(currentMode === '3d' && rebuildOpening3D(op))) refreshSliderView();
 }
-
 window.addEventListener('DOMContentLoaded', initOpeningControls);
-
 // Flèches ▲ ▼ à droite de chaque curseur : même effet qu'un glissement (input pendant le réglage, change au relâchement, donc un seul pas d'annulation)
 const STEPPER_BTN = 'shrink-0 w-4 h-3 flex items-center justify-center rounded-sm bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-[8px] leading-none select-none';
 function stepRange(input, dir) {
@@ -4209,7 +4130,6 @@ window.addEventListener('DOMContentLoaded', () => {
         records.forEach(r => r.addedNodes.forEach(n => { if (n.nodeType === 1) enhanceRangeInputs(n); }));
     }).observe(document.body, { childList: true, subtree: true });
 });
-
 function setSelectedDoorHinge(side) {
     const op = projectData.openings.find(o => o.id === selected3DId && o.type === 'door_single');
     if (!op || (side !== 'left' && side !== 'right') || op.hingeSide === side) return;
@@ -4219,7 +4139,6 @@ function setSelectedDoorHinge(side) {
     redraw2D();
     syncElementInspectors();
 }
-
 function setSelectedCircuit(val) {
     const el = projectData.electrical.find(e => e.id === selected3DId);
     if (!el) return;
@@ -4228,7 +4147,6 @@ function setSelectedCircuit(val) {
     if (currentMode === '3d') build3DScene(); else { redraw2D(); updateCircuitsUI(); }
     syncElementInspectors();
 }
-
 // Prise dédiée : appareil alimenté (le calibre passe par setSelectedCircuit)
 function setDedicatedAppliance(val) {
     const el = projectData.electrical.find(e => e.id === selected3DId);
@@ -4238,7 +4156,6 @@ function setDedicatedAppliance(val) {
     if (currentMode === '3d') build3DScene(); else { redraw2D(); updateCircuitsUI(); }
     syncElementInspectors();
 }
-
 // Blocs « appareil + calibre » de la prise dédiée, en 2D et en 3D
 function syncDedicatedInspectors(el, show) {
     ['dedicated-container', 'el2d-dedicated-wrap'].forEach(id => {
@@ -4259,7 +4176,6 @@ function syncDedicatedInspectors(el, show) {
         sel.value = dedicatedApplianceOf(el);
     });
 }
-
 // Déplacement d'un appareil ou d'une porte le long de son mur ; renvoie false si ce n'est pas possible
 function nudgeSelectedAlongWall(dir, stepCm) {
     const item = projectData.electrical.find(e => e.id === selected3DId) || projectData.openings.find(o => o.id === selected3DId) || (projectData.shafts || []).find(s => s.id === selected3DId);
@@ -4294,7 +4210,6 @@ function selectedMovable() {
     if (st) return { kind: 'escalier', item: st };
     return null;
 }
-
 // Flèches, selon l'élément (la même logique en 2D et en 3D) :
 // - appareil mural : gauche / droite le long du mur, haut / bas = hauteur (5 à 250 cm)
 // - plafonnier : gauche / droite = x, haut / bas = y (plan)
@@ -4318,7 +4233,6 @@ function cameraPlanAxes() {
         return { f: { x: fx, z: fz }, r: { x: -fz, z: fx } };
     } catch (e) { return null; }
 }
-
 // Sens du mur, vu depuis l'écran : +1 si « droite » de l'écran va dans le sens du mur (ou sans caméra)
 function wallScreenSign(w, ax) {
     if (!ax) return 1;
@@ -4326,7 +4240,6 @@ function wallScreenSign(w, ax) {
     const ux = (w.x2 - w.x1) / len, uz = (w.y2 - w.y1) / len;
     return ax.r.x * ux + ax.r.z * uz >= 0 ? 1 : -1;
 }
-
 // Flèches, selon l'élément (2D et 3D) ; en 3D, « droite / gauche / haut / bas » suivent l'écran et non le plan :
 // - appareil mural : gauche / droite le long du mur, haut / bas = hauteur (10 à 380 cm)
 // - plafonnier et escalier : sur le plan, dans le sens de l'écran (haut = vers le fond de la vue)
@@ -4396,7 +4309,6 @@ function nudgeSelected(key, stepCm) {
     }
     return false;
 }
-
 // Pavé de flèches dans la barre du bas (2D et 3D), visible seulement si un élément déplaçable est sélectionné
 function ensureNudgePads() {
     ['view-2d', 'view-3d'].forEach(id => {
@@ -4418,7 +4330,6 @@ function ensureNudgePads() {
         bar.appendChild(pad);
     });
 }
-
 // Curseurs « Distance au départ » et « Hauteur au sol » : réglés en 3D seulement. En 2D, la hauteur n'est jamais réglable :
 // un message indique où la régler (fenêtre 3D). Mêmes réglages en 2D et en 3D pour la distance, suivent l'élément en temps réel
 function syncSelectionSliders() {
@@ -4473,20 +4384,16 @@ function syncSelectionSliders() {
         document.getElementById('inspector-height-3d-val').textContent = (h / 100).toFixed(2) + ' m';
     }
 }
-
 function updateNudgePads() {
     const can = !!selectedMovable();
     document.querySelectorAll('.nudge-pad').forEach(p => p.classList.toggle('hidden', !can));
 }
-
 // ---------- Plan 2D : appareils, ouvertures, câbles ----------
 let showCables2D = true;
 let draggingEl2D = null;
-
 // ---------- Sauvegarde automatique ----------
 const AUTOSAVE_KEY = 'clic_and_volt_pro_autosave_v2';
 let _lastAutosave = '';
-
 async function restoreAutosave() {
     try {
         const s = localStorage.getItem(AUTOSAVE_KEY);
@@ -4507,9 +4414,9 @@ async function restoreAutosave() {
         }
     } catch (e) { /* données illisibles : on ignore */ }
 }
-
 async function triggerNewProject() {
     if (await askConfirm('Nouveau projet', 'Créer un nouveau projet effacera le travail en cours non sauvegardé. Continuer ?', 'Créer le projet', { danger: true })) {
+        currentProjectFileName = null;   // patch 85 : le nouveau projet n'a pas encore de nom de fichier
         projectData = {
             walls: [],
             openings: [],
@@ -4533,9 +4440,10 @@ async function triggerNewProject() {
         showNotification("Nouveau projet créé", "success");
     }
 }
-
+// patch 84 : nom (sans .json) du dernier projet chargé ou enregistré
+let currentProjectFileName = null;
 async function triggerSaveProject() {
-    const values = await askFields('Enregistrer le projet', [{ id: 'name', label: 'Nom du fichier (sans .json)', value: 'clic_and_volt_pro_projet' }], 'Enregistrer');
+    const values = await askFields('Enregistrer le projet', [{ id: 'name', label: 'Nom du fichier (sans .json)', value: currentProjectFileName || 'clic_and_volt_pro_projet' }], 'Enregistrer');
     if (values === null) return;
     const fileName = values.name
         .replace(/\.json$/i, '')
@@ -4554,9 +4462,9 @@ async function triggerSaveProject() {
     downloadAnchor.click();
     downloadAnchor.remove();
     setTimeout(() => URL.revokeObjectURL(dataUrl), 1000);
+    currentProjectFileName = fileName;   // patch 84
     showNotification('Projet enregistré sous « ' + fileName + '.json »', 'success');
 }
-
 function capturePlanImage(mode) {
     if (mode === '3d') {
         // capture 3D en haute résolution, puis retour à la résolution d'écran
@@ -4587,14 +4495,12 @@ function capturePlanImage(mode) {
         resize2DCanvas();
     }
 }
-
 // Nom de fichier proposé puis demandé à l'utilisateur avant l'export PNG
 function pngDefaultFileName(mode) {
     const lvl = (projectData.levels || []).find(l => l.id === activeLevelId);
     const levelPart = lvl ? '_' + lvl.name : '';
     return ('clic_and_volt_' + mode + levelPart).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_');
 }
-
 async function savePlanPng(mode) {
     try {
         const values = await askFields('Enregistrer en PNG', [{ id: 'name', label: 'Nom du fichier PNG (sans l’extension)', value: pngDefaultFileName(mode) }], 'Enregistrer');
@@ -4616,7 +4522,6 @@ async function savePlanPng(mode) {
         showNotification('Impossible d’enregistrer le plan en PNG.', 'error');
     }
 }
-
 // Familles de la légende du plan imprimé (l'ordre suit celui du Métré)
 const PRINT_LEGEND_GROUPS = [
     ['Prises', t => t.startsWith('outlet_')],
@@ -4625,13 +4530,11 @@ const PRINT_LEGEND_GROUPS = [
     ['Autres appareils', t => ['smoke_detector', 'doorbell_chime', 'shutter_motor'].includes(t)],
     ['Tableaux', t => t === 'panel']
 ];
-
 // Rang de famille d'un appareil dans la légende imprimée (99 = hors légende, en fin de liste)
 function legendFamilyRank(type) {
     const i = PRINT_LEGEND_GROUPS.findIndex(([, test]) => test(type));
     return i < 0 ? 99 : i;
 }
-
 // Seules les entrées présentes sur le niveau affiché sont listées, avec leur nombre
 function buildPrintLegend() {
     const rep = computeCircuitReport();
@@ -4654,7 +4557,6 @@ function buildPrintLegend() {
     });
     return groups.filter(g => g.items.length);
 }
-
 // Glyphes des ouvertures et de la trémie (même couleurs que le plan)
 function drawLegendOpening(ctx, kind, cx, cy, fs) {
     const w = fs * 1.2, th = fs * 0.4;
@@ -4684,7 +4586,6 @@ function drawLegendOpening(ctx, kind, cx, cy, fs) {
     }
     ctx.restore();
 }
-
 const LEGEND_GANG_PITCH = 16;
 // Liseré de groupe dans la légende : taille propre, en fraction de la hauteur de texte (la ligne fait 2 × fs)
 const LEGEND_RING_FS = 0.90;
@@ -4693,7 +4594,6 @@ const LEGEND_LONG_TYPES = [...SWITCH_GANG_TYPES, 'motion_timer', 'doorbell_butto
 function legendScale(type) {
     return type === 'panel' ? 0.04 : 0.085;
 }
-
 function drawLegendDevice(ctx, type, n, cx, cy, fs) {
     const s = fs * legendScale(type);
     const step = LEGEND_GANG_PITCH * s;
@@ -4728,14 +4628,11 @@ function drawLegendDevice(ctx, type, n, cx, cy, fs) {
         ctx.restore();
     }
 }
-
 // Un symbole par prise d'un groupe (double = 2 symboles côte à côte)
 function drawLegendSymbol(ctx, item, cx, cy, fs) {
     if (item.kind) drawLegendOpening(ctx, item.kind, cx, cy, fs);
     else drawLegendDevice(ctx, item.type, item.gang || 1, cx, cy, fs);
 }
-
-
 // Décalage horizontal du libellé depuis le centre du symbole : après le groupe complet (copies + anneau)
 function legendLabelOffset(it, fs) {
     if (it.kind) return fs * 4;
@@ -4744,7 +4641,6 @@ function legendLabelOffset(it, fs) {
     const groupRight = fs * 1.6 + (n - 1) * LEGEND_GANG_PITCH * s + fs * LEGEND_RING_FS;
     return Math.max(fs * 4, groupRight + fs * 0.6);
 }
-
 // Met la légende en page (réduit la police si une ligne déborde) ; draw(ctx, x, y) la dessine
 function measurePrintLegend(ctx, legend, width, cols, baseFs) {
     const colGap = Math.round(baseFs * 1.2);
@@ -4796,7 +4692,6 @@ function measurePrintLegend(ctx, legend, width, cols, baseFs) {
         }
     };
 }
-
 function printPlan(mode) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -4986,10 +4881,10 @@ function printPlan(mode) {
         showNotification('Impossible de préparer le plan à imprimer.', 'error');
     }
 }
-
 function triggerLoadProject(event) {
     const fileReader = new FileReader();
     if (event.target.files[0]) {
+        const loadedFileName = event.target.files[0].name.replace(/\.json$/i, '');   // patch 84
         fileReader.readAsText(event.target.files[0], "UTF-8");
         fileReader.onload = (e) => {
             try {
@@ -4997,6 +4892,7 @@ function triggerLoadProject(event) {
                 if (parsed && parsed.walls) {
                     saveStateToUndo();
                     projectData = parsed;
+                    currentProjectFileName = loadedFileName;   // patch 84
                     activeLevelId = null;
                     ensureProjectDefaults();
                     renderLevelSelector();
@@ -5017,13 +4913,11 @@ function triggerLoadProject(event) {
         };
     }
 }
-
 // Un clic dans le plan valide le champ « Contenu » du texte, sans attendre Entrée
 document.addEventListener('mousedown', e => {
     const a = document.activeElement;
     if (a && (a.id === 'text-value-2d' || a.id === 'text-value-3d') && e.target !== a) a.blur();
 }, true);
-
 // Réglage d'une taille d'écriture (8 à 32 px), enregistré dans le projet, puis redessin 2D ou 3D
 function setTextSize(kind, value) {
     const v = Math.min(32, Math.max(8, Math.round(Number(value)) || TEXT_SIZE_DEFAULTS[kind]));
@@ -5032,7 +4926,6 @@ function setTextSize(kind, value) {
     syncTextSizeInputs();
     if (currentMode === '3d') build3DScene(); else redraw2D();
 }
-
 // Remplit les trois champs de la barre gauche (2D et 3D) avec les tailles courantes
 function syncTextSizeInputs() {
     ['text', 'cote', 'niveau'].forEach(kind => {
