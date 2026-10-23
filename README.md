@@ -1,3 +1,5 @@
+© 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés.
+
 # Clic & Volt
 
 Clic & Volt est une application web de dessin de plans électriques. Elle permet de dessiner un logement en 2D, de le visualiser et de poser des appareils en 3D, puis de générer automatiquement le câblage, le métré et des contrôles indicatifs.
