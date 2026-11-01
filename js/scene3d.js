@@ -2061,24 +2061,6 @@ function* buildCableNetworkSteps() {
         }
     }
 
-    // patch 111 : chaque charge non affectée rejoint la commande de la répartition en circuits (même choix partout)
-    const groupMap = commandGroupOf();
-    lights.filter(light => !taken.has(light.id)).forEach(light => {
-        const sw = switches.find(s => s.id === groupMap.get(light.id));
-        if (sw && !manuallyConfigured.has(sw.id) && ctrl.get(sw.id).every(other => lightCid(other) === lightCid(light))) {
-            ctrl.get(sw.id).push(light);
-            taken.add(light.id);
-        }
-    });
-
-    // Une seconde commande va-et-vient rejoint le point déjà desservi le plus proche.
-    for (const sw of switches.filter(s => !manuallyConfigured.has(s.id) && s.type === 'switch_va_et_vient' && !ctrl.get(s.id).length)) {
-        yield;
-        let best = null;
-        for (const l of lights.filter(light => canControl(sw, light))) { const d = rdist(sw, l, lightCid(l)); if (isFinite(d) && (!best || d < best.d)) best = { l, d }; }
-        if (best) ctrl.get(sw.id).push(best.l);
-    }
-
     // identifiants réels pour l'interface ; les identifiants de raccord ne servent qu'au tracé
     result.controlLinks = switches.map(sw => ({
         switchId: sw.realId || sw.id,

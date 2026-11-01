@@ -1581,6 +1581,7 @@ const DEFAULT_CIRCUIT_BY_TYPE = {
     outlet_16a: 'c_outlets', outlet_20a: 'c_kitchen', outlet_20a_classic: 'c_outlets20', outlet_dedicated_20: 'c_dedicated20', outlet_dedicated_32: 'c_dedicated32',
     outlet_switched: 'c_outlets', doorbell_chime: 'c_doorbell', shutter_motor: 'c_shutters', shutter_control: 'c_shutters'
 };
+const NEUTRAL_CIRCUIT = '_neutre';   // commande sans lampe associée : aucun circuit, aucun point compté
 
 const CIRCUIT_POINT_LIMITS = { c_lighting: 8, c_outlets: 8, c_outlets20: 12, c_kitchen: 6, c_dedicated20: 1, c_dedicated32: 1 };
 
@@ -1686,6 +1687,7 @@ function switchedOutletCableColors(net) { return controlCableColors(net, ['outle
 // Couleur d'un appareil = couleur de son circuit, comme pour les prises. Une commande prend celle de la charge
 // qu'elle pilote, ou, sans liaison, celle du circuit par défaut de cette charge. targets : controlTargetsOf, ou null.
 function deviceCircuitOf(el, targets) {
+    if (el.circuitId === NEUTRAL_CIRCUIT) return null;
     if (isControl(el)) {
         const load = targets && targets.get(el.id);
         return load ? circuitOf(load) : defaultCircuitOfType(CONTROL_LOADS[el.type][0]);
@@ -1723,7 +1725,7 @@ function maxPointsForCircuit(circuit) {
 function circuitOf(el) {
     // un point de raccord de trémie (commande inter-niveaux) suit l'appareil réel qu'il représente
     if (el && el.isProxy) el = projectData.electrical.find(e => e.id === el.realId) || el;
-    if (!isCircuitPoint(el)) return null;
+    if (el.circuitId === NEUTRAL_CIRCUIT) return null;
     const id = AUTO_ASSIGN.map.get(el.id);
     return projectData.circuits.find(c => c.id === id)
         || projectData.circuits.find(c => c.id === DEFAULT_CIRCUIT_BY_TYPE[el.type])
@@ -1813,7 +1815,7 @@ function ensureCircuitAssignment() {
     const circuits = projectData.circuits;
     // chaque suite automatique garde son propre calibre, sa section et sa capacité (aucune recopie depuis le circuit d'origine)
     // une commande de volet ne prend pas de place sur un circuit : son fil suit le circuit de son moteur (voir scene3d)
-    const pts = projectData.electrical.filter(el => isCircuitPoint(el) && el.type !== 'shutter_control');
+    const pts = projectData.electrical.filter(el => isCircuitPoint(el) && el.type !== 'shutter_control' && el.circuitId !== NEUTRAL_CIRCUIT);
     // 227 : appareils posés après la création d'un circuit à la demande : ils lui sont affectés
     circuits.forEach(c => {
         if (!c.receives) return;
@@ -1871,7 +1873,7 @@ function ensureCircuitAssignment() {
         // un circuit automatique est réservé au niveau de ses premières prises : pas de prises de plusieurs étages sur un même circuit
         const lvlOf = new Map();
         const canTake = (c, el) => !lvlOf.has(c.id) || lvlOf.get(c.id) === el.levelId;
-        const assign = (el, cid) => { assigned.set(el.id, cid); if (!lvlOf.has(cid)) lvlOf.set(cid, el.levelId); count.set(cid, count.get(cid) + 1); };
+        const assign = (el, cid) => { assigned.set(el.id, cid); if (!lvlOf.has(cid)) lvlOf.set(cid, el.levelId); if (!isControl(el)) count.set(cid, count.get(cid) + 1); };
 
         // patch 111 : les lampes d'une même commande forment un bloc, placé en entier sur un même circuit
         const blocks = new Map();
@@ -1966,7 +1968,7 @@ function ensureCircuitAssignment() {
         // 5. circuits automatiques vides supprimés, les autres renumérotés sans modifier leurs réglages
         const kept = [F];
         chain.slice(1).forEach(c => {
-            if (count.get(c.id) > 0 || c.manual) kept.push(c);
+            if (count.get(c.id) > 0 || c.manual || [...assigned.values()].includes(c.id)) kept.push(c);
             else circuits.splice(circuits.indexOf(c), 1);
         });
         // 153 : « (n°1) », « (n°2)… » ; le premier garde son numéro dès qu'il y a plusieurs circuits de la même famille
@@ -2717,9 +2719,8 @@ function computeCircuitReport() {
     const info = nets.flatMap(n => n.linkInfo || []);
     const rows = projectData.circuits.map(c => {
         // points comptés sur tous les niveaux : un circuit est une protection, pas un étage
-        const ptsAll = projectData.electrical.filter(el => { if (el.type === 'shutter_control') return false; const cc = circuitOf(el); return cc && cc.id === c.id; });
+        const ptsAll = projectData.electrical.filter(el => { if (el.type === 'shutter_control' || isControl(el)) return false; const cc = circuitOf(el); return cc && cc.id === c.id; });
         const points = ptsAll.length;
-        const levelsUsed = new Set(ptsAll.map(el => el.levelId)).size;
         const mine = info.filter(l => l.circuitId === c.id);
         // montée verticale : une colonne de trémie par niveau atteint depuis le niveau du tableau (écart de cote + réserve)
         const panelEl = projectData.electrical.find(e => e.type === 'panel');
@@ -4569,7 +4570,7 @@ function updateLightingAssociations(el) {
 
         // une case n'est cochée que si la liaison est réellement calculée (E1 : pas de liaison entre circuits)
         const configuredIds = lightIds;
-        content += '<details class="pt-1"><summary class="cursor-pointer text-[11px] text-emerald-300">Modifier les associations</summary><div class="mt-1 space-y-1">';
+        content += '<details class="pt-1"><summary class="cursor-pointer text-[14px] text-emerald-300">Modifier les associations</summary><div class="mt-1 space-y-1">';
         const compatibleLoads = [...lightById.values()].filter(light => canControl(el, light));
         if (!compatibleLoads.length) content += '<div class="text-[11px] text-slate-500">Ajoutez une charge compatible au plan (' + esc(compatibleLoadsHint(el)) + ').</div>';
         content += groupByLevelHtml(compatibleLoads, light =>
@@ -4593,7 +4594,7 @@ function updateLightingAssociations(el) {
                 content += '<div class="text-[11px] text-sky-300">Va-et-vient : ' + vaEtVient.map(linkButton).join(' ↔ ') + '</div>';
             }
         }
-        content += '<details class="pt-1"><summary class="cursor-pointer text-[11px] text-emerald-300">Modifier les associations</summary><div class="mt-1 space-y-1">';
+        content += '<details class="pt-1"><summary class="cursor-pointer text-[14px] text-emerald-300">Modifier les associations</summary><div class="mt-1 space-y-1">';
         const compatibleSwitches = [...switchById.values()].filter(sw => canControl(sw, el));
         if (!compatibleSwitches.length) content += '<div class="text-[11px] text-slate-500">Ajoutez une commande compatible au plan (' + esc(compatibleControlsHint(el)) + ').</div>';
         content += groupByLevelHtml(compatibleSwitches, sw => {
@@ -4627,7 +4628,6 @@ function updateLightingAssociations(el) {
     });
     syncAssocRing();
 }
-
 function setLightingAssociation(switchId, lightId, isAssociated) {
     const sw = projectData.electrical.find(candidate => candidate.id === switchId && isControl(candidate));
     const light = projectData.electrical.find(candidate =>
@@ -4643,49 +4643,46 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
     const nextIds = new Set(initialIds);
     if (isAssociated) nextIds.add(light.id);
     else nextIds.delete(light.id);
-    // option B : la commande rejoint le circuit de la lampe (même famille, place disponible) ; la lampe ne bouge pas
+    // la commande prend le circuit de la lampe à l'association ; sans lampe, elle passe en neutre (sans circuit)
     let moveSw = null;
     const prevSwCircuitId = sw.circuitId;
     if (isAssociated) {
         const lightCircuit = circuitOf(light);
-        const swCircuit = circuitOf(sw);
-        if (lightCircuit && swCircuit && lightCircuit.id !== swCircuit.id) {
-            if (circuitRoot(lightCircuit).id !== circuitRoot(swCircuit).id) {
+        const swCircuit = circuitOf(sw);   // null si la commande est en neutre
+        if (lightCircuit && (!swCircuit || lightCircuit.id !== swCircuit.id)) {
+            if (swCircuit && circuitRoot(lightCircuit).id !== circuitRoot(swCircuit).id) {
                 showNotification('Association impossible : la lampe et la commande n’ont pas la même famille de circuits.', 'error');
-                return;
-            }
-            const used = [...AUTO_ASSIGN.map.values()].filter(cid => cid === lightCircuit.id).length;
-            if (used >= maxPointsForCircuit(lightCircuit)) {
-                showNotification('Association impossible : le circuit « ' + lightCircuit.name + ' » est plein (' + maxPointsForCircuit(lightCircuit) + ' points). Libérez un point.', 'error');
                 return;
             }
             moveSw = lightCircuit.id;
         }
+    } else if (nextIds.size === 0) {
+        moveSw = NEUTRAL_CIRCUIT;
     }
     saveStateToUndo();
-    const prevControlled = sw.controlledLightIds;   // 108 révisé : pour restaurer en cas de refus
+    const prevControlled = sw.controlledLightIds;
     if (moveSw) sw.circuitId = moveSw;
     sw.controlledLightIds = [...nextIds];
     _cableCache.sig = null;
     if (currentMode === '3d') build3DScene();
     syncElementInspectors();
     redraw2D();
-    // le message de réussite n'est donné que si la liaison est réellement tracée (même niveau uniquement)
     const sameLevel = sw.levelId === activeLevelId && light.levelId === activeLevelId;
     // vérification sur un réseau recalculé tout de suite (l'ancien réseau ne contient pas encore la nouvelle liaison)
     ensureCircuitAssignment();
     const syncLinks = computeCableNetwork().controlLinks || [];
     const linkedNow = !isAssociated || !sameLevel || syncLinks.some(link => link.switchId === sw.id && link.lightIds.includes(light.id));
     if (linkedNow) {
-        if (isAssociated && light.circuitId) {   // 112 : les anciennes listes manuelles de cette lampe sont nettoyées
+        if (isAssociated && light.circuitId) {
             pruneManualLinksOf(light);
             _cableCache.sig = null;
             if (currentMode === '3d') build3DScene(); else redraw2D();
-            syncElementInspectors();   // 112 v2 : les cases des deux fiches sont redessinées après le nettoyage
+            syncElementInspectors();
         }
-        showNotification('Association d’éclairage mise à jour.' + (moveSw ? ' Commande rattachée au circuit de la lampe.' : ''), 'success');
+        const note = moveSw === NEUTRAL_CIRCUIT ? ' Commande remise en neutre (sans circuit).'
+            : moveSw ? ' Commande rattachée au circuit de la lampe.' : '';
+        showNotification('Association d’éclairage mise à jour.' + note, 'success');
     } else {
-        // refus : on remet tout comme avant (liste de la commande et circuit de la lampe), sans liaison fantôme
         if (prevControlled === undefined) delete sw.controlledLightIds;
         else sw.controlledLightIds = prevControlled;
         if (moveSw) sw.circuitId = prevSwCircuitId;
