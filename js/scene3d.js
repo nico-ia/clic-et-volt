@@ -4304,7 +4304,17 @@ function on3DPointerDown(e) {
                     build3DScene();
                     target = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === targetId) || target;
                 }
+                // comme en 2D (on2DMouseDown) : un clic sur un point de circuit sélectionne son circuit ;
+                // un élément sans circuit (commande, charge commandée) le retire ; réglage manuel en cours : inchangé
                 const clickedCircuit = highlightCircuitOf(selectedElectrical);
+                const keepCircuit3D = !!cableManualId && selectedCircuitId === cableManualId;
+                const nextCircuitId = clickedCircuit ? clickedCircuit.id : null;
+                if (!keepCircuit3D && nextCircuitId !== selectedCircuitId) {
+                    selectedCircuitId = nextCircuitId;
+                    build3DScene();
+                    updateCircuitsUI();
+                    target = interactiveObjects3D.find(obj => obj.userData && obj.userData.id === targetId) || target;
+                }
                 if (clickedCircuit && clickedCircuit.id !== selectedCircuitId && !(cableManualId && selectedCircuitId === cableManualId)) {
                     selectedCircuitId = clickedCircuit.id;
                     build3DScene();
@@ -5649,6 +5659,8 @@ function finishCableJob(job, net) {
     _cableCache = { sig: job.sig, net };
     cableStats = net;
     cableRevision++;
+    syncElementInspectors();   // les cases et listes d'associations se redessinent avec le nouveau réseau
+    if (currentMode === '3d') build3DScene(); else requestRedraw2D();
     if (currentMode === '3d') build3DScene(); else requestRedraw2D();
 }
 

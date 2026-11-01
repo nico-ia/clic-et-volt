@@ -733,7 +733,7 @@ function modeHint(key) {
     if (key === 'place') return placementHintText(currentMode === '3d' ? activePlacementType : document.getElementById('place-type').value);
     if (key === 'text') return 'Cliquez sur le plan, à l’endroit du texte (Échap pour arrêter).';
     if (key === 'pan') return 'Faites glisser le plan avec le bouton gauche de la souris.';
-    return 'Cliquez un élément pour le sélectionner. Pour en choisir plusieurs : Ctrl+clic ou Maj+clic sur chacun, ou glissez dans le vide pour encadrer.';
+    return 'Cliquez un élément pour le sélectionner. Pour en choisir plusieurs : Ctrl+clic ou Maj+clic sur chacun, ou glissez dans le vide pour encadrer. Suppr pour effacer, Échap pour désélectionner.';
 }
 
 // Aide du mode courant : titre et consigne en cours (se met à jour pendant qu'elle est ouverte)
@@ -2237,7 +2237,7 @@ function applianceRefusal(type, levelId, wallId, distCm, side, height) {
     const cand = { id: '__cand', type, levelId, wallId, distanceFromStart: distCm,
         side: side === -1 ? -1 : 1, height: height || defaultHeightFor(type) };
     if (wallDeviceHit(cand)) return 'Emplacement occupé par un appareil : choisissez un autre point du mur.';
-    if (gangFamily(type) === 'switch' && wouldOverflowGang(cand)) return 'Groupe d’interrupteurs complet (deux au maximum) : placez-le sur un autre point du mur.';
+    if (gangFamily(type) === 'switch' && wouldOverflowGang(cand)) return 'Groupe d’interrupteurs complet (trois au maximum) : placez-le sur un autre point du mur.';
     return null;
 }
 
@@ -2581,9 +2581,9 @@ function snapStairToWalls(st, prev) {
 // Prises simples proches (même mur, même côté, même hauteur) : regroupées automatiquement en double / triple / quadruple
 const GANGABLE_OUTLETS = ['outlet_16a', 'outlet_20a', 'outlet_20a_classic'];
 
-// Interrupteurs : tous les types d'interrupteur se regroupent entre eux, deux au maximum (double)
-const SWITCH_GANG_TYPES = ['switch_simple', 'switch_va_et_vient', 'switch_dimmer', 'switch_pushbutton'];
-const GANG_CAP = { outlet: 4, switch: 2 };
+// Interrupteurs : tous les types d'interrupteur se regroupent entre eux, trois au maximum (triple)
+const SWITCH_GANG_TYPES = ['switch_simple', 'switch_va_et_vient', 'switch_dimmer', 'switch_pushbutton', 'shutter_control'];
+const GANG_CAP = { outlet: 4, switch: 3 };
 const GANG_MAX_GAP_CM = 15;
 const GANG_NAMES = { 1: 'simple', 2: 'double', 3: 'triple', 4: 'quadruple' };
 
@@ -4282,6 +4282,9 @@ function boxCircuitOf(el) {
 function setCircuitInspectorText(el) {
     const isBox = !!(el && el.type === 'junction_box');
     const c = isBox ? boxCircuitOf(el) : null;
+    // appareil commandé (commande ou charge commandée) : rappel du double clic avec le nom de son circuit
+    const cmd = !isBox && !!el && (isControl(el) || isControlledLoad(el));
+    const cc = cmd ? deviceCircuitOf(el, controlTargetsOf(getCableNetwork())) : null;
     const label = isBox ? 'Circuit porté par cette boîte' : 'Circuit';
     let info = '';
     if (c) {
@@ -4290,11 +4293,13 @@ function setCircuitInspectorText(el) {
             (served > 0
                 ? 'Utilisée : elle dessert ' + served + ' appareil' + (served > 1 ? 's' : '') + '.'
                 : 'Non utilisée : elle ne dessert aucun appareil pour l’instant (un appareil se relie à elle seulement si c’est le trajet le plus court, en mode étoile).');
+    } else if (cc) {
+        info = 'Double-clic sur cet appareil : sélectionne tout son circuit « ' + cc.name + ' ».';
     }
     [['circuit-select-label', 'circuit-select-info'], ['el2d-circuit-label', 'el2d-circuit-info']].forEach(([lid, iid]) => {
         const l = document.getElementById(lid), i = document.getElementById(iid);
         if (l) l.textContent = label;
-        if (i) { i.textContent = info; i.classList.toggle('hidden', !isBox); }
+        if (i) { i.textContent = info; i.classList.toggle('hidden', !info); }
     });
 }
 
@@ -4394,7 +4399,9 @@ function planHoverInfo(id) {
             const max = maxPointsForCircuit(c);
             parts.push(max + (max > 1 ? ' prises max' : ' prise max'));
         }
-        return { title: electricalDisplayName(el), sub: parts.filter(Boolean).join(' · ') };
+        // appareil commandé ou commande : rappel du double clic, avec le nom du circuit
+        const cmdHint = (isControl(el) || isControlledLoad(el)) && c ? 'Double-clic : tout le circuit « ' + c.name + ' »' : '';
+        return { title: electricalDisplayName(el), sub: parts.filter(Boolean).join(' · '), hint: cmdHint };
     }
     const op = projectData.openings.find(o => o.id === id);
     if (op) return { title: op.type === 'door_single' ? 'Porte' : 'Fenêtre', sub: levelName(op.levelId) || '' };
@@ -4415,6 +4422,7 @@ function showPlanTooltip(clientX, clientY, id) {
     }
     planTooltipEl.innerHTML = '<div class="font-semibold">' + esc(info.title) + '</div>' +
         (info.sub ? '<div class="text-[10px] text-slate-400">' + esc(info.sub) + '</div>' : '') +
+        (info.hint ? '<div class="text-[10px] text-amber-300">' + esc(info.hint) + '</div>' : '') +
         '<div class="text-[10px] text-sky-300">Clic : sélectionner</div>';
     planTooltipEl.style.left = (clientX + 14) + 'px';
     planTooltipEl.style.top = (clientY + 14) + 'px';
@@ -4635,31 +4643,28 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
     const nextIds = new Set(initialIds);
     if (isAssociated) nextIds.add(light.id);
     else nextIds.delete(light.id);
-    // 108 : une lampe d'un autre circuit que la commande est rattachée au circuit de la commande, si la place le permet
-    let moveTo = null;
-    const prevCircuitId = light.circuitId;
+    // option B : la commande rejoint le circuit de la lampe (même famille, place disponible) ; la lampe ne bouge pas
+    let moveSw = null;
+    const prevSwCircuitId = sw.circuitId;
     if (isAssociated) {
-        const linked = automaticLinks.find(link => link.switchId === sw.id);
-        const refLight = linked && linked.lightIds.length ? projectData.electrical.find(e => e.id === linked.lightIds[0]) : null;
-        const fallbackId = sw.type === 'shutter_control' ? DEFAULT_CIRCUIT_BY_TYPE.shutter_motor : DEFAULT_CIRCUIT_BY_TYPE.light_ceiling;
-        const targetCircuit = refLight ? circuitOf(refLight) : projectData.circuits.find(c => c.id === fallbackId);
         const lightCircuit = circuitOf(light);
-        if (targetCircuit && lightCircuit && targetCircuit.id !== lightCircuit.id) {
-            if (circuitRoot(targetCircuit).id !== circuitRoot(lightCircuit).id) {
+        const swCircuit = circuitOf(sw);
+        if (lightCircuit && swCircuit && lightCircuit.id !== swCircuit.id) {
+            if (circuitRoot(lightCircuit).id !== circuitRoot(swCircuit).id) {
                 showNotification('Association impossible : la lampe et la commande n’ont pas la même famille de circuits.', 'error');
                 return;
             }
-            const used = [...AUTO_ASSIGN.map.values()].filter(cid => cid === targetCircuit.id).length;
-            if (used >= maxPointsForCircuit(targetCircuit)) {
-                showNotification('Association impossible : le circuit « ' + targetCircuit.name + ' » est plein (' + maxPointsForCircuit(targetCircuit) + ' points). Libérez un point ou déplacez la commande.', 'error');
+            const used = [...AUTO_ASSIGN.map.values()].filter(cid => cid === lightCircuit.id).length;
+            if (used >= maxPointsForCircuit(lightCircuit)) {
+                showNotification('Association impossible : le circuit « ' + lightCircuit.name + ' » est plein (' + maxPointsForCircuit(lightCircuit) + ' points). Libérez un point.', 'error');
                 return;
             }
-            moveTo = targetCircuit.id;
+            moveSw = lightCircuit.id;
         }
     }
     saveStateToUndo();
     const prevControlled = sw.controlledLightIds;   // 108 révisé : pour restaurer en cas de refus
-    if (moveTo) light.circuitId = moveTo;
+    if (moveSw) sw.circuitId = moveSw;
     sw.controlledLightIds = [...nextIds];
     _cableCache.sig = null;
     if (currentMode === '3d') build3DScene();
@@ -4667,8 +4672,10 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
     redraw2D();
     // le message de réussite n'est donné que si la liaison est réellement tracée (même niveau uniquement)
     const sameLevel = sw.levelId === activeLevelId && light.levelId === activeLevelId;
-    const linkedNow = !isAssociated || !sameLevel || (getCableNetwork().controlLinks || [])
-        .some(link => link.switchId === sw.id && link.lightIds.includes(light.id));
+    // vérification sur un réseau recalculé tout de suite (l'ancien réseau ne contient pas encore la nouvelle liaison)
+    ensureCircuitAssignment();
+    const syncLinks = computeCableNetwork().controlLinks || [];
+    const linkedNow = !isAssociated || !sameLevel || syncLinks.some(link => link.switchId === sw.id && link.lightIds.includes(light.id));
     if (linkedNow) {
         if (isAssociated && light.circuitId) {   // 112 : les anciennes listes manuelles de cette lampe sont nettoyées
             pruneManualLinksOf(light);
@@ -4676,12 +4683,12 @@ function setLightingAssociation(switchId, lightId, isAssociated) {
             if (currentMode === '3d') build3DScene(); else redraw2D();
             syncElementInspectors();   // 112 v2 : les cases des deux fiches sont redessinées après le nettoyage
         }
-        showNotification('Association d’éclairage mise à jour.' + (moveTo ? ' Lampe rattachée au circuit de la commande.' : ''), 'success');
+        showNotification('Association d’éclairage mise à jour.' + (moveSw ? ' Commande rattachée au circuit de la lampe.' : ''), 'success');
     } else {
         // refus : on remet tout comme avant (liste de la commande et circuit de la lampe), sans liaison fantôme
         if (prevControlled === undefined) delete sw.controlledLightIds;
         else sw.controlledLightIds = prevControlled;
-        if (moveTo) light.circuitId = prevCircuitId;
+        if (moveSw) sw.circuitId = prevSwCircuitId;
         _cableCache.sig = null;
         if (currentMode === '3d') build3DScene(); else redraw2D();
         syncElementInspectors();
