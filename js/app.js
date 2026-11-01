@@ -2634,6 +2634,8 @@ function computeOutletGangs() {
     const groupOf = new Map();
     const tally = {};
     [...GANGABLE_OUTLETS, ...SWITCH_GANG_TYPES].forEach(type => { tally[type] = { 1: 0, 2: 0, 3: 0, 4: 0 }; });
+    // groupes d'interrupteurs de types mélangés : composition → { types, n, count }
+    const mixed = new Map();
     const buckets = new Map();
     electricalOn().forEach(el => {
         const fam = gangFamily(el.type);
@@ -2658,7 +2660,14 @@ function computeOutletGangs() {
                 sizeOf.set(it.el.id, n);
                 groupOf.set(it.el.id, ids);
             });
-            tally[cluster[0].el.type][n]++;
+            const types = cluster.map(it => it.el.type);
+            if (fam === 'switch') {
+                // interrupteurs : groupe compté par sa composition réelle (ex. 2 simples + 1 va-et-vient)
+                const sorted = [...types].sort((a, b) => SWITCH_GANG_TYPES.indexOf(a) - SWITCH_GANG_TYPES.indexOf(b));
+                const key = sorted.join(',') + '#' + n;
+                if (!mixed.has(key)) mixed.set(key, { types: sorted, n, count: 0 });
+                mixed.get(key).count++;
+            } else tally[types[0]][n]++;
             cluster = [];
         };
         items.forEach(it => {
@@ -2690,7 +2699,7 @@ function computeOutletGangs() {
         });
         flush();
     });
-    return { sizeOf, tally, overflow, groupOf, overflowGroups };
+    return { sizeOf, tally, overflow, groupOf, overflowGroups, mixed };
 }
 
 // Réseau de câblage de chaque niveau (le métré couvre tout le projet, pas seulement le niveau affiché)
@@ -2916,6 +2925,17 @@ function computeCircuitReport() {
         } else {
             countLines.push({ type: t, gang: 0, label: ELEMENT_LABELS[t] || t, count: counts[t] });
         }
+    });
+    // groupes d'interrupteurs : une ligne par composition
+    gangs.mixed.forEach(m => {
+        const parts = [];
+        m.types.forEach(t => {
+            const last = parts[parts.length - 1];
+            if (last && last.t === t) last.k++; else parts.push({ t, k: 1 });
+        });
+        const label = parts.length === 1 ? gangLabel(m.types[0], m.n)
+            : GANG_NAMES[m.n] + ' : ' + parts.map(p => (p.k > 1 ? p.k + ' × ' : '') + (ELEMENT_LABELS[p.t] || p.t)).join(' + ');
+        countLines.push({ type: m.types[0], types: m.types, gang: m.n, label, count: m.count });
     });
     return { rows, alerts, alertTargets, infos, sections, conduitM, counts, countLines };
 }
@@ -3156,6 +3176,52 @@ function circuitListName(c) {
     return d ? DEDICATED_APPLIANCE_LABELS[d.applianceKind] + ' (' + c.breakerRating + ' A)' : c.name;
 }
 
+// Icône d'un circuit selon sa famille (une suite automatique garde l'icône de son circuit d'origine)
+// Table unique : mêmes icônes pour les boutons « Nouveau circuit » et pour les cartes de circuit
+const CIRCUIT_ICONS = {
+    c_lighting: 'fa-lightbulb',
+    c_outlets: 'fa-plug',
+    c_outlets20: 'fa-bolt',
+    c_kitchen: 'fa-utensils',
+    c_shutters: 'fa-grip-lines',
+    c_doorbell: 'fa-bell',
+    c_daaf: 'fa-fire',
+    c_dedicated20: 'fa-bolt-lightning',
+    c_dedicated32: 'fa-bolt-lightning'
+};
+// Une suite automatique (c_outlets_x2…) reprend l'icône de son circuit d'origine
+function circuitIconOf(c) {
+    return CIRCUIT_ICONS[c.baseId || c.id] || 'fa-plug';
+}
+
+// Circuits de prises : type d'appareil dessiné comme dans la palette et sur le plan
+const CIRCUIT_LEGEND_TYPE = {
+    c_outlets: 'outlet_16a',
+    c_outlets20: 'outlet_20a_classic',
+    c_kitchen: 'outlet_20a',
+    c_dedicated20: 'outlet_dedicated_20',
+    c_dedicated32: 'outlet_dedicated_32'
+};
+// Icône d'un circuit : même symbole que la palette pour les prises, icône Font Awesome pour le reste
+function circuitIconHtml(c, color) {
+    const root = c.baseId || c.id;
+    const type = CIRCUIT_LEGEND_TYPE[root];
+    const item = type && typeof PLACE_BUTTONS !== 'undefined' ? PLACE_BUTTONS.find(b => b.type === type) : null;
+    if (item) {
+        const big = type === 'outlet_dedicated_20' || type === 'outlet_dedicated_32';
+        return placeSvg(big ? '-9 -12 18 13' : '-7 -10 14 11', prisePlanSvg(item.color, big ? 1.33 : 1), 'w-4 h-4 shrink-0');
+    }
+    return '<i class="fa-solid ' + circuitIconOf(c) + ' text-[12px] shrink-0" style="color:' + esc(color || circuitColor(c)) + '"></i>';
+}
+// Dessine les icônes de prises une fois insérées dans la liste
+function drawCircuitIcons(root) {
+    root.querySelectorAll('canvas[data-legend-type]').forEach(cv => {
+        const ctx = cv.getContext('2d');
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        drawLegendDevice(ctx, cv.dataset.legendType, 1, cv.width / 2, cv.height / 2, 22);
+    });
+}
+
 function updateCircuitsUI() {
     // la liste existe en 3D (barre gauche) et en 2D (barre droite) : les deux sont remplies
     const lists = ['circuits-list', 'circuits-list-2d'].map(id => document.getElementById(id)).filter(Boolean);
@@ -3222,7 +3288,7 @@ function updateCircuitsUI() {
         const nCuts = c.cableCuts ? Object.keys(c.cableCuts).length : 0;
         div.innerHTML =
             '<div class="flex items-center gap-2 min-w-0">' +
-            '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + esc(circuitColor(c)) + '"></span>' +
+            circuitIconHtml(c) +
             '<span class="font-semibold text-slate-200 min-w-0 flex-1 break-words">' + esc(circuitListName(c)) + '</span>' +
             // 153 : poubelle juste après le nom, sur la ligne des icônes (circuit sélectionné seulement, comme avant)
             (selected && list.closest('#sidebar-2d-right, #sidebar-3d-right')
@@ -3957,6 +4023,7 @@ function setRightTab(key, save = true) {
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-500 text-slate-200');
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    if (key === 'appareillage') setPlacementFilter(onDemandSelected, false);
     if (save) { try { localStorage.setItem(RIGHT_TAB_KEY, key || ''); } catch (e) { /* stockage indisponible */ } }
 }
 
@@ -4283,9 +4350,6 @@ function boxCircuitOf(el) {
 function setCircuitInspectorText(el) {
     const isBox = !!(el && el.type === 'junction_box');
     const c = isBox ? boxCircuitOf(el) : null;
-    // appareil commandé (commande ou charge commandée) : rappel du double clic avec le nom de son circuit
-    const cmd = !isBox && !!el && (isControl(el) || isControlledLoad(el));
-    const cc = cmd ? deviceCircuitOf(el, controlTargetsOf(getCableNetwork())) : null;
     const label = isBox ? 'Circuit porté par cette boîte' : 'Circuit';
     let info = '';
     if (c) {
@@ -4294,8 +4358,8 @@ function setCircuitInspectorText(el) {
             (served > 0
                 ? 'Utilisée : elle dessert ' + served + ' appareil' + (served > 1 ? 's' : '') + '.'
                 : 'Non utilisée : elle ne dessert aucun appareil pour l’instant (un appareil se relie à elle seulement si c’est le trajet le plus court, en mode étoile).');
-    } else if (cc) {
-        info = 'Double-clic sur cet appareil : sélectionne tout son circuit « ' + cc.name + ' ».';
+    } else if (el && isControl(el) && el.circuitId === NEUTRAL_CIRCUIT) {
+        info = 'Commande en neutre : aucun circuit. Cochez une lampe dans « Modifier les associations » pour la rattacher.';
     }
     [['circuit-select-label', 'circuit-select-info'], ['el2d-circuit-label', 'el2d-circuit-info']].forEach(([lid, iid]) => {
         const l = document.getElementById(lid), i = document.getElementById(iid);
@@ -5016,6 +5080,9 @@ function pruneManualLinksOf(light) {
 // 227 : circuits créés à la demande (lampes, prises…). Un circuit « receives » reçoit les appareils posés ensuite
 // de sa famille ; il reste même vide (manual) jusqu'à ce qu'on en crée un autre
 const ON_DEMAND_FAMILIES = [['c_lighting', 'éclairage'], ['c_outlets', 'prises 16A'], ['c_outlets20', 'prises 20A'], ['c_kitchen', 'prises 20A plan de travail'], ['c_shutters', 'volet']];
+// Famille « Nouveau circuit » choisie : liseré jaune sur son bouton et bouton « Aller aux appareillages »
+let onDemandSelected = null;
+// Icône de chaque bouton « Nouveau circuit » (une par famille)
 function newCircuitOnDemand(familyId) {
     const F = projectData.circuits.find(c => c.id === familyId);
     if (!F) return null;
@@ -5042,6 +5109,11 @@ function newCircuitOnDemand(familyId) {
     return nc;
 }
 function onDemandCircuitBar() {
+    const wrap = document.createElement('div');
+    const hint = document.createElement('div');
+    hint.className = 'text-[11px] text-slate-400 pb-1.5';
+    hint.textContent = 'Vous voulez un nouveau circuit sans utiliser la limite fixée ? Les appareils posés ensuite de ce type vont sur ce nouveau circuit';
+    wrap.appendChild(hint);
     const bar = document.createElement('div');
     bar.className = 'flex flex-wrap gap-1 pb-2';
     ON_DEMAND_FAMILIES.forEach(([id, label]) => {
@@ -5049,14 +5121,32 @@ function onDemandCircuitBar() {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'px-2 py-1 rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
-        b.textContent = 'Nouveau circuit ' + label;
+        b.innerHTML = circuitIconHtml(projectData.circuits.find(c => c.id === id), 'currentColor') + ' ' + esc('Nouveau circuit ' + label);
+        if (onDemandSelected === id) b.classList.add('ring-2', 'ring-yellow-300');
         b.title = 'Les appareils posés ensuite de ce type vont sur ce nouveau circuit';
-        b.addEventListener('click', () => newCircuitOnDemand(id));
+        b.addEventListener('click', () => {
+            if (onDemandSelected === id) {          // second clic : désélection, sans nouveau circuit
+                onDemandSelected = null;
+            } else {
+                onDemandSelected = id;
+                newCircuitOnDemand(id);
+            }
+            setPlacementFilter(onDemandSelected, false);
+            updateCircuitsUI();
+        });
         bar.appendChild(b);
     });
-    return bar;
+    wrap.appendChild(bar);
+    if (onDemandSelected && ON_DEMAND_FAMILIES.some(([id]) => id === onDemandSelected)) {
+        const go = document.createElement('button');
+        go.type = 'button';
+        go.className = 'mt-1 px-2 py-1 rounded-md border-2 border-yellow-300 bg-slate-800 hover:bg-slate-700 text-[10px] text-yellow-200';
+        go.textContent = 'Aller aux appareillages ↗';
+        go.addEventListener('click', () => setPlacementFilter(onDemandSelected));
+        wrap.appendChild(go);
+    }
+    return wrap;
 }
-
 function setSelectedCircuit(val) {
     const el = projectData.electrical.find(e => e.id === selected3DId);
     if (!el) return;
@@ -5483,7 +5573,7 @@ function buildPrintLegend() {
     const lines = rep.countLines.slice().sort((x, y) => rank(x.type) - rank(y.type) || (x.gang || 0) - (y.gang || 0));
     const groups = PRINT_LEGEND_GROUPS.map(([title, test]) => ({
         title,
-        items: lines.filter(l => test(l.type)).map(l => ({ label: l.label, count: l.count, type: l.type, gang: l.gang || 1 }))
+        items: lines.filter(l => test(l.type)).map(l => ({ label: l.label, count: l.count, type: l.type, types: l.types, gang: l.gang || 1 }))
     }));
     const doors = openingsOn().filter(o => o.type === 'door_single').length;
     const wins = openingsOn().filter(o => o.type === 'window_std').length;
@@ -5528,7 +5618,7 @@ function drawLegendOpening(ctx, kind, cx, cy, fs) {
     }
     ctx.restore();
 }
-const LEGEND_GANG_PITCH = 16;
+const LEGEND_GANG_PITCH = 10;
 // Liseré de groupe dans la légende : taille propre, en fraction de la hauteur de texte (la ligne fait 2 × fs)
 const LEGEND_RING_FS = 0.90;
 // Symboles longs (interrupteurs, sonnette, minuterie, volet) : centrés sur leur milieu
@@ -5538,7 +5628,7 @@ function legendScale(type) {
     return type === 'panel' ? 0.04 : 0.085;
 }
 
-function drawLegendDevice(ctx, type, n, cx, cy, fs) {
+function drawLegendDevice(ctx, type, n, cx, cy, fs, types) {
     const s = fs * legendScale(type);
     const step = LEGEND_GANG_PITCH * s;
     const x0 = cx;
@@ -5548,6 +5638,7 @@ function drawLegendDevice(ctx, type, n, cx, cy, fs) {
     _gangSizes2D = new Map([[el.id, n]]);
     try {
         for (let i = 0; i < n; i++) {
+            el.type = types && types[i] ? types[i] : type;
             ctx.save();
             ctx.translate(x0 + i * step, cy);
             ctx.rotate(-Math.PI / 2);
@@ -5576,7 +5667,7 @@ function drawLegendDevice(ctx, type, n, cx, cy, fs) {
 // Un symbole par prise d'un groupe (double = 2 symboles côte à côte)
 function drawLegendSymbol(ctx, item, cx, cy, fs) {
     if (item.kind) drawLegendOpening(ctx, item.kind, cx, cy, fs);
-    else drawLegendDevice(ctx, item.type, item.gang || 1, cx, cy, fs);
+    else drawLegendDevice(ctx, item.type, item.gang || 1, cx, cy, fs, item.types);
 }
 
 // Décalage horizontal du libellé depuis le centre du symbole : après le groupe complet (copies + anneau)
@@ -5586,6 +5677,7 @@ function legendLabelOffset(it, fs) {
     const s = fs * legendScale(it.type);
     const groupRight = fs * 1.6 + (n - 1) * LEGEND_GANG_PITCH * s + fs * LEGEND_RING_FS;
     return Math.max(fs * 4, groupRight + fs * 0.6);
+
 }
 
 // Met la légende en page (réduit la police si une ligne déborde) ; draw(ctx, x, y) la dessine

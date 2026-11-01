@@ -17,20 +17,16 @@ function placeSvg(viewBox, inner, cls = 'w-7 h-6 shrink-0') {
     return `<svg class="${cls}" viewBox="${viewBox}" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 }
 
-// Prise 16 A et 20 A (petit format) ; mid = true ajoute le trait de la 20 A
-function socketSmall(c, mid) {
-    return `<path d="M-1,-6 V6" stroke="${c}" stroke-width="1.2"/>` +
-        `<path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="${c}" stroke-width="1.3"/>` +
-        `<path d="M3.5,0 H8.5 M8.5,-3.5 V3.5${mid ? ' M6,-3 V3' : ''}" stroke="${c}" stroke-width="1.1"/>`;
+// Symbole de prise, même dessin que la référence : coupelle vers le haut, barre, broche qui descend ; sans fond
+// sc : échelle (1 pour 16 A / 20 A, plus grand pour les dédiées)
+function prisePlanSvg(c, sc = 1) {
+    return `<g transform="scale(${sc})" fill="none" stroke="${c}" stroke-width="1.2" stroke-linecap="round">` +
+        `<path d="M0,-0.2 V-4.25"/>` +
+        `<path d="M-5.6,-4.25 H5.6"/>` +
+        `<path d="M-4.5,-8.75 A4.5,4.5 0 0 0 4.5,-8.75"/>` +
+        `<path d="M-4.5,-8.75 H-6.3 M4.5,-8.75 H6.3"/>` +
+        `</g>`;
 }
-
-// Prise grand format (dédiée, commandée) ; fill et pin réglables pour la 32 A
-function socketBig(c, fill = '#f8fafc', pin = c) {
-    return `<path d="M-1,-11 V11" stroke="${c}" stroke-width="1.2"/>` +
-        `<path d="M-1,-9.5 A9.5,9.5 0 0 1 -1,9.5 Z" fill="${fill}" stroke="${c}" stroke-width="1.3"/>` +
-        `<path d="M8.5,0 H13.5 M13.5,-3.5 V3.5 M11,-4.5 V4.5" stroke="${pin}" stroke-width="1.1"/>`;
-}
-
 const PLACE_BUTTONS = [
     // ----- Ouvertures -----
     { group: 'ouvertures', type: 'door_single', label: 'Porte', title: 'Porte : cliquez sur un mur', fa: 'fa-door-open', color: '#b07a4a' },
@@ -44,18 +40,20 @@ const PLACE_BUTTONS = [
     { group: 'appareillages', type: 'junction_box', label: 'Dérivation', title: 'Boîte de dérivation : point où se rejoignent les câbles d’un circuit', color: '#64748b',
         icon: c => placeSvg('-8 -8 16 16', `<rect x="-6" y="-6" width="12" height="12" fill="#f8fafc" stroke="${c}" stroke-width="1.6"/><path d="M-4,0 H4 M0,-4 V4" stroke="#0f172a" stroke-width="0.9"/>`) },
     { group: 'appareillages', sep: true },
+
     { group: 'appareillages', type: 'outlet_16a', label: 'Prise 16A', title: 'Prise 16 A (8 prises max) : cliquez sur un mur', color: '#f97316',
-        icon: c => placeSvg('-3 -8 17 16', socketSmall(c, false)) },
+        icon: c => placeSvg('-7 -10 14 11', prisePlanSvg(c)) },
     { group: 'appareillages', type: 'outlet_20a', label: 'Prise 20A plan de travail', title: 'Prise 20A plan de travail (6 prises max) : cliquez sur un mur', color: '#ef4444',
-        icon: c => placeSvg('-3 -8 17 16', socketSmall(c, true)) },
+        icon: c => placeSvg('-7 -10 14 11', prisePlanSvg(c)) },
     { group: 'appareillages', type: 'outlet_20a_classic', label: 'Prise 20A classique', title: 'Prise 20A classique (12 prises max) : cliquez sur un mur', color: '#0891b2',
-        icon: c => placeSvg('-3 -8 17 16', socketSmall(c, true)) },
+        icon: c => placeSvg('-7 -10 14 11', prisePlanSvg(c)) },
     { group: 'appareillages', type: 'outlet_dedicated_20', label: 'Prise 20A dédiée', title: 'Prise 20A dédiée (1 prise max, un appareil par circuit) : cliquez sur un mur', color: '#8b5cf6',
-        icon: c => placeSvg('-3 -13 22 26', socketBig(c)) },
+        icon: c => placeSvg('-9 -12 18 13', prisePlanSvg(c, 1.33)) },
     { group: 'appareillages', type: 'outlet_dedicated_32', label: 'Prise 32A dédiée', title: 'Prise 32A dédiée (1 prise max, un appareil par circuit) : cliquez sur un mur', color: '#6d28d9', sub: '#c4b5fd',
-        icon: (c, s) => placeSvg('-3 -13 22 26', socketBig(c, c, s)) },
+        icon: c => placeSvg('-9 -12 18 13', prisePlanSvg(c, 1.33)) },
     { group: 'appareillages', type: 'outlet_switched', label: 'Prise commandée', title: 'Prise commandée (8 prises max) : une prise que l\'interrupteur coupe ou rétablit (ex. radiateur)', color: '#f59e0b',
-        icon: c => placeSvg('-3 -13 22 26', socketBig(c)) },
+        icon: c => placeSvg('-9 -12 18 13', prisePlanSvg(c, 1.33)) },
+
     { group: 'appareillages', sep: true },
     { group: 'appareillages', type: 'light_ceiling', label: 'Plafonnier', title: 'Plafonnier : cliquez au plafond, dans la pièce', color: '#fde047',
         icon: c => placeSvg('-12 -12 24 24', `<circle cx="0" cy="0" r="10" fill="#fef9c3" stroke="${c}" stroke-width="1.4"/><path d="M-6.5,-6.5 L6.5,6.5 M-6.5,6.5 L6.5,-6.5" stroke="#0f172a" stroke-width="1"/>`) },
@@ -151,3 +149,35 @@ function buildPlaceButtons() {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildPlaceButtons);
 else buildPlaceButtons();
+
+// Appareils posables pour chaque famille de circuit « Nouveau circuit »
+const CIRCUIT_PLACE_TYPES = {
+    c_lighting: ['light_ceiling', 'light_spot', 'wall_light', 'switch_simple', 'switch_va_et_vient', 'switch_pushbutton', 'switch_dimmer', 'motion_timer'],
+    c_outlets: ['outlet_16a', 'outlet_switched'],
+    c_outlets20: ['outlet_20a_classic'],
+    c_kitchen: ['outlet_20a'],
+    c_shutters: ['shutter_control', 'shutter_motor']
+};
+
+// Ouvre la section Appareillages des barres de droite et la fait apparaître à l'écran
+// Affiche l'onglet Appareillages des barres de droite et fait apparaître les appareils compatibles
+function revealPlacementSection() {
+    setRightTab('appareillage');
+    const first = document.querySelector('.place-btn[data-type].ring-yellow-300');
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// familyId : appareils compatibles entourés de jaune et cliquables, les autres grisés ; null : tout redevient normal
+// reveal : true affiche aussi l'onglet Appareillages (bouton « Aller »)
+function setPlacementFilter(familyId, reveal = true) {
+    const types = familyId ? (CIRCUIT_PLACE_TYPES[familyId] || []) : null;
+    document.querySelectorAll('.place-btn[data-type]').forEach(b => {
+        const ok = !types || types.includes(b.dataset.type);
+        b.disabled = !ok;
+        b.classList.toggle('opacity-40', !!types && !ok);
+        b.classList.toggle('cursor-not-allowed', !!types && !ok);
+        b.classList.toggle('ring-2', !!types && ok);
+        b.classList.toggle('ring-yellow-300', !!types && ok);
+    });
+    if (types && reveal) revealPlacementSection();
+}

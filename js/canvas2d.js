@@ -1107,7 +1107,7 @@ function elFrontAngle(el) {
 // Symboles de plan : le mur est à gauche (x = -1), la face avant vers +x
 function drawElementSymbol2D(el) {
     const c = getElCoords(el);
-    const ink = '#0f172a', paper = '#f8fafc';
+    const ink = '#0f172a', paper = 'transparent';
     const circ = el.legendOnly ? null : circuitOf(el);       // circuit propre du point (légende : aucun)
     // circuit de l'anneau : pour une commande, celui de la charge qu'elle pilote
     const ringCirc = el.legendOnly ? null : deviceCircuitOf(el, _controlTargets2D);
@@ -1144,32 +1144,37 @@ function drawElementSymbol2D(el) {
     // appareillage du circuit sélectionné : l'appareil lui-même clignote (estompé une phase sur deux)
     const blinkMember = !isPrintRendering && !el.legendOnly && !!_circuitMembers2D && _circuitMembers2D.has(el.id) && el.id !== selected3DId;
     if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.50;
-    if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_20a_classic' || t === 'outlet_dedicated_20' || t === 'outlet_dedicated_32' || t === 'outlet_switched') {
 
-    // prise simple : demi-disque à l'échelle du module ; dans une double / triple, le demi-disque est un peu plus petit
-    // pour que les prises voisines (7,5 cm d'entraxe) ne se chevauchent pas
-    const inGang = (_gangSizes2D || computeOutletGangs().sizeOf).get(el.id) > 1;
-    const r = isDedicatedOutlet(el) ? 9.5 : (inGang ? 3.4 : 4.5);
-        line(-1, -r - 1.5, -1, r + 1.5, 2.2);                      // trait de mur
-        ctx2D.beginPath();                                          // demi-disque
-        ctx2D.arc(-1, 0, r, -Math.PI / 2, Math.PI / 2);
+    if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_20a_classic' || t === 'outlet_dedicated_20' || t === 'outlet_dedicated_32' || t === 'outlet_switched') {
+        // symbole de référence, identique pour toutes les prises ; tout est côté pièce (+x),
+        // seul le bout de la broche touche le mur (x = -1)
+        const inGang = (_gangSizes2D || computeOutletGangs().sizeOf).get(el.id) > 1;
+        const R = isDedicatedOutlet(el) ? 6.0 : (inGang ? 3.4 : 4.5);
+        const tipX = -1 + 2 * LW;                  // bout de la broche, arrondi compris, juste au contact du mur
+        const barX = tipX + 0.9 * R;               // barre perpendiculaire à la broche
+        const cx = barX + R;                       // coupelle : fond posé sur la barre, bord ouvert vers la pièce
+        line(tipX, 0, barX, 0, 1.8);               // broche de terre (seul son bout touche le mur)
+        line(barX, -1.25 * R, barX, 1.25 * R, 1.8); // barre
+        // coupelle : fond blanc, trait ouvert (pas de diamètre)
+        ctx2D.beginPath();
+        ctx2D.arc(cx, 0, R, Math.PI / 2, Math.PI * 1.5);
         ctx2D.closePath();
-        ctx2D.fillStyle = t === 'outlet_dedicated_32' ? col : paper;
+        ctx2D.fillStyle = paper;
         ctx2D.fill();
-        ctx2D.lineWidth = (2) * LW;
+        ctx2D.beginPath();
+        ctx2D.arc(cx, 0, R, Math.PI / 2, Math.PI * 1.5);
+        ctx2D.lineWidth = 2 * LW;
         ctx2D.strokeStyle = col;
         ctx2D.stroke();
-        line(r - 1, 0, r + 4, 0, 1.8);                             // broche de terre
-        line(r + 4, -3.5, r + 4, 3.5, 1.8);
-        if (t === 'outlet_20a' || t === 'outlet_20a_classic') line(r + 1.5, -3, r + 1.5, 3, 1.8);
-        if (t === 'outlet_dedicated_32') line(r + 1.5, -4.5, r + 1.5, 4.5, 1.8);
-        if (t === 'outlet_switched') {                               // repère : prise pilotée par une commande
+        line(cx, R, cx, R + 0.4 * R, 1.8);         // rebords de la coupelle
+        line(cx, -R, cx, -R - 0.4 * R, 1.8);
+        if (t === 'outlet_switched') {             // repère : prise pilotée par une commande
             ctx2D.beginPath();
-            ctx2D.arc(r * 0.45 - 1, r * 0.55, 1.6, 0, Math.PI * 2);
+            ctx2D.arc(cx + 1.5, R + 3.2, 1.6, 0, Math.PI * 2);
             ctx2D.fillStyle = col;
             ctx2D.fill();
         }
-        ringX = 3; ringR = r + 4;
+        ringX = 0.95 * R; ringR = R + 3.5;
         textAt = { x: ringX + ringR + 3, y: 0, label: isDedicatedOutlet(el) ? String(dedicatedAmpsOf(el)) : t === 'outlet_switched' ? 'C' : t.slice(7, 9) };
     } else if (isLightingControl(el) || t === 'doorbell_button' || t === 'shutter_control') {
         line(-1, 0, 5, 0, 1.8);

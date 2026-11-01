@@ -13,6 +13,23 @@
     const sym = (body, x, y, rot = 0, s = 1) =>
         `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${body}</g>`;
 
+    // Fenêtre : même dessin que « Fenêtre : ventaux et côté » (origine au centre, largeur 100 à l'échelle 1)
+    const winSym = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})">
+        <rect x="-50" y="-5" width="100" height="10" fill="#0f172a"/>
+        <rect x="-50" y="-50" width="100" height="50" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 4" opacity=".55"/>
+        <path d="M-50,-50 A50,50 0 0 1 0,0 M50,-50 A50,50 0 0 0 0,0" fill="none" stroke="#22d3ee" stroke-dasharray="3 4" opacity=".6"/>
+        <line x1="-50" y1="0" x2="50" y2="0" stroke="#22d3ee" stroke-width="2"/>
+        <line x1="-50" y1="0" x2="-50" y2="-50" stroke="#3db1ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="50" y1="0" x2="50" y2="-50" stroke="#3db1ff" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="-50" cy="0" r="3.5" fill="#f8fafc"/>
+        <circle cx="50" cy="0" r="3.5" fill="#f8fafc"/></g>`;
+    // Porte : même dessin que « Poser une porte ou une fenêtre » (charnière à l'origine, largeur 80 à l'échelle 1)
+    const doorSym = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})">
+        <rect x="0" y="-5" width="80" height="10" fill="#0f172a"/>
+        <g class="g-door" style="transform-origin:0px 0px"><line x1="0" y1="0" x2="80" y2="0" stroke="#b07a4a" stroke-width="4" stroke-linecap="round"/></g>
+        <path d="M80,0 A80,80 0 0 0 0,-80" fill="none" stroke="#b07a4a" stroke-dasharray="3 4" opacity=".6"/>
+        <circle cx="0" cy="0" r="4" fill="#f8fafc"/></g>`;
+
     const S = {
         // colonne de droite : tableau électrique (bandeau et éclair cyan)
         panel: `<rect x="-1" y="-18" width="11" height="36" fill="#f8fafc" stroke="#06b6d4" stroke-width="1.6"/>
@@ -21,14 +38,14 @@
         // boîte de dérivation (carré clair, croix)
         junction: `<rect x="-6" y="-6" width="12" height="12" fill="#f8fafc" stroke="#64748b" stroke-width="1.6"/>
                    <path d="M-4,0 H4 M0,-4 V4" stroke="#0f172a" stroke-width="0.9"/>`,
-        // prise 16 A (orange) : demi-disque, broche de terre
-        outlet16: `<path d="M-1,-6 V6" stroke="#f97316" stroke-width="1.2"/>
-                   <path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#f97316" stroke-width="1.3"/>
-                   <path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#f97316" stroke-width="1.1"/>`,
-        // prise 20 A (rouge) : deux alvéoles
-        outlet20: `<path d="M-1,-6 V6" stroke="#ef4444" stroke-width="1.2"/>
-                   <path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#ef4444" stroke-width="1.3"/>
-                   <path d="M3.5,0 H8.5 M8.5,-3.5 V3.5 M6,-3 V3" stroke="#ef4444" stroke-width="1.1"/>`,
+        // prise 16 A (orange) : coupelle côté pièce, broche qui touche le mur, sans fond
+        outlet16: `<path d="M0.2,0 H4.25" stroke="#f97316" stroke-width="1.2" fill="none"/>
+                   <path d="M4.25,-5.6 V5.6" stroke="#f97316" stroke-width="1.2" fill="none"/>
+                   <path d="M8.75,-4.5 A4.5,4.5 0 0 0 8.75,4.5 M8.75,-4.5 V-6.3 M8.75,4.5 V6.3" stroke="#f97316" stroke-width="1.2" fill="none"/>`,
+        // prise 20 A (rouge) : même dessin que la 16 A
+        outlet20: `<path d="M0.2,0 H4.25" stroke="#ef4444" stroke-width="1.2" fill="none"/>
+                   <path d="M4.25,-5.6 V5.6" stroke="#ef4444" stroke-width="1.2" fill="none"/>
+                   <path d="M8.75,-4.5 A4.5,4.5 0 0 0 8.75,4.5 M8.75,-4.5 V-6.3 M8.75,4.5 V6.3" stroke="#ef4444" stroke-width="1.2" fill="none"/>`,
         // interrupteur simple (vert)
         switchSimple: `<path d="M-1,0 H5" stroke="#10b981" stroke-width="1.2"/>
                        <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#10b981" stroke-width="1.2"/>
@@ -60,15 +77,14 @@
         wallLight: `<rect x="-3" y="-7" width="3" height="14" rx="1" fill="#facc15" stroke="#ca8a04" stroke-width="1"/>
                     <path d="M0,0 H4" stroke="#eab308" stroke-width="1.2"/>
                     <path d="M4,-6 Q15,-5 15,0 Q15,5 4,6 Z" fill="#facc15" stroke="#ca8a04" stroke-width="1"/>`,
-        // fenêtre (cyan) : ouverture dans le mur, double trait
-        window: `<rect x="-30" y="-4" width="60" height="8" fill="#020617"/>
-                 <rect x="-30" y="-4" width="60" height="8" fill="none" stroke="#22d3ee" stroke-width="2"/>
-                 <line x1="-30" y1="0" x2="30" y2="0" stroke="#22d3ee" stroke-width="2"/>`,
-        // prise commandée (orange clair) : prise 16 A avec un point
-        outletSwitched: `<path d="M-1,-6 V6" stroke="#f97316" stroke-width="1.2"/>
-                         <path d="M-1,-4.5 A4.5,4.5 0 0 1 -1,4.5 Z" fill="#f8fafc" stroke="#f97316" stroke-width="1.3"/>
-                         <path d="M3.5,0 H8.5 M8.5,-3.5 V3.5" stroke="#f97316" stroke-width="1.1"/>
-                         <circle cx="1" cy="2.5" r="1.6" fill="#f97316"/>`,
+        // fenêtre (bleu, comme sur le plan) : cadre et trait central, sans fond
+        window: `<rect x="-30" y="-4" width="60" height="8" fill="none" stroke="#49b6ff" stroke-width="1.2"/>
+                 <line x1="-30" y1="0" x2="30" y2="0" stroke="#49b6ff" stroke-width="1.2"/>`,
+        // prise commandée (orange) : même dessin que la 16 A, avec un point de commande
+        outletSwitched: `<path d="M0.2,0 H4.25" stroke="#f97316" stroke-width="1.2" fill="none"/>
+                         <path d="M4.25,-5.6 V5.6" stroke="#f97316" stroke-width="1.2" fill="none"/>
+                         <path d="M8.75,-4.5 A4.5,4.5 0 0 0 8.75,4.5 M8.75,-4.5 V-6.3 M8.75,4.5 V6.3" stroke="#f97316" stroke-width="1.2" fill="none"/>
+                         <circle cx="10.25" cy="7.7" r="1.6" fill="#f97316"/>`,
         // bouton de sonnette et sonnerie (rose clair, couleur du circuit Sonnerie) : ondes sonores
         doorbellButton: `<path d="M-1,0 H5" stroke="#f9a8d4" stroke-width="1.2"/>
                          <circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="#f9a8d4" stroke-width="1.2"/>
@@ -103,8 +119,7 @@
         <circle class="g-pt" cx="40" cy="140" r="5"/>
         <circle class="g-pt g-pt2" cx="160" cy="140" r="5"/>
         <circle class="g-pt g-pt3" cx="280" cy="60" r="5"/>
-        <rect x="8" y="150" width="62" height="22" rx="5" fill="#1e293b" stroke="#475569"/>
-        <text class="g-lbl" x="39" y="165">Touche T</text>
+        <text class="g-lbl" x="50" y="170">Clic ou Touche T</text>
         <text class="g-lbl" x="200" y="170">Clic, clic, clic droit = fin</text>`);
 
     const animEdit = () => svg(`
@@ -119,15 +134,11 @@
     // Porte : même dessin que le plan. Mur tracé de gauche à droite : charnière (pivot) à gauche, côté départ du mur, comme le réglage par défaut « Gauche »
     const animDoor = () => svg(`
         <rect x="40" y="105" width="240" height="10" fill="#334155"/>
-        <rect x="130" y="105" width="80" height="10" fill="#0f172a"/>
-        <g class="g-door" style="transform-origin:130px 110px">
-            <line x1="130" y1="110" x2="210" y2="110" stroke="#b07a4a" stroke-width="4" stroke-linecap="round"/>
-        </g>
-        <path d="M210 110 A80 80 0 0 0 130 30" fill="none" stroke="#b07a4a" stroke-dasharray="3 4" opacity=".6"/>
-        <circle cx="130" cy="110" r="4" fill="#f8fafc"/>
-        ${sym(S.window, 260, 110)}
-        <text class="g-lbl" x="130" y="165">Porte</text>
-        <text class="g-lbl" x="260" y="150">Fenêtre</text>`);
+        <rect x="130" y="105" width="48" height="10" fill="#0f172a"/>
+        ${doorSym(130, 110, 0.6)}
+        <text class="g-lbl" x="154" y="150">Porte</text>
+        ${winSym(232, 110, 0.8)}
+        <text class="g-lbl" x="232" y="150">Fenêtre</text>`);
 
     // Fenêtre à deux ventaux ouverts à 90° vers le haut, chacun une demi-largeur ; arcs en tirets = trajet balayé ; zone réservée en pointillés
     const animWindow = () => svg(`
@@ -197,7 +208,7 @@
         <text class="g-lvl g-lvl-b" x="160" y="86">Sous-sol</text>
         <text class="g-lbl" x="160" y="140">Nom, cote, puis « Créer le niveau »</text>`);
 
-    // Trémie en coupe : la colonne blanche part du bas du RDC et monte jusqu'au haut de l'étage
+    // Trémie en coupe : la colonne blanche part du bas du RDC et monte jusqu'au haut de l'étage ; l'escalier monte à côté
     const animShaft = () => svg(`
         <rect x="30" y="26" width="260" height="56" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
         <rect x="30" y="98" width="260" height="56" rx="4" fill="#0f172a" stroke="#475569" stroke-width="2"/>
@@ -205,9 +216,14 @@
         <rect class="g-shaftpulse" x="140" y="26" width="40" height="128" fill="rgba(248,250,252,0.6)" stroke="#f8fafc" stroke-width="2"/>
         <circle cx="160" cy="55" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
         <circle cx="160" cy="125" r="5" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+        <g class="g-stair s1"><rect x="196" y="136" width="16" height="18" fill="#a78bfa"/></g>
+        <g class="g-stair s2"><rect x="212" y="118" width="16" height="36" fill="#a78bfa"/></g>
+        <g class="g-stair s3"><rect x="228" y="100" width="16" height="54" fill="#a78bfa"/></g>
+        <g class="g-stair s4"><rect x="244" y="82" width="16" height="72" fill="#a78bfa"/></g>
         <text class="g-lbl" x="48" y="46" style="text-anchor:start">Étage</text>
         <text class="g-lbl" x="48" y="126" style="text-anchor:start">RDC</text>
-        <text class="g-lbl" x="160" y="172">La trémie traverse tous les étages reliés</text>`);
+        <text class="g-lbl" x="228" y="46">Escalier</text>
+        <text class="g-lbl" x="160" y="172">La trémie et l’escalier relient les étages</text>`);
 
     // Escalier : marches violettes (même couleur que le plan), montée visible
     const animStair = () => svg(`
@@ -223,7 +239,7 @@
     const animStairWindow = () => svg(`
         <rect x="40" y="105" width="240" height="10" fill="#334155"/>
         <rect x="120" y="105" width="100" height="10" fill="#0f172a"/>
-        ${sym(S.window, 170, 110, 0, 1.6)}
+        ${winSym(170, 110, 1)}
         <rect x="120" y="115" width="100" height="40" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 4" opacity=".55"/>
         <g class="g-stair s2"><rect x="150" y="122" width="40" height="14" fill="#a78bfa"/></g>
         <g class="g-stair s3"><rect x="190" y="122" width="40" height="22" fill="#a78bfa"/></g>
@@ -240,7 +256,7 @@
         <rect class="g-btnpress" x="222" y="64" width="66" height="16" rx="5"/>
         <text class="g-lbl" x="255" y="75">Aller ↗</text>
         <line x1="20" y1="130" x2="300" y2="130" stroke="#334155" stroke-width="8"/>
-        <rect x="140" y="126" width="60" height="8" fill="#0f172a"/>
+        ${doorSym(140, 130, 0.75)}
         <text class="g-lbl" x="206" y="122" style="text-anchor:start;font-size:10px">Porte</text>
         <circle class="g-bolt" cx="170" cy="140" r="17" fill="none" stroke="#ef4444" stroke-width="2"/>
         ${sym(S.outlet16, 170, 130, 90, 2.6)}
@@ -308,6 +324,46 @@
         <text class="g-lbl" x="160" y="170">Interrupteur</text>
         <text class="g-lbl" x="270" y="170">Prise</text>
         <text class="g-lbl" x="160" y="18">Posé en 2D ou en 3D : le câble se trace seul</text>`);
+
+    // Ajouter un circuit : bouton choisi entouré de jaune, bouton « Aller », seuls les appareils compatibles sont cliquables
+    const animAddCircuit = () => svg(`
+        <text class="g-lbl" x="84" y="16" style="fill:#e2e8f0">Circuits</text>
+        <text class="g-lbl" x="238" y="16" style="fill:#e2e8f0">Appareillages</text>
+        <g class="g-pop p1">
+            <rect x="14" y="24" width="140" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="84" y="36" style="fill:#e2e8f0;font-size:8.5px">Nouveau circuit éclairage</text>
+        </g>
+        <g class="g-pop p2">
+            <rect x="14" y="48" width="140" height="18" rx="4" fill="none" stroke="#facc15" stroke-width="2"/>
+            <text class="g-lbl" x="84" y="60" style="fill:#fef08a;font-size:8.5px">Nouveau circuit prises 16 A</text>
+        </g>
+        <g class="g-pop p2">
+            <rect x="14" y="72" width="140" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="84" y="84" style="fill:#e2e8f0;font-size:8.5px">Nouveau circuit volet</text>
+        </g>
+        <g class="g-pop p3">
+            <rect x="14" y="98" width="140" height="18" rx="4" fill="#1e293b" stroke="#facc15" stroke-width="1.5"/>
+            <text class="g-lbl" x="84" y="110" style="fill:#fef08a;font-size:8.5px">Aller aux appareillages ↗</text>
+        </g>
+        <g class="g-pop p1">
+            <rect x="170" y="24" width="136" height="18" rx="4" fill="none" stroke="#facc15" stroke-width="1.5"/>
+            <text class="g-lbl" x="238" y="36" style="fill:#e2e8f0;font-size:8.5px">Prise 16 A</text>
+        </g>
+        <g class="g-pop p2">
+            <rect x="170" y="48" width="136" height="18" rx="4" fill="none" stroke="#facc15" stroke-width="1.5"/>
+            <text class="g-lbl" x="238" y="60" style="fill:#e2e8f0;font-size:8.5px">Prise commandée</text>
+        </g>
+        <g style="opacity:.3">
+            <rect x="170" y="72" width="136" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="238" y="84" style="fill:#94a3b8;font-size:8.5px">Plafonnier</text>
+        </g>
+        <g style="opacity:.3">
+            <rect x="170" y="96" width="136" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="238" y="108" style="fill:#94a3b8;font-size:8.5px">Interrupteur</text>
+        </g>
+        <text class="g-lbl" x="160" y="146" style="font-size:10px">1. Le bouton choisi s’entoure de jaune</text>
+        <text class="g-lbl" x="160" y="161" style="font-size:10px">2. « Aller » ouvre les appareillages</text>
+        <text class="g-lbl" x="160" y="176" style="font-size:10px">3. Seuls les appareils compatibles sont cliquables</text>`);
 
     // Circuits : trois couleurs (même palette qu'en 2D et dans la liste des circuits)
     const animCircuits = () => svg(`
@@ -447,7 +503,7 @@
           text: ['Une fenêtre a deux ventaux : chacun fait la moitié de sa largeur et pivote sur un montant.',
                  'Le dessin montre les ventaux ouverts à 90° : les arcs en tirets indiquent le trajet qu\'ils balaient.',
                  'Pour changer de côté, sélectionnez la fenêtre et cliquez « Basculer de l\'autre côté du mur » dans l\'inspecteur, en 2D ou en 3D.',
-                 'Le trajet des ventaux doit rester libre : un escalier qui le touche est signalé en rouge (page suivante).'],
+                 'Le trajet des ventaux doit rester libre.'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'window_std', pulse: '#btn-2d-place-window_std' },
           retenir: 'Gardez libre devant la fenêtre une profondeur égale à la moitié de sa largeur.' },
         { part: 'Plan 2D', title: 'Poser le tableau électrique', anim: animPanel,
@@ -477,6 +533,18 @@
                  'Ces câblages sont simplifiés : la sonnette et le volet ne montrent pas les fils réels (basse tension, moteur à plusieurs fils).'],
           essayer: { mode: '2d', tab: 'appareillage', place: 'doorbell_button', pulse: '#btn-2d-place-doorbell_button' },
           retenir: 'Une prise commandée 16A se relie à un interrupteur, comme un luminaire.' },
+        { part: 'Plan 2D', title: 'Les circuits en couleur', anim: animCircuits,
+          text: ['Un circuit est un groupe d\'appareils protégés par le même disjoncteur (coupe-circuit automatique).',
+                 'Chaque circuit a sa couleur. Cette couleur est la même en 2D, en 3D et dans la liste des circuits.',
+                 'Par défaut, l\'éclairage est jaune, les prises orange, les prises 20 A classiques cyan et les prises 20 A plan de travail rouges.'],
+          essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
+          retenir: 'Deux circuits de même couleur ? Vérifiez le nom du circuit dans la liste.' },
+        { part: 'Plan 2D', title: 'Ajouter un circuit sans attendre la limite', anim: animAddCircuit,
+          text: ['Dans l’onglet « Circuits », les boutons « Nouveau circuit » créent un circuit supplémentaire, même si le circuit actuel n’a pas atteint sa limite de points.',
+                 'Le bouton choisi s’entoure d’un liseré jaune : les appareils posés ensuite de ce type vont sur ce nouveau circuit. Un bouton « Aller aux appareillages » apparaît.',
+                 'Ce bouton ouvre l’onglet « Appareillages » : seuls les appareils compatibles avec ce circuit sont entourés de jaune et cliquables, les autres sont grisés.'],
+          essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
+          retenir: 'Un second clic sur le bouton choisi le désélectionne, sans créer de circuit.' },
         { part: 'Plan 2D', title: 'Ajouter un étage ou un sous-sol', anim: animLevels,
           text: ['Cliquez sur [fa-circle-up] pour ajouter un étage, ou sur [fa-circle-down] pour ajouter un sous-sol, dans la barre du haut.',
                  'Donnez un nom et une cote (hauteur par rapport au RDC).',
@@ -485,7 +553,7 @@
           essayer: { mode: '2d', pulse: '#btn-add-level' },
           retenir: 'Chaque élément appartient à un seul niveau.' },
         { part: 'Plan 2D', title: 'Trémie et escalier', anim: animShaft,
-          text: ['La trémie (ouverture dans le plancher) se pose sur un mur et relie plusieurs niveaux.',
+          text: ['La trémie (ouverture dans le plancher) relie le cablage électrique entre plusieurs niveaux.',
                  'Cochez les étages à relier, puis cliquez sur le mur.',
                  'L\'escalier relie aussi deux niveaux : posez-le sur le plan, puis réglez sa largeur et sa rotation.'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'shaft', pulse: '#btn-2d-place-shaft' },
@@ -530,12 +598,6 @@
                  'Un réglage refusé ne change rien : le tronçon garde son ancien réglage, et un avertissement reste 6 secondes dans le plan.'],
           essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
           retenir: 'Un réglage fait à la main reste en place quand vous réglez un autre tronçon.' },
-        { part: 'Vue 3D et câblage', title: 'Les circuits en couleur', anim: animCircuits,
-          text: ['Un circuit est un groupe d\'appareils protégés par le même disjoncteur (coupe-circuit automatique).',
-                 'Chaque circuit a sa couleur. Cette couleur est la même en 2D, en 3D et dans la liste des circuits.',
-                 'Par défaut, l\'éclairage est jaune, les prises orange, les prises 20 A classiques cyan et les prises 20 A plan de travail rouges.'],
-          essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
-          retenir: 'Deux circuits de même couleur ? Vérifiez le nom du circuit dans la liste.' },
         { part: 'Vue 3D et câblage', title: 'Afficher ou masquer les câbles', anim: animCablesToggle,
           text: ['Le bouton « Câbles » est dans « Aides & Commandes » (barre de gauche du plan 2D). Il affiche ou masque les câbles, en 2D et en 3D.',
                  'Quand les câbles sont masqués, le bâtiment reste visible : pratique pour repérer les pièces et les appareils.'],
