@@ -17,7 +17,6 @@ function appDialogShow({ title, message = '', fields = [], okLabel = 'OK', cance
     okBtn.textContent = okLabel;
     okBtn.className = 'px-3 py-1.5 rounded-lg text-white text-xs font-semibold ' +
         (danger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500');
-
     const box = document.getElementById('app-dialog-fields');
     box.innerHTML = '';
     fields.forEach(f => {
@@ -33,7 +32,6 @@ function appDialogShow({ title, message = '', fields = [], okLabel = 'OK', cance
         label.appendChild(input);
         box.appendChild(label);
     });
-
     appDialogValidate = validate;
     appDialogFocusBefore = document.activeElement;
     document.getElementById('app-dialog').classList.remove('hidden');

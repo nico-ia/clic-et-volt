@@ -47,6 +47,7 @@ let hover2DFrame = 0;
 function hoverAllowed2D() {
     return !isPanning && !draggingEl2D && !selectionBoxStart && !draggingWall && currentTool !== 'place' && currentTool !== 'wall';
 }
+
 function scheduleHover2D(clientX, clientY, coords) {
     hover2DPending = { clientX, clientY, coords };
     if (hover2DFrame) return;
@@ -65,16 +66,12 @@ function on2DWheel(e) {
     const rect = canvas2D.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-
     const anchor = viewToWorld(mouseX, mouseY);
-
     const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
     zoom = Math.max(0.2, Math.min(5.0, zoom * zoomFactor));
-
     const moved = worldToView(anchor.x, anchor.y);
     panX += mouseX - moved.x;
     panY += mouseY - moved.y;
-
     document.getElementById('zoom-level').textContent = `Zoom: ${Math.round(zoom * 100)}%`;
     requestRedraw2D();
 }
@@ -115,7 +112,6 @@ function recenter2DView() {
 const PRINT_RENDER_SCALE = 3;    // Résolution de l'image d'impression / PNG : plus de pixels que l'écran pour rester nets sur papier
 const DERIV_HALF = 5;   // demi-côté du carré de dérivation (unités de plan)
 
-
 function redraw2D() {
     if (!ctx2D || !canvas2D) return;
     if (typeof refreshToolHint === 'function') refreshToolHint();   // le mode affiché suit l'action en cours
@@ -128,12 +124,10 @@ function redraw2D() {
     // rendu d'impression : les pixels sont multipliés, les coordonnées restent celles de l'écran
     const k = isPrintRendering ? PRINT_RENDER_SCALE : 1;
     ctx2D.setTransform(k, 0, 0, k, 0, 0);
-
     ctx2D.save();
     ctx2D.translate(panX, panY);
     ctx2D.rotate(rot2D);
     ctx2D.scale(zoom, zoom);
-
     if (gridVisible) {
         ctx2D.strokeStyle = currentTheme === 'light' ? '#cbd5e1' : '#1e293b';
         ctx2D.lineWidth = 1 / zoom;
@@ -143,7 +137,6 @@ function redraw2D() {
         const endX = Math.max(...corners.map(c => c.x)) + gridSize;
         const startY = Math.floor(Math.min(...corners.map(c => c.y)) / gridSize) * gridSize - gridSize;
         const endY = Math.max(...corners.map(c => c.y)) + gridSize;
-
         for (let x = startX; x <= endX; x += gridSize) {
             ctx2D.beginPath();
             ctx2D.moveTo(x, startY);
@@ -162,7 +155,7 @@ function redraw2D() {
     // écran : effacement (fond transparent, la grille disparaît dans le mur) ; impression : repeint au fond
     const wallsDrawn = wallsOn();
     ctx2D.save();
-    ctx2D.strokeStyle = '#279289';
+    ctx2D.strokeStyle = currentTheme === 'light' ? '#475569' : '#ffffff';   // 251 : murs blancs en sombre, gris foncé en clair
     ctx2D.lineCap = 'round';
     // baies : le mur n'est pas dessiné dans l'emplacement des ouvertures (découpe seulement, rien n'est effacé)
     ctx2D.beginPath();
@@ -202,7 +195,7 @@ function redraw2D() {
 
     // montants : le contour du mur s'arrête net sur chaque baie (trait en travers, hors du découpage)
     ctx2D.save();
-    ctx2D.strokeStyle = '#279289';
+        ctx2D.strokeStyle = currentTheme === 'light' ? '#475569' : '#ffffff';   // 251 : murs blancs en sombre, gris foncé en clair
     ctx2D.lineWidth = 2 / zoom;
     ctx2D.lineCap = 'butt';
     openingsOn().forEach(op => {
@@ -220,18 +213,16 @@ function redraw2D() {
         ctx2D.restore();
     });
     ctx2D.restore();
-
     draw2DEquipment();
     drawTexts2D();
 
     // fantôme de pose : l'élément qu'on va poser, translucide, sous le curseur
     if (!isPrintRendering && currentTool === 'place' && placeGhost2D) drawPlaceGhost2D(placeGhost2D);
-
     if (!isPrintRendering && wallSnap && (draggingWall || drawingStartPoint)) {
         const sn = wallSnap;
         ctx2D.save();
-        ctx2D.strokeStyle = '#f8fafc';
-        ctx2D.fillStyle = '#f8fafc';
+        ctx2D.strokeStyle = currentTheme === 'light' ? '#475569' : '#ffffff';
+        ctx2D.fillStyle = currentTheme === 'light' ? '#475569' : '#ffffff';
         ctx2D.lineWidth = 2 / zoom;
         ctx2D.beginPath();
         ctx2D.arc(sn.pt.x, sn.pt.y, 6 / zoom, 0, Math.PI * 2);
@@ -244,7 +235,6 @@ function redraw2D() {
         ctx2D.fillText(SNAP_LABEL[sn.kind], 10 / zoom, -10 / zoom);
         ctx2D.restore();
     }
-
     if (!isPrintRendering && drawingStartPoint && mouseCurrentPos) {
         ctx2D.strokeStyle = '#34d399';
         ctx2D.lineWidth = activeWallThickness;
@@ -253,7 +243,6 @@ function redraw2D() {
         ctx2D.moveTo(drawingStartPoint.x, drawingStartPoint.y);
         ctx2D.lineTo(mouseCurrentPos.x, mouseCurrentPos.y);
         ctx2D.stroke();
-
         const dx = mouseCurrentPos.x - drawingStartPoint.x;
         const dy = mouseCurrentPos.y - drawingStartPoint.y;
         const length = Math.hypot(dx, dy);
@@ -275,13 +264,11 @@ function redraw2D() {
             ctx2D.fillText(label, 0, 0);
             ctx2D.restore();
         }
-
         ctx2D.fillStyle = '#34d399';
         ctx2D.beginPath();
         ctx2D.arc(drawingStartPoint.x, drawingStartPoint.y, 6 / zoom, 0, Math.PI * 2);
         ctx2D.fill();
     }
-
     if (!isPrintRendering && currentTool === 'select') {
         selectedWallIds.forEach(id => {
             const wall = wallsOn().find(w => w.id === id);
@@ -306,7 +293,6 @@ function redraw2D() {
             });
         });
     }
-
     if (!isPrintRendering && selectionBoxStart && selectionBoxEnd) {
         const left = Math.min(selectionBoxStart.x, selectionBoxEnd.x);
         const top = Math.min(selectionBoxStart.y, selectionBoxEnd.y);
@@ -320,7 +306,6 @@ function redraw2D() {
         ctx2D.strokeRect(left, top, width, height);
         ctx2D.setLineDash([]);
     }
-
     ctx2D.restore();
 }
 
@@ -367,6 +352,7 @@ function setPlanRotation(deg) {
     if (slider) slider.value = v;
     if (label) label.textContent = v + '°';
 }
+
 function rotatePlan(deltaDeg) { rotateView2D(rot2D + deltaDeg * Math.PI / 180); }
 
 // Trémies et escaliers sont des ouvertures (ils percent le plafond) : même sélection que les ouvertures
@@ -374,9 +360,51 @@ function isOpeningLikeId(id) {
     return openingsOn().some(x => x.id === id) || shaftsOn().some(x => x.id === id) || stairsOn().some(x => x.id === id);
 }
 
+// Tronçon de câble sélectionné (réglage par tronçon, inspecteur « Tronçon de câble »)
+let selectedCableKey = null;
+// circuit en réglage manuel par tronçon (bouton dans la fiche du circuit)
+let cableManualId = null;
+
+// emplacement vu de chaque tronçon de mur, pour le retrouver quand il est réglé « faux plafond » (plus de mur dessiné)
+const CUT_GEOM = new Map();
+
+function pickCable2D(coords, tolCm) {
+    // tronçons sélectionnables seulement pour le circuit en réglage manuel et sélectionné, et seulement les siens
+    if (!selectedCircuitId || selectedCircuitId !== cableManualId) return null;
+    const circ = projectData.circuits.find(c => c.id === selectedCircuitId);
+    const tol = tolCm || 8 / zoom;   // 164 : la 3D passe une tolérance en cm
+    let best = null, bestD = Infinity;
+    const distOf = g => {
+        const isLow = g.a.z < 50 && g.b.z < 50;
+        const off = isLow ? -3.5 : (g.a.z > 150 && g.b.z > 150 ? 3.5 : 0);
+        const dx = g.b.x - g.a.x, dy = g.b.y - g.a.y, len = Math.hypot(dx, dy) || 1;
+        const ox = -dy / len * off, oy = dx / len * off;
+        return distToSegment(coords, { x: g.a.x + ox, y: g.a.y + oy }, { x: g.b.x + ox, y: g.b.y + oy });
+    };
+    getCableNetwork().segments.forEach(sg => {
+        const key = cableSegKey(sg, selectedCircuitId);
+        if (!key) return;
+        if (sg.kind === 'low' || sg.kind === 'ceil') CUT_GEOM.set(key, { a: sg.a, b: sg.b });
+        // 176 : un câble partagé se trace en voies côte à côte (3 cm chacune) : la tolérance couvre toutes les voies
+        const nCirc = new Set((sg.cids || []).filter(Boolean)).size;
+        const reach = tol + 1.5 * Math.max(0, nCirc - 1);
+        const d = distOf(sg);
+        if (d < reach && d < bestD) { bestD = d; best = { cutKey: key }; }
+    });
+    // tronçon réglé « faux plafond » : plus de mur dessiné, on le retrouve à son emplacement mémorisé
+    if (!best && circ && circ.cableCuts) {
+        Object.keys(circ.cableCuts).forEach(key => {
+            const g = CUT_GEOM.get(key);
+            if (!g) return;
+            const d = distOf(g);
+            if (d < tol && d < bestD) { bestD = d; best = { cutKey: key }; }
+        });
+    }
+    return best;
+}
+
 function on2DMouseDown(e) {
     const coords = worldToCanvasCoords(e.clientX, e.clientY);
-
     if (e.button === 2) {
         e.preventDefault();
         if (currentTool === 'wall' && drawingStartPoint) {
@@ -391,14 +419,12 @@ function on2DMouseDown(e) {
         }
         return;
     }
-
     if (e.button === 1 || (e.shiftKey && currentTool !== 'select') || currentTool === 'pan') {
         isPanning = true;
         startPanX = e.clientX - panX;
         startPanY = e.clientY - panY;
         return;
     }
-
     if (currentTool === 'wall') {
         let snapX = coords.x;
         let snapY = coords.y;
@@ -422,7 +448,6 @@ function on2DMouseDown(e) {
                     bestSnapY = w.y2;
                 }
             });
-
             if (minSnapDist < 25 / zoom) {
                 snapX = bestSnapX;
                 snapY = bestSnapY;
@@ -431,14 +456,12 @@ function on2DMouseDown(e) {
                 snapY = Math.round(snapY / 25) * 25;
             }
         }
-
         if (angleSnap && drawingStartPoint) {
             const dx = snapX - drawingStartPoint.x;
             const dy = snapY - drawingStartPoint.y;
             if (Math.abs(dx) > Math.abs(dy)) snapY = drawingStartPoint.y;
             else snapX = drawingStartPoint.x;
         }
-
         if (!drawingStartPoint) {
             // départ : accroché à un bout ou à l'axe d'un mur existant (murs bien jointifs)
             const ms = magnetWallEnd({ x: snapX, y: snapY }, null, null, null);
@@ -479,7 +502,6 @@ function on2DMouseDown(e) {
                     updateStats();
                     showNotification("Mur tracé avec succès", "success");
                 }
-
                 drawingStartPoint = { x: endX, y: endY };
                 mouseCurrentPos = { x: endX, y: endY };
                 document.getElementById('drawing-instruction-hint').textContent = "Déplacez et cliquez pour tracer un autre mur connecté (Clic droit pour arrêter)";
@@ -492,6 +514,9 @@ function on2DMouseDown(e) {
         placeText2D(coords);
         return;
     } else if (currentTool === 'select') {
+        if (selectedCableKey) { selectedCableKey = null; syncCableCutInspector(); }   // tout clic en sélection remplace le tronçon choisi
+        // circuit en réglage manuel : il reste sélectionné pendant qu'on clique le plan
+        const keepCircuit = !!cableManualId && selectedCircuitId === cableManualId;
         const hit = pickElement2D(coords);
         // patch 78 : Ctrl / Maj + clic ajoute ou retire un appareil ou une ouverture (trémies et escaliers compris)
         if (hit && (e.ctrlKey || e.metaKey || e.shiftKey) && !textById(hit.id)) {
@@ -507,7 +532,7 @@ function on2DMouseDown(e) {
                 if (isDev) selectedDeviceIds = selectedDeviceIds.includes(hit.id) ? selectedDeviceIds.filter(id => id !== hit.id) : [...selectedDeviceIds, hit.id];
                 else selectedOpeningIds = selectedOpeningIds.includes(hit.id) ? selectedOpeningIds.filter(id => id !== hit.id) : [...selectedOpeningIds, hit.id];
                 selected3DId = null;
-                selectedCircuitId = null;
+                if (!keepCircuit) selectedCircuitId = null;
                 syncElementInspectors();
                 updateCircuitsUI();
                 redraw2D();
@@ -519,7 +544,7 @@ function on2DMouseDown(e) {
             setSelectedWalls([]);
             draggingWall = null;
             selected3DId = hit.id;
-            selectedCircuitId = null;
+            if (!keepCircuit) selectedCircuitId = null;
             draggingEl2D = { id: hit.id, moved: false, grab: textGrab2D(hit.id, coords) };
             syncElementInspectors();
             updateCircuitsUI();
@@ -534,15 +559,15 @@ function on2DMouseDown(e) {
             // comme en 3D : cliquer un point de circuit sélectionne son câblage
             const hitEl = electricalOn().find(x => x.id === hit.id);
             const hitCircuit = highlightCircuitOf(hitEl);
-            selectedCircuitId = hitCircuit ? hitCircuit.id : null;
+            if (!keepCircuit) selectedCircuitId = hitCircuit ? hitCircuit.id : null;
             syncElementInspectors();
             updateCircuitsUI();
             redraw2D();
             return;
         }
-        if (selected3DId || selectedCircuitId || selectedDeviceIds.length || selectedOpeningIds.length) {
+        // clic dans le vide : on retire les appareils sélectionnés, mais le circuit choisi reste sélectionné
+        if (selected3DId || selectedDeviceIds.length || selectedOpeningIds.length) {
             selected3DId = null;
-            selectedCircuitId = null;
             if (!(e.ctrlKey || e.metaKey || e.shiftKey)) { selectedDeviceIds = []; selectedOpeningIds = []; }
             syncElementInspectors();
             updateCircuitsUI();
@@ -586,6 +611,21 @@ function on2DMouseDown(e) {
             redraw2D();
             return;
         }
+        // tronçon de câble : prioritaire sur le mur qu'il longe (les câbles sont sur l'axe du mur)
+        const cableHit = additiveSelection ? null : pickCable2D(coords);
+        if (cableHit) {
+            setSelectedWalls([]);
+            draggingWall = null;
+            selectionBoxStart = null;
+            selectionBoxEnd = null;
+            selectedCableKey = cableHit.cutKey;
+            selected3DId = null;
+            syncElementInspectors();
+            updateCircuitsUI();
+            redraw2D();
+            placeCablePopover(e.clientX, e.clientY);
+            return;
+        }
         let foundId = null;
         if (wallsPickable) wallsOn().forEach(w => {
             const dist = distToSegment(coords, {x: w.x1, y: w.y1}, {x: w.x2, y: w.y2});
@@ -627,7 +667,6 @@ function circuitForDoubleClick(el) {
     return deviceCircuitOf(el, controlTargetsOf(getCableNetwork()));
 }
 
-
 // Double clic sur un appareil (outil Sélectionner) : affiche le circuit entier
 function on2DDoubleClick(e) {
     if (currentTool !== 'select') return;
@@ -638,12 +677,10 @@ function on2DDoubleClick(e) {
     if (circ) selectCircuit(circ.id);
 }
 
-
 // ---------- Fantôme de pose (2D) ----------
 // Montre l'élément qui serait posé à la position du curseur, sans le créer.
 // Rouge : il y en a déjà un identique à cet endroit (la pose serait refusée).
 let placeGhost2D = null;
-
 // Niveaux qui seront reliés à l'escalier en cours de pose (cases cochées), sans message ni arrêt
 function previewStairLevels() {
     const list = document.getElementById(currentMode === '3d' ? 'shaft-link-list-3d' : 'shaft-link-list');
@@ -723,28 +760,23 @@ function on2DMouseMove(e) {
     const coords = worldToCanvasCoords(e.clientX, e.clientY);
     document.getElementById('cursor-coords').textContent = `X: ${(coords.x/100).toFixed(2)}m, Y: ${(coords.y/100).toFixed(2)}m`;
     if (currentTool === 'place' && !isPanning) { updatePlaceGhost2D(coords); redraw2D(); }
-
     // survol : étiquette de l'élément visé (hors placement, glissement et tracé)
     scheduleHover2D(e.clientX, e.clientY, coords);
-
     if (isPanning) {
         panX = e.clientX - startPanX;
         panY = e.clientY - startPanY;
         requestRedraw2D();
         return;
     }
-
     if (draggingEl2D) {
         dragElement2D(coords);
         return;
     }
-
     if (currentTool === 'select' && selectionBoxStart) {
         selectionBoxEnd = coords;
         redraw2D();
         return;
     }
-
     if (currentTool === 'select' && draggingWall) {
         const drag = draggingWall;
         if (!drag.moved) {
@@ -805,7 +837,6 @@ function on2DMouseMove(e) {
         }
         return;
     }
-
     if (currentTool === 'wall' && drawingStartPoint) {
         let snapX = coords.x;
         let snapY = coords.y;
@@ -831,6 +862,7 @@ function on2DMouseUp(e) {
     // le relâchement compte pour le plan seulement s'il a lieu sur le canevas ou termine une action en cours
     const surPlan = e.target === canvas2D;
     const actionEnCours = !!(isPanning || draggingWall || draggingEl2D || (selectionBoxStart && selectionBoxEnd));
+    const layoutMoved = !!((draggingWall && draggingWall.moved) || (draggingEl2D && draggingEl2D.moved));
     if (isPanning) isPanning = false;
     if (selectionBoxStart && selectionBoxEnd) {
         const start = selectionBoxStart;
@@ -909,6 +941,8 @@ function on2DMouseUp(e) {
     if (draggingWall) draggingWall = null;
     resetWallSnap();
     if (draggingEl2D) draggingEl2D = null;
+    // calcul en fond seulement si le relâchement a déplacé quelque chose (évite la signature à chaque clic)
+    if (layoutMoved) startCableJob();
     // pas de vidage du cache : la signature du réseau change d'elle-même si une position a bougé
     if (surPlan || actionEnCours) redraw2D();
 }
@@ -940,7 +974,6 @@ const SNAP_RADIUS_PX = 12;     // rayon d'entrée d'une accroche (pixels à l'é
 const SNAP_RELEASE = 1.8;      // on quitte une accroche au-delà de RADIUS × 1,8
 const SNAP_RANK = { end: 0, wall: 0, axis: 1, right: 2, align: 3 };   // départage : les bouts d'abord
 const SNAP_LABEL = { end: 'bout de mur', wall: 'mur suivant', axis: 'mur en T', right: 'angle droit', align: 'alignement' };
-
 let wallSnap = null;           // accroche active : { ctx, key, kind, pt }
 
 function resetWallSnap() { wallSnap = null; }
@@ -950,7 +983,6 @@ function resetWallSnap() { wallSnap = null; }
 function wallSnapCandidates(p, anchor, dirU, excludeId) {
     const list = [];
     const others = wallsOn().filter(w => w.id !== excludeId);
-
     others.forEach(w => {
         list.push({ key: 'end:' + w.id + ':1', kind: 'end', pt: { x: w.x1, y: w.y1 } });
         list.push({ key: 'end:' + w.id + ':2', kind: 'end', pt: { x: w.x2, y: w.y2 } });
@@ -962,9 +994,7 @@ function wallSnapCandidates(p, anchor, dirU, excludeId) {
             }
         }
     });
-
     if (!anchor) return list;
-
     // droites issues du point fixe : alignement et angle droit avec les murs qui y arrivent
     const rays = [];
     others.forEach(w => {
@@ -983,7 +1013,6 @@ function wallSnapCandidates(p, anchor, dirU, excludeId) {
         const s = (p.x - anchor.x) * ux + (p.y - anchor.y) * uy;   // projection : seulement vers l'avant
         if (s > 0) list.push({ key: r.key, kind: r.kind, pt: { x: anchor.x + ux * s, y: anchor.y + uy * s } });
     });
-
     // prolongement : point où le tracé rencontre un mur suivant
     if (dirU) {
         others.forEach(w => {
@@ -1009,7 +1038,6 @@ function magnetWallEnd(p, F, u, excludeId) {
     const rPx = SNAP_RADIUS_PX / zoom;
     const cands = wallSnapCandidates(p, F, u, excludeId);
     const dist = c => Math.hypot(p.x - c.pt.x, p.y - c.pt.y);
-
     // meilleure accroche dans le rayon d'entrée (les bouts et le mur suivant d'abord)
     let best = null, bestScore = Infinity;
     cands.forEach(c => {
@@ -1018,7 +1046,6 @@ function magnetWallEnd(p, F, u, excludeId) {
         const score = d + SNAP_RANK[c.kind] * rPx * 0.3;
         if (score < bestScore) { bestScore = score; best = c; }
     });
-
     // accroche en cours : elle tient tant que le curseur reste dans le rayon de sortie,
     // sauf si une accroche plus prioritaire entre dans le rayon d'entrée
     let sticky = null;
@@ -1109,7 +1136,6 @@ function drawElementSymbol2D(el) {
         ctx2D.stroke();
     };
     let ringX = 7, ringR = 12, textAt = null;
-
     ctx2D.save();
     ctx2D.translate(c.x, c.y);
     ctx2D.rotate(ang);
@@ -1117,10 +1143,8 @@ function drawElementSymbol2D(el) {
     ctx2D.lineCap = 'round';
     // appareillage du circuit sélectionné : l'appareil lui-même clignote (estompé une phase sur deux)
     const blinkMember = !isPrintRendering && !el.legendOnly && !!_circuitMembers2D && _circuitMembers2D.has(el.id) && el.id !== selected3DId;
-    if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.25;
-
+    if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.50;
     if (t === 'outlet_16a' || t === 'outlet_20a' || t === 'outlet_20a_classic' || t === 'outlet_dedicated_20' || t === 'outlet_dedicated_32' || t === 'outlet_switched') {
-
 
     // prise simple : demi-disque à l'échelle du module ; dans une double / triple, le demi-disque est un peu plus petit
     // pour que les prises voisines (7,5 cm d'entraxe) ne se chevauchent pas
@@ -1337,7 +1361,7 @@ function drawElementSymbol2D(el) {
         ctx2D.arc(ringX, 0, ringR, 0, Math.PI * 2);
         ctx2D.lineWidth = (2.2) * LW;
         ctx2D.strokeStyle = circuitColor(ringCirc);
-        ctx2D.globalAlpha = circHot ? (blinkOn ? 0.95 : 0.2) : 0.9;
+        ctx2D.globalAlpha = circHot ? (blinkOn ? 0.95 : 0.5) : 0.9;
         ctx2D.stroke();
         ctx2D.globalAlpha = 1;
     }
@@ -1355,7 +1379,7 @@ function drawElementSymbol2D(el) {
         ctx2D.roundRect(ringX - ringR, y0 - ringR, 2 * ringR, y1 - y0 + 2 * ringR, ringR);
         ctx2D.lineWidth = (2.2) * LW;
         ctx2D.strokeStyle = col;
-        ctx2D.globalAlpha = circHot ? (blinkOn ? 0.95 : 0.2) : 0.9;
+        ctx2D.globalAlpha = circHot ? (blinkOn ? 0.95 : 0.5) : 0.9;
         ctx2D.stroke();
         ctx2D.globalAlpha = 1;
     }
@@ -1370,12 +1394,10 @@ function drawElementSymbol2D(el) {
     // calibre (10 / 16 / 20 / 32), hors du symbole, dans sa couleur. Absent de la légende : le libellé porte déjà l'ampérage, et le chiffre chevauche les lignes voisines
     if (textAt && !el.legendOnly) {
         const fx = Math.cos(ang), fy = Math.sin(ang);
-
         ctx2D.save();
-        if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.25;
+        if (blinkMember && !blinkOn) ctx2D.globalAlpha = 0.50;
         ctx2D.fillStyle = col;
         ctx2D.font = 'bold 6.5px Inter, sans-serif';
-
         ctx2D.textAlign = 'center';
         ctx2D.textBaseline = 'middle';
         ctx2D.translate(c.x + fx * (textAt.x + 1), c.y + fy * (textAt.x + 1));
@@ -1419,7 +1441,6 @@ function drawWallLengthLabels() {
         }
         return false;
     };
-
     wallsOn().forEach(wall => {
         const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
         const len = Math.hypot(dx, dy);
@@ -1448,6 +1469,7 @@ function drawWallLengthLabels() {
         ctx2D.save();
         ctx2D.translate(best.x, best.y);
         ctx2D.rotate(-rot2D);
+        ctx2D.globalAlpha = 0.50;
         ctx2D.fillStyle = currentTheme === 'light' ? '#0f172a' : '#f1f5f9';
         ctx2D.fillText(label, 0, 0);
         ctx2D.restore();
@@ -1458,14 +1480,11 @@ function drawWallLengthLabels() {
 
 // Tailles des groupes de prises (double, triple…), calculées une fois par dessin du plan
 let _gangSizes2D = null;
-
 let _gangGroups2D = null;
 // Appareillages du circuit sélectionné (clignotent eux-mêmes), calculé une fois par dessin du plan
 let _circuitMembers2D = null;
-
 // Commande -> charge qu'elle pilote, calculé une fois par dessin du plan
 let _controlTargets2D = new Map();
-
 
 // Même couleur, plus sombre (facteur 0,55) : sert au clignotement du fil sélectionné en 2D
 function darkerCss2D(css) {
@@ -1477,6 +1496,7 @@ function darkerCss2D(css) {
         return css;
     }
 }
+
 // Cadre de sélection 2D : mêmes couleurs, mêmes tirets et mêmes décalages qu'en 3D (selectionFramePalette3D,
 // selectionIsMulti3D). x, y, w, h : rectangle dans le repère courant (déjà tourné pour un mur).
 function selectionFrame2D(x, y, w, h) {
@@ -1507,7 +1527,11 @@ function drawOpening2D(op, ghostColor, colliding) {
         if (ghostColor) ctx2D.globalAlpha = 0.7;
         ctx2D.translate(p.x, p.y);
         ctx2D.rotate(p.angle);
-        ctx2D.strokeStyle = ((op.id === selected3DId || selectedOpeningIds.includes(op.id)) ? (isDoor ? '#b07a4a' : '#3db1ff') : (ghostColor || (isDoor ? '#a16207' : '#49b6ff')));
+        const selOp = op.id === selected3DId || selectedOpeningIds.includes(op.id);
+        const lightOp = currentTheme === 'light';
+        ctx2D.strokeStyle = selOp
+            ? (isDoor ? '#b07a4a' : (lightOp ? '#1e40af' : '#3db1ff'))
+            : (ghostColor || (isDoor ? '#a16207' : (lightOp ? '#0369a1' : '#49b6ff')));
         ctx2D.lineWidth = 1;
         ctx2D.beginPath();
         if (isDoor) {
@@ -1536,6 +1560,25 @@ function drawOpening2D(op, ghostColor, colliding) {
             ctx2D.strokeRect(-w / 2, -p.th / 2, w, p.th);
             ctx2D.setLineDash([]);
         }
+
+        // fenêtre : deux ventaux ouverts à 90° depuis chaque montant, du côté d'ouverture ; arcs en tirets = trajet balayé
+        if (!isDoor) {
+            const sy = op.side === -1 ? 1 : -1;   // même convention que windowSquaresOf
+            const L = w / 2;
+            ctx2D.beginPath();
+            ctx2D.moveTo(-w / 2, 0); ctx2D.lineTo(-w / 2, sy * L);
+            ctx2D.moveTo(w / 2, 0); ctx2D.lineTo(w / 2, sy * L);
+            ctx2D.stroke();
+            ctx2D.setLineDash([4, 3]);
+            ctx2D.beginPath();
+            ctx2D.arc(-w / 2, 0, L, 0, sy * Math.PI / 2, sy < 0);
+            // Sans ce moveTo, l'arc relie la fin du premier arc au début du second par une diagonale
+            ctx2D.moveTo(w / 2 - L, 0);
+            ctx2D.arc(w / 2, 0, L, Math.PI, sy * Math.PI / 2, sy > 0);
+            ctx2D.stroke();
+            ctx2D.setLineDash([]);
+        }
+
         // porte ou fenêtre en superposition ou citée par une alerte : contour rouge clignotant, comme les appareils
         if (!ghostColor && !isPrintRendering && blinkOn && colliding && colliding.has(op.id)) {
             ctx2D.strokeStyle = '#ef4444';
@@ -1575,13 +1618,15 @@ function cableOutsideDevices2D(a, b, discs) {
 }
 
 function draw2DEquipment() {
+    // 243 : les conflits sont calculés une seule fois par image (au lieu de 4 fois)
+    let _collidingCache = null;
+    const collidingNow = () => _collidingCache || (_collidingCache = collidingElementIds());
     const gangs = computeOutletGangs();
     _gangSizes2D = gangs.sizeOf;
     
     _gangGroups2D = gangs.groupOf;
     const selCircuit = selectedCircuitId ? circuitById(selectedCircuitId) : null;
     _circuitMembers2D = selCircuit ? circuitHighlightIds(selCircuit) : null;
-
     ensureCircuitAssignment();
     // 1. Câbles (trait plein = plafond, pointillé = plinthe)
     const net = projectData.electrical.length ? getCableNetwork() : null;
@@ -1590,7 +1635,9 @@ function draw2DEquipment() {
         const selectedElement = projectData.electrical.find(el => el.id === selected3DId);
         const isLightingSelection = selectedElement &&
             (isControl(selectedElement) || isControlledLoad(selectedElement));
-        const selectedLinkIds = new Set(isLightingSelection
+        // circuit en réglage manuel sélectionné : son surlignage l'emporte sur la liaison de la lumière cliquée
+        const manualKeep = !!cableManualId && selectedCircuitId === cableManualId;
+        const selectedLinkIds = new Set(isLightingSelection && !manualKeep
             ? (net.controlLinks || [])
                 .filter(link => link.switchId === selected3DId || link.lightIds.includes(selected3DId))
                 .flatMap(link => link.linkIds || [])
@@ -1622,13 +1669,14 @@ function draw2DEquipment() {
             const ids = [...new Set((s.cids || []).filter(Boolean))];
             const circs = ids.map(id => projectData.circuits.find(c => c.id === id)).filter(Boolean);
             const focusHit = hasLinkFocus ? linkHighlighted : (!!focusCircuit && (s.cids || []).includes(focusCircuit.id));
+            // 253 : circuit ou liaison sélectionné : les autres tronçons ne sont plus dessinés (sauf les escaliers)
+            if (focusMode && !focusHit && !s.stairHit) return;
             // couleur du lien sélectionné uniquement (un tronçon partagé peut porter aussi d'autres commandes)
             const linkColor = (s.links || []).filter(id => selectedLinkIds.has(id)).map(id => linkCableColors.get(id)).find(Boolean);
-            const focusColor = hasLinkFocus ? (linkColor || '#facc15') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : '#facc15');
+            const focusColor = hasLinkFocus ? (linkColor || '#ffffff') : (focusCircuit && (s.cids || []).includes(focusCircuit.id) ? circuitColor(focusCircuit) : '#ffffff');
             // fil du circuit (ou de la commande) sélectionné : il alterne avec le contraste, comme les appareils
             const focusBlinkColour = (!isPrintRendering && !blinkOn) ? darkerCss2D(focusColor) : focusColor;
-            
-            ctx2D.lineWidth = focusMode && focusHit ? 2.4 : 1.4;
+            ctx2D.lineWidth = (focusMode && focusHit ? 3.0 : 2.0) / zoom;
             const nx = -dy / len, ny = dx / len;
             // trace le tronçon décalé de `shift` perpendiculairement à sa direction ; faux si rien à tracer
             const strokeRun = (shift) => {
@@ -1646,8 +1694,9 @@ function draw2DEquipment() {
             // (triées pour garder le même ordre d'un tronçon à l'autre)
             const bandColors = focusMode ? [] : [...new Set([...circs.map(c => circuitColor(c)), ...(s.links || []).filter(id => ctlColors.has(id)).map(id => ctlColors.get(id))])].sort();
             if (s.stairHit || focusMode || bandColors.length <= 1) {
+                ctx2D.globalAlpha = 1.0;
                 ctx2D.strokeStyle = s.stairHit ? (blinkOn ? '#ef4444' : '#fecaca') : focusMode
-                    ? (focusHit ? focusBlinkColour : dimColor)
+                    ? (focusHit ? focusColor : dimColor)
                     : bandColors[0] || '#94a3b8';
                 ctx2D.setLineDash(isLow ? [8, 6] : []);
                 ctx2D.stroke();
@@ -1669,11 +1718,42 @@ function draw2DEquipment() {
         ctx2D.globalAlpha = 1;
     }
 
+    // tronçon de câble sélectionné : liseré à tirets qui alterne entre les couleurs du cadre de sélection, autour de chaque segment de la travée
+    if (showCables2D && net && selectedCableKey) {
+        ctx2D.save();
+        ctx2D.setLineDash([4 / zoom, 2 / zoom]);
+        ctx2D.lineWidth = 1 / zoom;
+        const [selBase, selAlt] = selectionFramePalette3D();
+        ctx2D.strokeStyle = blinkOn ? selBase : selAlt;
+        const R = 6;   // demi-largeur du liseré (cm), autour du câble tel qu'il est tracé
+        net.segments.forEach(sg => {
+            if (cableSegKey(sg, cableManualId) !== selectedCableKey) return;
+            const isLow = sg.a.z < 50 && sg.b.z < 50;
+            const off = isLow ? -3.5 : (sg.a.z > 150 && sg.b.z > 150 ? 3.5 : 0);
+            const dx = sg.b.x - sg.a.x, dy = sg.b.y - sg.a.y, len = Math.hypot(dx, dy);
+            ctx2D.beginPath();
+            if (len < 0.5) {
+                ctx2D.arc(sg.a.x, sg.a.y, R, 0, Math.PI * 2);   // montée : vue de dessus, un point
+            } else {
+                const ox = -dy / len * off, oy = dx / len * off;   // même décalage que le tracé du câble
+                const nx = -dy / len * R, ny = dx / len * R;
+                const p = (q, s) => ({ x: q.x + ox + nx * s, y: q.y + oy + ny * s });
+                const a1 = p(sg.a, 1), a2 = p(sg.a, -1), b1 = p(sg.b, 1), b2 = p(sg.b, -1);
+                ctx2D.moveTo(a1.x, a1.y);
+                ctx2D.lineTo(b1.x, b1.y);
+                ctx2D.lineTo(b2.x, b2.y);
+                ctx2D.lineTo(a2.x, a2.y);
+                ctx2D.closePath();
+            }
+            ctx2D.stroke();
+        });
+        ctx2D.restore();
+    }
+
     // 2. Ouvertures
     // calculé une fois par image, puis partagé par toutes les ouvertures
-    const collidingOpen = !isPrintRendering && blinkOn ? collidingElementIds() : null;
+    const collidingOpen = !isPrintRendering && blinkOn ? collidingNow() : null;
     openingsOn().forEach(op => drawOpening2D(op, null, collidingOpen));
-
     // 2 bis. Trémies (D5) : carré en pointillés, aligné sur le mur
     shaftsOn().forEach(sh => {
         const p = shaftPos2D(sh);
@@ -1692,7 +1772,7 @@ function draw2DEquipment() {
             selectionFrame2D(-s / 2, -s / 2, s, s);
         }
         // chevauchement avec une ouverture ou un appareil : contour rouge clignotant, comme les appareils
-        if (!isPrintRendering && blinkOn && collidingElementIds().has(sh.id)) {
+        if (!isPrintRendering && blinkOn && collidingNow().has(sh.id)) {
             ctx2D.strokeStyle = '#ef4444';
             ctx2D.lineWidth = 3 / zoom;
             ctx2D.strokeRect(-s / 2 - 10 / zoom, -s / 2 - 10 / zoom, s + 20 / zoom, s + 20 / zoom);
@@ -1714,17 +1794,15 @@ function draw2DEquipment() {
         drawArrowText(ctx2D, shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - (textSizePx('niveau') / 2 + 20) / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
         ctx2D.restore();
     });
-
     // 2 ter. Escaliers : emprise au sol, marches tracées, flèche vers la marche haute
     if (stairsOn().length) {
-        const stairColliding = collidingElementIds();
+        const stairColliding = collidingNow();
         stairsOn().forEach(st => drawStair2D(st, stairColliding));
     }
-
     // 3. Appareils électriques (symboles de plan)
     electricalOn().forEach(el => drawElementSymbol2D(el));
     if (!isPrintRendering && blinkOn) {
-        const colliding = collidingElementIds();
+        const colliding = collidingNow();
         electricalOn().forEach(el => {
             if (!colliding.has(el.id)) return;
             const p = getElCoords(el);
@@ -1757,6 +1835,7 @@ function stairGrab(id, coords) {
         y: dx * sinA + dy * cosA
     };
 }
+
 // Sens de la flèche d'un escalier : +1 si le niveau relié est au-dessus du niveau affiché (montée vers +x),
 // -1 s'il est en dessous (la flèche descend vers le niveau relié)
 function stairArrowSign(st) {
@@ -1766,6 +1845,7 @@ function stairArrowSign(st) {
     if (!others.length) return 1;
     return others.some(id => elevOf(id) > here) ? 1 : -1;
 }
+
 // Escalier en 2D : emprise orientée, traits de marches, flèche vers la marche haute, nom des niveaux reliés
 function drawStair2D(st, colliding) {
     const L = st.length || 300, W = st.width || 90, n = stairStepCount(st), hot = st.id === selected3DId;
@@ -1780,7 +1860,6 @@ function drawStair2D(st, colliding) {
     if (st.levelId !== activeLevelId) ctx2D.setLineDash([6 / zoom, 4 / zoom]);
     ctx2D.strokeRect(-L / 2, -W / 2, L, W);
     ctx2D.setLineDash([]);
-
     ctx2D.beginPath();
     for (let i = 1; i < n; i++) {
         const x = -L / 2 + i * L / n;
@@ -1913,10 +1992,12 @@ function defaultHeightFor(type) {
     if (type === 'wall_light') return 180;
     if (type === 'doorbell_chime') return 200;
     if (type === 'shutter_motor') return 210;
-    if (type.startsWith('outlet_dedicated')) return 20;
+    if (type === 'outlet_20a') return 110;   // prise plan de travail
+    if (type.startsWith('outlet_dedicated')) return 30;
     if (type.startsWith('outlet')) return 30;
     return 110;
 }
+
 // Trémie / escalier : niveaux reliés cochés dans la liste de la barre de droite (le plus proche coché par défaut).
 // Renvoie null si aucun niveau n'est coché.
 function askShaftLevels() {
@@ -1934,6 +2015,7 @@ function askShaftLevels() {
     }
     return [activeLevelId, ...chosen];
 }
+
 function place2DAt(coords) {
     const type = document.getElementById('place-type').value;
     const uid = Date.now() + '_' + Math.floor(Math.random() * 1000);
@@ -1983,10 +2065,8 @@ function place2DAt(coords) {
         if (type === 'door_single' || type === 'window_std') {
             const opening = { id: 'op_' + uid, type, wallId: info.wall.id, distanceFromStart: dist, height: type === 'door_single' ? 210 : 120, width: type === 'door_single' ? 96 : 120 };
             if (type === 'window_std') opening.sillHeight = 90;
-            if (type === 'door_single') {
-                opening.hingeSide = doorHingeForPlacement();
-                opening.side = info.side;
-            }
+            opening.side = info.side;
+            if (type === 'door_single') opening.hingeSide = doorHingeForPlacement();
             projectData.openings.push(Object.assign(opening, { levelId: activeLevelId }));
         } else if (type === 'shaft') {
             projectData.shafts.push({ id: 'sh_' + uid, levelId: activeLevelId, levelIds: shaftLinks, wallId: info.wall.id, distanceFromStart: dist, side: info.side, size: 40 });
@@ -2006,6 +2086,7 @@ function place2DAt(coords) {
         showNotification('Élément placé', 'success');
     }
 }
+
 function dragElement2D(coords) {
     if (!draggingEl2D) return;
     const tx = textById(draggingEl2D.id);
@@ -2013,7 +2094,7 @@ function dragElement2D(coords) {
         if (!draggingEl2D.moved) { saveStateToUndo(); draggingEl2D.moved = true; }
         tx.x = Math.round(coords.x - draggingEl2D.grab.x);
         tx.y = Math.round(coords.y - draggingEl2D.grab.y);
-        redraw2D();
+        requestRedraw2D();
         return;
     }
     const el = projectData.electrical.find(e => e.id === draggingEl2D.id);
@@ -2030,7 +2111,7 @@ function dragElement2D(coords) {
         st.x = Math.round(coords.x - (grab.x * cosA - grab.y * sinA));
         st.y = Math.round(coords.y - (grab.x * sinA + grab.y * cosA));
         snapStairToWalls(st, prevSt);
-        redraw2D();
+        requestRedraw2D();
         return;
     }
     const item = el || op || sh;
@@ -2039,7 +2120,7 @@ function dragElement2D(coords) {
     if (sh) {
         sh.x = Math.round(coords.x - (draggingEl2D.grab ? draggingEl2D.grab.x : 0));
         sh.y = Math.round(coords.y - (draggingEl2D.grab ? draggingEl2D.grab.y : 0));
-        redraw2D();
+        requestRedraw2D();
         return;
     }
     if (el && CEILING_TYPES.includes(el.type)) {
@@ -2059,8 +2140,9 @@ function dragElement2D(coords) {
         item.distanceFromStart = dist;
         if (el || sh || (op && op.type === 'door_single')) item.side = info.side;
     }
-    redraw2D();
+    requestRedraw2D();
 }
+
 // ---------- Textes ajoutables (noms de pièces), patch 71 ----------
 // Données : projectData.annotations, { id, kind: 'texte', levelId, x, y, text }. Hors câblage et collisions.
 // Tailles des écritures (px à l'écran), réglées dans la barre gauche et enregistrées avec le projet
@@ -2069,22 +2151,27 @@ function textSizePx(kind) {
     const v = Number(projectData.textSizes && projectData.textSizes[kind]);
     return v >= 8 && v <= 32 ? v : TEXT_SIZE_DEFAULTS[kind];
 }
+
 function textsOn() {
     return (projectData.annotations || []).filter(a => a.kind === 'texte' && a.levelId === activeLevelId);
 }
+
 function textById(id) {
     if (!id) return null;
     return (projectData.annotations || []).find(a => a.kind === 'texte' && a.id === id) || null;
 }
+
 // Taille approximative du texte dans le plan (cm), pour la sélection au clic
 function textBox2D(tx) {
     ctx2D.font = 'bold ' + (textSizePx('text') / zoom) + 'px Inter, sans-serif';
     return { w: ctx2D.measureText(tx.text || '').width, h: textSizePx('text') / zoom };
 }
+
 function textGrab2D(id, coords) {
     const tx = textById(id);
     return tx ? { x: coords.x - tx.x, y: coords.y - tx.y } : { x: 0, y: 0 };
 }
+
 // Style aligné sur les noms de trémies : 12 px, gras, sans fond ; taille fixe à l'écran
 function drawTexts2D() {
     const light = currentTheme === 'light';
@@ -2108,11 +2195,13 @@ function drawTexts2D() {
         ctx2D.restore();
     });
 }
+
 // Rafraîchit la vue active après une modification de texte
 function refreshAfterText() {
     if (currentMode === '3d') build3DScene();
     else redraw2D();
 }
+
 function placeText2D(coords) {
     askFields('Nouveau texte', [{ id: 'text', label: 'Texte (nom de pièce)', value: '' }], 'Ajouter',
         v => v.text ? null : 'Saisissez un texte.')
@@ -2129,6 +2218,7 @@ function placeText2D(coords) {
             showNotification('Texte ajouté', 'success');
         });
 }
+
 function editText2D(id) {
     const tx = textById(id);
     if (!tx) return;
@@ -2142,6 +2232,7 @@ function editText2D(id) {
             refreshAfterText();
         });
 }
+
 function setSelectedTextValue(value) {
     const tx = textById(selected3DId);
     const v = (value || '').trim();
@@ -2151,6 +2242,7 @@ function setSelectedTextValue(value) {
     syncElementInspectors();
     refreshAfterText();
 }
+
 function deleteText2D() {
     const tx = textById(selected3DId);
     if (!tx) return;

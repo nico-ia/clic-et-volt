@@ -61,8 +61,7 @@
             <button onclick="editActiveLevelHeights()" class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Modifier la cote et la hauteur sous plafond du niveau affiché" aria-label="Modifier la cote et la hauteur sous plafond du niveau affiché"><i class="fa-solid fa-up-down"></i></button>
             <button id="btn-add-level" onclick="addLevel()" class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Ajouter un étage" aria-label="Ajouter un étage"><i class="fa-solid fa-circle-up"></i></button>
             <button id="btn-add-basement" onclick="addLevel(true)" class="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Ajouter un sous-sol" aria-label="Ajouter un sous-sol"><i class="fa-solid fa-circle-down"></i></button>
-            <button id="ghost-toggle" onclick="toggleGhostLevels()" class="px-2 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-200 rounded-lg text-xs transition" title="Afficher les étages voisins (dessus et dessous) en fantôme, sans les sélectionner"><i class="fa-solid fa-ghost"></i> Fantômes</button>
-            <button onclick="deleteActiveLevel()" class="px-2 py-1.5 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Supprimer le niveau affiché"><i class="fa-solid fa-trash"></i></button>
+            <button id="ghost-toggle" onclick="toggleGhostLevels()" class="px-2 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-200 rounded-lg text-xs transition opacity-50" title="Afficher les étages voisins (dessus et dessous) en fantôme, sans les sélectionner"><i class="fa-solid fa-ghost"></i> Fantômes</button>            <button onclick="deleteActiveLevel()" class="px-2 py-1.5 bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 rounded-lg text-xs transition" title="Supprimer le niveau affiché"><i class="fa-solid fa-trash"></i></button>
         </div>
 
         <!-- Action Buttons -->
@@ -220,7 +219,7 @@
                     </div>
                     <!-- Message d'attente 2D : même texte et même style que l'inspecteur 3D -->
                     <div id="inspector-dock-empty-2d" class="text-xs text-slate-500 bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-center">
-                        Sélectionnez un appareil ou une porte pour afficher ses informations et réglages.
+                        Sélectionnez un appareillage (prise, interrupteur,...) ou une ouverture (porte, fenêtre,...) pour afficher ses informations et réglages.
                     </div>
 
                     <!-- Wall Inspector -->
@@ -525,7 +524,7 @@
 
                     </div>
                     <div id="inspector-dock-empty" class="text-xs text-slate-500 bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-center">
-                        Sélectionnez un appareil ou une porte pour afficher ses informations et réglages.
+                        Sélectionnez un appareillage (prise, interrupteur,...) ou une ouverture (porte, fenêtre,...) pour afficher ses informations et réglages.
                     </div>
 
                     <!-- Inspecteurs partagés avec la 2D (mur, paramètres par défaut, trémie) : déplacés ici en 3D -->

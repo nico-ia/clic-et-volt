@@ -1,6 +1,7 @@
 /* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
 
 // Guide intégré à Clic & Volt (parties 1 à 3 : Plan 2D, Vue 3D et câblage, Métré & contrôles).
+// Mise à jour : fenêtre à deux ventaux et côté d'ouverture, conflits escalier / ouverture, réglage des tronçons de câble.
 // Les symboles des animations sont ceux de l'appli : mêmes formes et mêmes couleurs que les boutons
 // de la colonne de droite et que le plan (canvas2d.js, drawElementSymbol2D).
 // Script autonome : à charger après app.js.
@@ -128,6 +129,21 @@
         <text class="g-lbl" x="130" y="165">Porte</text>
         <text class="g-lbl" x="260" y="150">Fenêtre</text>`);
 
+    // Fenêtre à deux ventaux ouverts à 90° vers le haut, chacun une demi-largeur ; arcs en tirets = trajet balayé ; zone réservée en pointillés
+    const animWindow = () => svg(`
+        <rect x="40" y="105" width="240" height="10" fill="#334155"/>
+        <rect x="120" y="105" width="100" height="10" fill="#0f172a"/>
+        <rect x="120" y="60" width="100" height="50" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 4" opacity=".55"/>
+        <path d="M120 60 A50 50 0 0 1 170 110 M220 60 A50 50 0 0 0 170 110" fill="none" stroke="#22d3ee" stroke-dasharray="3 4" opacity=".6"/>
+        <line x1="120" y1="110" x2="220" y2="110" stroke="#22d3ee" stroke-width="2"/>
+        <line x1="120" y1="110" x2="120" y2="60" stroke="#3db1ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="220" y1="110" x2="220" y2="60" stroke="#3db1ff" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="120" cy="110" r="3.5" fill="#f8fafc"/>
+        <circle cx="220" cy="110" r="3.5" fill="#f8fafc"/>
+        <text class="g-lbl" x="170" y="28">Ventaux ouverts à 90°</text>
+        <text class="g-lbl" x="170" y="150">Basculer de l'autre côté du mur : le côté change</text>
+        <text class="g-lbl" x="170" y="168">Zone réservée : largeur × ½ largeur</text>`);
+
     // Tableau : symbole du plan agrandi, éclair qui clignote (la légende est dans le texte de la page)
     const animPanel = () => svg(`
         <g class="g-pop">${sym(S.panel, 160, 90, 0, 4)}</g>`);
@@ -203,6 +219,18 @@
         <text class="g-lbl" x="160" y="30">Montée de l'escalier</text>
         <text class="g-lbl" x="160" y="170">Il relie deux niveaux, comme la trémie</text>`);
 
+    // Escalier dans le débattement d'une fenêtre : les marches et la fenêtre passent en rouge, sans refus
+    const animStairWindow = () => svg(`
+        <rect x="40" y="105" width="240" height="10" fill="#334155"/>
+        <rect x="120" y="105" width="100" height="10" fill="#0f172a"/>
+        ${sym(S.window, 170, 110, 0, 1.6)}
+        <rect x="120" y="115" width="100" height="40" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 4" opacity=".55"/>
+        <g class="g-stair s2"><rect x="150" y="122" width="40" height="14" fill="#a78bfa"/></g>
+        <g class="g-stair s3"><rect x="190" y="122" width="40" height="22" fill="#a78bfa"/></g>
+        <rect class="g-bolt" x="146" y="118" width="92" height="30" rx="4" fill="none" stroke="#ef4444" stroke-width="2"/>
+        <text class="g-lbl" x="160" y="26">Marche dans le débattement d'une fenêtre</text>
+        <text class="g-lbl" x="160" y="172">Les deux passent en rouge : la pose n'est pas refusée</text>`);
+
     // Alerte réelle : une prise placée dans une porte, bouton « Aller ↗ » sur la carte, puis la prise sort de la porte
     const animAlert = () => svg(`
         <rect x="16" y="8" width="288" height="80" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
@@ -217,6 +245,26 @@
         <circle class="g-bolt" cx="170" cy="140" r="17" fill="none" stroke="#ef4444" stroke-width="2"/>
         ${sym(S.outlet16, 170, 130, 90, 2.6)}
         <text class="g-lbl" x="160" y="172">Cliquez « Aller ↗ » : l'élément est sélectionné</text>`);
+
+    // Tronçon de câble : fiche des 5 réglages au-dessus du mur, tronçon entouré de pointillés jaunes
+    const animTroncon = () => svg(`
+        <rect x="14" y="6" width="292" height="46" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+        <rect class="g-key" x="22" y="16" width="52" height="24" rx="4"/>
+        <text class="g-lbl" x="48" y="31" style="font-size:9px">Auto</text>
+        <rect class="g-btnpress" x="78" y="16" width="52" height="24" rx="4"/>
+        <text class="g-lbl" x="104" y="31" style="font-size:9px">Murs bas</text>
+        <rect class="g-key" x="134" y="16" width="52" height="24" rx="4" style="animation-delay:1.3s"/>
+        <text class="g-lbl" x="160" y="31" style="font-size:9px">Murs haut</text>
+        <rect class="g-key" x="190" y="16" width="52" height="24" rx="4" style="animation-delay:2.6s"/>
+        <text class="g-lbl" x="216" y="31" style="font-size:9px">Faux pl.</text>
+        <rect class="g-key" x="246" y="16" width="52" height="24" rx="4" style="animation-delay:3.9s"/>
+        <text class="g-lbl" x="272" y="31" style="font-size:9px">Sous pl.</text>
+        <rect x="40" y="104" width="240" height="8" fill="#334155"/>
+        <path d="M50 96 H270" stroke="#facc15" stroke-width="3" stroke-dasharray="6 6"/>
+        <rect class="g-dash" x="110" y="84" width="100" height="24" fill="none" stroke="#facc15" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text class="g-lbl" x="160" y="140">Cliquez le tronçon : il s'entoure de pointillés</text>
+        <text class="g-lbl" x="160" y="158">Refus : réglage impossible, avertissement 6 s</text>
+        <text class="g-lbl" x="160" y="172">Le réglage ne bouge pas tant qu'il n'est pas refusé</text>`);
 
     // ---------- Partie 2 : vue 3D ----------
     // Vue 3D : barre du haut, boîte à outils et élément sélectionné à gauche, bâtiment au centre, « Placement & contrôles » à droite
@@ -391,10 +439,17 @@
         { part: 'Plan 2D', title: 'Poser une porte ou une fenêtre', anim: animDoor,
           text: ['Ouvrez l\'onglet « Ouvertures » à droite.',
                  'Cliquez « Porte » ou « Fenêtre », puis cliquez près du mur.',
-                 'Le côté cliqué est le côté de pose. Deux ouvertures ne peuvent pas se chevaucher.',
+                 'L\'ouverture se pose du côté où vous cliquez. Deux ouvertures ne peuvent pas se chevaucher.',
                  'Réglage « Charnière (porte poussant) » : Gauche ou Droite, vu depuis le côté où vous êtes. Par défaut, « Gauche » : la charnière est du côté de départ du mur, comme dans l\'animation.'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'door_single', pulse: '#btn-2d-place-door_single' },
           retenir: 'Ne placez jamais une prise ou un interrupteur à l\'emplacement d\'une porte.' },
+        { part: 'Plan 2D', title: 'Fenêtre : ventaux et côté', anim: animWindow,
+          text: ['Une fenêtre a deux ventaux : chacun fait la moitié de sa largeur et pivote sur un montant.',
+                 'Le dessin montre les ventaux ouverts à 90° : les arcs en tirets indiquent le trajet qu\'ils balaient.',
+                 'Pour changer de côté, sélectionnez la fenêtre et cliquez « Basculer de l\'autre côté du mur » dans l\'inspecteur, en 2D ou en 3D.',
+                 'Le trajet des ventaux doit rester libre : un escalier qui le touche est signalé en rouge (page suivante).'],
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'window_std', pulse: '#btn-2d-place-window_std' },
+          retenir: 'Gardez libre devant la fenêtre une profondeur égale à la moitié de sa largeur.' },
         { part: 'Plan 2D', title: 'Poser le tableau électrique', anim: animPanel,
           text: ['Ouvrez l\'onglet « Appareillages ».',
                  'Cliquez « Tableau » (un seul par projet, au RDC), puis cliquez sur un mur près de l\'entrée.'],
@@ -437,7 +492,8 @@
         { part: 'Plan 2D', title: 'Corriger une alerte', anim: animAlert,
           text: ['Les alertes sont dans l\'onglet « Alertes ».',
                  'Cliquez « Aller ↗ » : l\'élément concerné est sélectionné et son onglet s\'ouvre.',
-                 'Suivez la piste de correction écrite sous l\'alerte.'],
+                 'Suivez la piste de correction écrite sous l\'alerte.',
+                 'Un escalier qui touche une porte, une fenêtre ou le débattement de ses ventaux fait partie des alertes à corriger.'],
           essayer: { mode: '2d', tab: 'avertissements', pulse: '#sidebar-2d-right [data-right-tab="avertissements"]' },
           retenir: 'Une alerte ne bloque rien : elle signale un point à vérifier.' },
 
@@ -462,9 +518,17 @@
           text: ['Vous ne dessinez pas les câbles : l\'appli les trace toute seule entre le tableau et chaque appareil.',
                  'Un appareil posé en 2D ou en 3D reçoit son câble automatiquement.',
                  'Le câble suit les murs et passe par les trémies (ouvertures dans le plancher) pour rejoindre l\'autre étage.',
-                 'Pièce fermée sans liaison au tableau : l\'alerte du circuit concerné propose « Passer entre pièces au plafond » (câble au plafond entre les pièces, et vers un mur intérieur isolé). Ce réglage se fait sur la carte de chaque circuit (onglet Circuits) ; « Retirer l\'autorisation » l\'annule.',
-                 'Cheminement par circuit : sur la carte de chaque circuit (onglet Circuits), choisissez « Murs » (défaut), « Mixte » ou « Plafond ». Le plafond prend la ligne droite au-dessus de la pièce (et des îlots) pour un chemin plus court, même sans îlot ; le mixte ne le fait que si le chemin par les murs est nettement plus long. Un appareil posé sur un mur isolé passe toujours par le plafond. Si un circuit n\'a pas de chemin, il clignote en rouge, ainsi que son bouton de cheminement, et le compteur d\'alertes global y renvoie (il change d\'étage si besoin).'],
+                 'Pièce fermée ou mur isolé non relié au tableau : en Auto, le câble passe par le faux plafond pour rejoindre cette partie. Pour passer sous le sol, réglez le circuit sur « Sous plancher » sur sa carte (rangée « Cavité »).',
+                 'Cheminement par circuit : sur la carte de chaque circuit (onglet Circuits), choisissez « Auto » (défaut) ou « Faux plafond / Sous plancher ». Auto suit les murs, bas ou haut, au plus court selon portes et fenêtres. « Faux plafond / Sous plancher » trace des lignes droites dans le faux plafond (10 cm au-dessus du plafond) ou sous le sol (10 cm sous le sol), sans suivre les murs. Un interrupteur posé sur un mur donne accès au sous-plancher de chaque côté de ce mur. Un plafonnier posé au-dessus d’un mur est signalé « à déplacer » (il ne descend jamais droit au sol). Si un circuit n’a pas de chemin, il clignote en rouge, ainsi que son bouton de cheminement, et le compteur d\'alertes global y renvoie (il change d\'étage si besoin).'],
           retenir: 'Pas besoin de tracer les câbles : vérifiez seulement la place des appareils.' },
+        { part: 'Vue 3D et câblage', title: 'Régler le cheminement d\'un tronçon', anim: animTroncon,
+          text: ['Un tronçon est une section de mur entre deux points remarquables : un coin, un appareil, une ouverture ou un autre mur.',
+                 'Pour régler un tronçon, passez d\'abord le circuit en réglage manuel (bouton de réglage par tronçon dans la fiche du circuit). Cliquez ensuite le tronçon, en 2D ou en 3D : il s\'entoure de pointillés jaunes.',
+                 'La fiche du tronçon propose : Auto, Murs bas, Murs haut, Faux plafond, Sous plancher.',
+                 'Murs bas et murs haut sont refusés devant une porte, une fenêtre ou un escalier. Faux plafond et sous plancher sont refusés devant un escalier.',
+                 'Un réglage refusé ne change rien : le tronçon garde son ancien réglage, et un avertissement reste 6 secondes dans le plan.'],
+          essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
+          retenir: 'Un réglage fait à la main reste en place quand vous réglez un autre tronçon.' },
         { part: 'Vue 3D et câblage', title: 'Les circuits en couleur', anim: animCircuits,
           text: ['Un circuit est un groupe d\'appareils protégés par le même disjoncteur (coupe-circuit automatique).',
                  'Chaque circuit a sa couleur. Cette couleur est la même en 2D, en 3D et dans la liste des circuits.',
@@ -479,15 +543,22 @@
         { part: 'Vue 3D et câblage', title: 'Régler un appareil en 3D', anim: animInspector3d,
           text: ['Cliquez un appareil en 3D : il est sélectionné et son réglage s\'affiche à gauche.',
                  'Le curseur « Hauteur au sol » règle la hauteur. « Distance au départ » le déplace le long du mur.',
-                 '« Basculer de l\'autre côté du mur » le place de l\'autre côté. Pour une porte, « Charnière (porte poussant) » indique le côté où elle pivote.',
+                 '« Basculer de l\'autre côté du mur » le place de l\'autre côté. Pour une porte, « Charnière (porte poussant) » indique le côté où elle pivote. Pour une fenêtre, le même bouton change le côté où ses ventaux s\'ouvrent.',
                  'Pour une prise dédiée, l\'inspecteur indique l\'appareil alimenté. Le calibre dépend du type : prise 20A dédiée ou prise 32A dédiée.'],
           essayer: { mode: '3d', tab: 'appareillage', place3d: 'outlet_16a', pulse: '#btn-place-outlet_16a' },
           retenir: 'Hauteurs usuelles : prise à 30 cm du sol, interrupteur à 1,10 m.' },
         { part: 'Vue 3D et câblage', title: 'Escalier en 3D', anim: animStair,
           text: ['L\'escalier posé en 2D apparaît en 3D : vous voyez sa montée d\'un étage à l\'autre.',
-                 'Sélectionnez-le pour régler sa largeur et sa rotation (son orientation).'],
+                 'Sélectionnez-le pour régler sa largeur et sa rotation (son orientation). Les flèches de la barre du bas le déplacent, et les câbles se recalculent tout de suite.'],
           essayer: { mode: '2d', tab: 'ouvertures', place: 'stair', pulse: '#btn-2d-place-stair' },
           retenir: 'Vérifiez la largeur de l\'escalier et le passage libre en haut et en bas.' },
+        { part: 'Vue 3D et câblage', title: 'Escalier, porte et fenêtre : conflits', anim: animStairWindow,
+          text: ['Un escalier peut être posé près d\'une porte ou d\'une fenêtre, mais l\'appli signale un conflit si une de ses marches touche l\'ouverture, ou le débattement des ventaux d\'une fenêtre ouverte.',
+                 'Dans ce cas, l\'escalier et l\'ouverture passent en rouge, et l\'alerte apparaît dans l\'onglet « Alertes ».',
+                 'La pose n\'est pas refusée : déplacez l\'escalier, ou changez le côté de la fenêtre avec « Basculer de l\'autre côté du mur ».',
+                 'Seules les marches situées à la hauteur de l\'ouverture comptent : une marche placée plus bas que l\'allège, ou plus haut que le linteau, ne gêne pas.'],
+          essayer: { mode: '2d', tab: 'ouvertures', place: 'window_std', pulse: '#btn-2d-place-window_std' },
+          retenir: 'Le rouge signale un conflit à corriger, il ne bloque pas la pose.' },
         { part: 'Vue 3D et câblage', title: 'Trémie et point de dérivation', anim: animRiser,
           text: ['La trémie (ouverture dans le plancher) laisse passer les câbles entre les étages.',
                  'La boîte blanche de dérivation (boîte où se rejoignent les câbles) est placée à 1,50 m du sol par défaut, à chaque étage relié.',

@@ -191,3 +191,41 @@ input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: inner-spin-button;
     opacity: 1 !important;
 }
+
+/* ---- Mode clair : boutons colorés plus foncés (poubelle, réglage manuel, boutons de coupure) ---- */
+body.theme-light .text-rose-200 { color: #b91c1c !important; }
+body.theme-light .text-emerald-200 { color: #047857 !important; }
+body.theme-light .border-rose-500\/60 { border-color: #e11d48 !important; }
+body.theme-light .bg-rose-500\/15 { background-color: rgba(225, 29, 72, 0.14) !important; }
+body.theme-light .hover\:bg-rose-500\/25:hover { background-color: rgba(225, 29, 72, 0.24) !important; }
+body.theme-light .border-emerald-400\/50 { border-color: #059669 !important; }
+body.theme-light .bg-emerald-400\/15 { background-color: rgba(5, 150, 105, 0.18) !important; }
+body.theme-light .hover\:bg-emerald-400\/25:hover { background-color: rgba(5, 150, 105, 0.28) !important; }
+
+/* ---- Mode clair : textes trop pâles (couleurs -100 à -300) ramenés en couleurs foncées lisibles ---- */
+body.theme-light .text-sky-100, body.theme-light .text-sky-200, body.theme-light .text-sky-300 { color: #0c4a6e !important; }
+body.theme-light .text-emerald-100, body.theme-light .text-emerald-200, body.theme-light .text-emerald-300 { color: #065f46 !important; }
+body.theme-light .text-green-100, body.theme-light .text-green-200, body.theme-light .text-green-300 { color: #166534 !important; }
+body.theme-light .text-lime-100, body.theme-light .text-lime-200, body.theme-light .text-lime-300 { color: #3f6212 !important; }
+body.theme-light .text-teal-100, body.theme-light .text-teal-200, body.theme-light .text-teal-300,
+body.theme-light .text-cyan-100, body.theme-light .text-cyan-200, body.theme-light .text-cyan-300 { color: #155e75 !important; }
+body.theme-light .text-blue-100, body.theme-light .text-blue-200, body.theme-light .text-blue-300 { color: #1e40af !important; }
+body.theme-light .text-indigo-100, body.theme-light .text-indigo-200, body.theme-light .text-indigo-300 { color: #3730a3 !important; }
+body.theme-light .text-violet-100, body.theme-light .text-violet-200, body.theme-light .text-violet-300,
+body.theme-light .text-purple-100, body.theme-light .text-purple-200, body.theme-light .text-purple-300,
+body.theme-light .text-fuchsia-100, body.theme-light .text-fuchsia-200, body.theme-light .text-fuchsia-300 { color: #5b21b6 !important; }
+body.theme-light .text-rose-100, body.theme-light .text-rose-200, body.theme-light .text-rose-300,
+body.theme-light .text-pink-100, body.theme-light .text-pink-200, body.theme-light .text-pink-300,
+body.theme-light .text-red-100, body.theme-light .text-red-200, body.theme-light .text-red-300 { color: #b91c1c !important; }
+body.theme-light .text-amber-100, body.theme-light .text-amber-200, body.theme-light .text-amber-300,
+body.theme-light .text-yellow-100, body.theme-light .text-yellow-200, body.theme-light .text-yellow-300,
+body.theme-light .text-orange-100, body.theme-light .text-orange-200, body.theme-light .text-orange-300 { color: #92400e !important; }
+
+/* ---- Mode clair : fonds gris trop foncés ramenés en gris clair, lettrage foncé lisible dessus ---- */
+body.theme-light .bg-slate-500, body.theme-light .bg-slate-600, body.theme-light .bg-slate-700 { background-color: #e2e8f0 !important; color: #0f172a !important; }
+body.theme-light .bg-slate-800 { background-color: #edf2f7 !important; color: #0f172a !important; }
+body.theme-light .hover\:bg-slate-500:hover, body.theme-light .hover\:bg-slate-600:hover, body.theme-light .hover\:bg-slate-700:hover { background-color: #cbd5e1 !important; color: #0f172a !important; }
+body.theme-light .bg-slate-500\/40, body.theme-light .bg-slate-600\/40, body.theme-light .bg-slate-700\/40, body.theme-light .bg-slate-700\/50 { background-color: rgba(203, 213, 225, 0.6) !important; }
+
+/* ---- Mode clair : fenêtre de tronçon (bg-slate-900/60 et autres fonds slate translucides) en blanc translucide ---- */
+body.theme-light [class*="bg-slate-900/"], body.theme-light [class*="bg-slate-800/"], body.theme-light [class*="bg-slate-700/"] { background-color: rgba(255, 255, 255, 0.94) !important; }

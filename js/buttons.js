@@ -44,7 +44,6 @@ const PLACE_BUTTONS = [
     { group: 'appareillages', type: 'junction_box', label: 'Dérivation', title: 'Boîte de dérivation : point où se rejoignent les câbles d’un circuit', color: '#64748b',
         icon: c => placeSvg('-8 -8 16 16', `<rect x="-6" y="-6" width="12" height="12" fill="#f8fafc" stroke="${c}" stroke-width="1.6"/><path d="M-4,0 H4 M0,-4 V4" stroke="#0f172a" stroke-width="0.9"/>`) },
     { group: 'appareillages', sep: true },
-
     { group: 'appareillages', type: 'outlet_16a', label: 'Prise 16A', title: 'Prise 16 A (8 prises max) : cliquez sur un mur', color: '#f97316',
         icon: c => placeSvg('-3 -8 17 16', socketSmall(c, false)) },
     { group: 'appareillages', type: 'outlet_20a', label: 'Prise 20A plan de travail', title: 'Prise 20A plan de travail (6 prises max) : cliquez sur un mur', color: '#ef4444',
@@ -58,7 +57,6 @@ const PLACE_BUTTONS = [
     { group: 'appareillages', type: 'outlet_switched', label: 'Prise commandée', title: 'Prise commandée (8 prises max) : une prise que l\'interrupteur coupe ou rétablit (ex. radiateur)', color: '#f59e0b',
         icon: c => placeSvg('-3 -13 22 26', socketBig(c)) },
     { group: 'appareillages', sep: true },
-
     { group: 'appareillages', type: 'light_ceiling', label: 'Plafonnier', title: 'Plafonnier : cliquez au plafond, dans la pièce', color: '#fde047',
         icon: c => placeSvg('-12 -12 24 24', `<circle cx="0" cy="0" r="10" fill="#fef9c3" stroke="${c}" stroke-width="1.4"/><path d="M-6.5,-6.5 L6.5,6.5 M-6.5,6.5 L6.5,-6.5" stroke="#0f172a" stroke-width="1"/>`) },
     { group: 'appareillages', type: 'light_spot', label: 'Spot', title: 'Spot encastré : luminaire affleurant au plafond, dans la pièce', color: '#eab308',
@@ -66,7 +64,6 @@ const PLACE_BUTTONS = [
     { group: 'appareillages', type: 'wall_light', label: 'Applique', title: 'Applique : luminaire fixé sur un mur', color: '#eab308',
         icon: c => placeSvg('-5 -9 30 18', `<rect x="-3" y="-7" width="3" height="14" rx="1" fill="#facc15" stroke="#ca8a04" stroke-width="1"/><path d="M0,0 H4" stroke="${c}" stroke-width="1.2"/><path d="M4,-6 Q15,-5 15,0 Q15,5 4,6 Z" fill="#facc15" stroke="#ca8a04" stroke-width="1"/><path d="M17,-5 L21,-7 M18,0 H23 M17,5 L21,7" stroke="${c}" stroke-width="1"/>`) },
     { group: 'appareillages', sep: true },
-
     { group: 'appareillages', type: 'switch_simple', label: 'Interrupteur', title: 'Interrupteur simple : commande un luminaire', color: '#10b981',
         icon: c => placeSvg('-2 -6 18 14', `<path d="M-1,0 H5" stroke="${c}" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="${c}" stroke-width="1.2"/><path d="M8.5,0 L12.7,-4.2" stroke="${c}" stroke-width="1.1"/><circle cx="12.7" cy="-4.2" r="1" fill="${c}"/>`) },
     { group: 'appareillages', type: 'switch_va_et_vient', label: 'Va-et-vient', title: 'Va-et-vient : deux interrupteurs commandent un même luminaire', color: '#22c55e',
@@ -78,7 +75,6 @@ const PLACE_BUTTONS = [
     { group: 'appareillages', type: 'motion_timer', label: 'Minuterie / mouv.', title: 'Minuterie / détecteur de mouvement : allume un luminaire pendant une durée ou à la présence', color: '#a3e635',
         icon: c => placeSvg('-2 -8 20 16', `<path d="M-1,0 H5" stroke="${c}" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="${c}" stroke-width="1.2"/><path d="M13.5,-4.2 A6.5,6.5 0 0 1 13.5,4.2 M15.8,-6.1 A9.5,9.5 0 0 1 15.8,6.1" fill="none" stroke="${c}" stroke-width="1.1"/>`) },
     { group: 'appareillages', sep: true },
-
     { group: 'appareillages', type: 'doorbell_button', label: 'Bouton sonnette', title: 'Bouton de sonnette : fait sonner la sonnette', color: '#f472b6',
         icon: c => placeSvg('-2 -6 18 14', `<path d="M-1,0 H5" stroke="${c}" stroke-width="1.2"/><circle cx="8.5" cy="0" r="3.6" fill="#f8fafc" stroke="${c}" stroke-width="1.2"/><circle cx="8.5" cy="0" r="1.2" fill="${c}"/>`) },
     { group: 'appareillages', type: 'doorbell_chime', label: 'Sonnerie', title: 'Sonnerie : carillon alimenté par le circuit d\'éclairage', color: '#f472b6',
@@ -98,6 +94,7 @@ const PLACE_SIDEBARS = [
     { sidebar: 'sidebar-2d-right', prefix: 'btn-2d-place-' },
     { sidebar: 'sidebar-3d-right', prefix: 'btn-place-' }
 ];
+
 // Section (titre de la balise summary) qui reçoit chaque groupe de boutons
 const PLACE_GROUP_SUMMARY = { ouvertures: 'Ouvertures', appareillages: 'Appareillages' };
 
