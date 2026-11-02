@@ -5079,7 +5079,7 @@ function pruneManualLinksOf(light) {
 
 // 227 : circuits créés à la demande (lampes, prises…). Un circuit « receives » reçoit les appareils posés ensuite
 // de sa famille ; il reste même vide (manual) jusqu'à ce qu'on en crée un autre
-const ON_DEMAND_FAMILIES = [['c_lighting', 'éclairage'], ['c_outlets', 'prises 16A'], ['c_outlets20', 'prises 20A'], ['c_kitchen', 'prises 20A plan de travail'], ['c_shutters', 'volet']];
+const ON_DEMAND_FAMILIES = [['c_lighting', 'éclairage', 'Éclairage'], ['c_outlets', 'prises 16A', 'Prises 16 A'], ['c_outlets20', 'prises 20A', 'Prises 20 A'], ['c_kitchen', 'prises 20A plan de travail', '20A Plan de travail'], ['c_shutters', 'volet', 'Volet']];
 // Famille « Nouveau circuit » choisie : liseré jaune sur son bouton et bouton « Aller aux appareillages »
 let onDemandSelected = null;
 // Icône de chaque bouton « Nouveau circuit » (une par famille)
@@ -5112,18 +5112,18 @@ function onDemandCircuitBar() {
     const wrap = document.createElement('div');
     const hint = document.createElement('div');
     hint.className = 'text-[11px] text-slate-400 pb-1.5';
-    hint.textContent = 'Vous voulez un nouveau circuit sans utiliser la limite fixée ? Les appareils posés ensuite de ce type vont sur ce nouveau circuit';
+    hint.textContent = 'Vous voulez un nouveau circuit sans utiliser la limite fixée ? Les appareils de ce type posés ensuite vont sur ce nouveau circuit';
     wrap.appendChild(hint);
     const bar = document.createElement('div');
-    bar.className = 'flex flex-wrap gap-1 pb-2';
-    ON_DEMAND_FAMILIES.forEach(([id, label]) => {
+    bar.className = 'grid grid-cols-3 gap-1.5 pb-2';
+    ON_DEMAND_FAMILIES.forEach(([id, label, short]) => {
         if (!projectData.circuits.some(c => c.id === id)) return;
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'px-2 py-1 rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
-        b.innerHTML = circuitIconHtml(projectData.circuits.find(c => c.id === id), 'currentColor') + ' ' + esc('Nouveau circuit ' + label);
+        b.className = 'inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
+        b.innerHTML = circuitIconHtml(projectData.circuits.find(c => c.id === id), 'currentColor') + ' ' + esc(short);
         if (onDemandSelected === id) b.classList.add('ring-2', 'ring-yellow-300');
-        b.title = 'Les appareils posés ensuite de ce type vont sur ce nouveau circuit';
+        b.title = 'Nouveau circuit ' + label + ' : les appareils de ce type posés ensuite vont sur ce nouveau circuit';
         b.addEventListener('click', () => {
             if (onDemandSelected === id) {          // second clic : désélection, sans nouveau circuit
                 onDemandSelected = null;

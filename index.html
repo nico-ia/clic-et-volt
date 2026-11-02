@@ -1,5 +1,7 @@
 <!DOCTYPE html>
+
 <!-- © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. -->
+
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -31,7 +33,7 @@
                     <polygon points="14,6.2 11.2,6.2 18.4,21.4" fill="#059669"/>
                     <polygon points="15.4,2.4 7.6,13 12.6,13 8.8,21.8 16.4,11 11.4,11" fill="#fde047"/>
                 </svg>
-                <p class="text-[9px] leading-none text-slate-500 text-center"><a href="https://github.com/nico-ia" target="_blank" rel="noopener" class="hover:text-slate-300">nico-ia<br>Apps</a></p>
+                <p class="text-[10px] leading-none text-slate-500 text-center"><a href="https://github.com/nico-ia" target="_blank" rel="noopener" class="hover:text-slate-300">nico-ia<br>Apps</a></p>
             </div>
             <div>
                 <h1 class="font-bold text-lg leading-tight tracking-wide text-white flex items-center gap-2">
@@ -43,14 +45,14 @@
 
         <!-- Sélecteur de mode : trois boutons séparés -->
         <div class="flex items-center gap-2 shrink-0">
-            <button id="tab-2d" onclick="switchMode('2d')" class="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow">
-                <i class="fa-solid fa-pen-ruler"></i> Plan 2D
+            <button id="tab-2d" onclick="switchMode('2d')" title="Plan 2D" aria-label="Plan 2D" class="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 bg-emerald-600 text-white shadow">
+                <i class="fa-solid fa-pen-ruler"></i> <span class="hidden min-[1536px]:inline">Plan 2D</span>
             </button>
-            <button id="tab-3d" onclick="switchMode('3d')" class="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200">
-                <i class="fa-solid fa-cube"></i> Plan 3D
+            <button id="tab-3d" onclick="switchMode('3d')" title="Plan 3D" aria-label="Plan 3D" class="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200">
+                <i class="fa-solid fa-cube"></i> <span class="hidden min-[1536px]:inline">Plan 3D</span>
             </button>
-            <button id="tab-report" onclick="switchMode('report')" class="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200">
-                <i class="fa-solid fa-clipboard-check"></i> Métré & Contrôles
+            <button id="tab-report" onclick="switchMode('report')" title="Métré & Contrôles" aria-label="Métré & Contrôles" class="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200">
+                <i class="fa-solid fa-clipboard-check"></i> <span class="hidden min-[1536px]:inline">Métré & Contrôles</span>
             </button>
         </div>
 
@@ -67,17 +69,18 @@
 
         <!-- Action Buttons -->
         <div class="flex items-center space-x-1.5 shrink-0">
-            <button id="help-fab" type="button" class="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-bold transition" title="Aide et raccourcis (touche ?)" aria-label="Aide et raccourcis">?</button>
-            <button id="theme-toggle" onclick="toggleTheme()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Passer au thème clair">
+            <button id="help-fab" type="button" class="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold transition" title="Aide et raccourcis (touche ?)" aria-label="Aide et raccourcis">?</button>
+            <button id="guide-btn" type="button" onclick="openClicVoltGuide()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition flex items-center gap-1.5" title="Ouvrir le guide pas à pas" aria-label="Ouvrir le guide pas à pas"><i class="fa-solid fa-book-open"></i> <span class="hidden min-[1536px]:inline">Guide</span></button>
+            <button id="theme-toggle" onclick="toggleTheme()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition flex items-center gap-1.5" title="Passer au thème clair">
                 <i class="fa-solid fa-moon"></i> <span class="hidden min-[1536px]:inline">Sombre</span>
             </button>
-            <button onclick="triggerNewProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Nouveau projet">
+            <button onclick="triggerNewProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition flex items-center gap-1.5" title="Nouveau projet">
                 <i class="fa-solid fa-file-circle-plus"></i> <span class="hidden min-[1536px]:inline">Nouveau</span>
             </button>
-            <button onclick="triggerSaveProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Enregistrer JSON">
+            <button onclick="triggerSaveProject()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition flex items-center gap-1.5" title="Enregistrer JSON">
                 <i class="fa-solid fa-floppy-disk"></i> <span class="hidden min-[1536px]:inline">Enregistrer</span>
             </button>
-            <label class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition flex items-center gap-1.5 cursor-pointer" title="Charger JSON">
+            <label class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer" title="Charger JSON">
                 <i class="fa-solid fa-folder-open"></i> <span class="hidden min-[1536px]:inline">Ouvrir</span>
                 <input autocomplete="off"type="file" id="load-file-input" accept=".json" class="hidden" onchange="triggerLoadProject(event)">
             </label>
@@ -88,12 +91,14 @@
 
         <!-- ================= 2D MODE VIEW ================= -->
         <div id="view-2d" class="absolute inset-0 flex bg-slate-950">
+
             <!-- 2D Sidebar -->
             <div id="sidebar-2d" class="w-80 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
                 <div class="p-3 border-b border-slate-800 font-semibold text-sm text-slate-300 flex items-center gap-2">
                     <i class="fa-solid fa-toolbox text-emerald-400"></i> Boîte à outils
                 </div>
                 <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-4">
+
                     <!-- Outils communs 2D et 3D : même bloc dans les deux sidebars gauches -->
                     <div id="shared-tools-block" class="space-y-4">
                     <div>
@@ -111,9 +116,11 @@
                             <i class="fa-solid fa-font text-sm"></i> Texte
                         </button>
                     </div>
+
                     <!-- Drawing Aids & History : sous Tracer mur, car elles ne concernent que le tracé -->
                     <details open data-persist="aides" class="space-y-2">
                         <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Aides & Commandes</summary>
+                        
                         <!-- Aides en une seule ligne : état ON/OFF affiché dans chaque bouton -->
                         <div class="grid grid-cols-4 gap-1.5">
                             <button onclick="toggleGridSnap()" id="btn-grid-snap" title="Aimantation : les points de tracé s’accrochent à la grille et aux angles" aria-pressed="true" class="h-12 flex flex-col items-center justify-center gap-1 rounded-xl border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition">
@@ -165,6 +172,7 @@
                         <div class="border-b border-slate-800 pb-2">
                             <div id="el2d-name" class="text-sm font-semibold text-white"></div>
                         </div>
+
                         <!-- Escalier sélectionné : mêmes réglages et même ordre qu'en 3D -->
                         <div id="stair-inspector" class="hidden space-y-2 pt-1">
                             <div class="flex items-center gap-2">
@@ -191,24 +199,29 @@
                                 <option value="right">Droite</option>
                             </select>
                         </div>
+
                         <!-- Côté du mur : après la charnière, avant les dimensions, comme en 3D (emplacement rempli par app.js) -->
                         <div id="shared-side-slot-2d" class="space-y-3"></div>
                         <div id="opening-controls-2d" class="hidden space-y-2"></div>
+
                         <!-- Distance : après les dimensions, comme en 3D (emplacement rempli par app.js) -->
                         <div id="shared-controls-slot-2d" class="space-y-3"></div>
                         <p id="height-hint-2d" class="hidden text-[10px] text-sky-300">Cet appareil est réglable en hauteur dans la fenêtre 3D.</p>
+                        
                         <!-- Circuit : après distance, comme en 3D -->
                         <div id="el2d-circuit-wrap" class="space-y-1 pt-1">
                             <div id="el2d-circuit-label" class="text-xs text-slate-300">Circuit</div>
                             <div id="el2d-circuit-info" class="hidden text-[10px] text-sky-300"></div>
                             <select autocomplete="off" id="el2d-circuit" onchange="setSelectedCircuit(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
                         </div>
+
                         <!-- Prise dédiée : appareil alimenté -->
                         <div id="el2d-dedicated-wrap" class="space-y-1 pt-1 hidden">
                             <div class="text-xs text-slate-300">Appareil alimenté</div>
                             <select autocomplete="off" id="el2d-dedicated-appliance" onchange="setDedicatedAppliance(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
                         </div>
                     </div>
+                    
                     <!-- Texte sélectionné (2D) -->
                     <div id="text-inspector-2d" class="hidden bg-slate-950/60 p-3 rounded-xl border border-yellow-400 space-y-3">
                         <div class="border-b border-slate-800 pb-2">
@@ -218,6 +231,7 @@
                             <input autocomplete="off" id="text-value-2d" type="text" onchange="setSelectedTextValue(this.value)" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
                         </label>
                     </div>
+
                     <!-- Message d'attente 2D : même texte et même style que l'inspecteur 3D -->
                     <div id="inspector-dock-empty-2d" class="text-xs text-slate-500 bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-center">
                         Sélectionnez un appareillage (prise, interrupteur,...) ou une ouverture (porte, fenêtre,...) pour afficher ses informations et réglages.
@@ -305,6 +319,7 @@
                     <button id="btn-deselect-all" onclick="clearAllSelection()" class="hidden px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-xs" title="Retirer la sélection (Échap)">Déselection</button>
                     <button id="btn-delete-multi" onclick="deleteCurrentSelection()" class="hidden px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs" title="Supprimer la sélection (Suppr)">Supprimer la sélection</button>
                     <button type="button" onclick="toggleModeHelp(event)" class="w-6 h-6 rounded-full bg-slate-800 border border-emerald-500/40 text-emerald-300 text-xs font-bold" title="Aide sur le mode en cours" aria-label="Aide">?</button>
+                    
                     <!-- Panneau d'aide du mode courant (patch 75), sous le bloc de mode -->
                     <div id="mode-help" class="hidden absolute top-full right-0 mt-2 w-72 bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl shadow-xl p-3 text-xs text-slate-300 space-y-1.5 whitespace-normal">
                         <div class="flex items-center justify-between gap-2">
@@ -367,14 +382,9 @@
                     <details open class="space-y-2">
   <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Appareillages</summary>
                         <div class="grid grid-cols-2 gap-2 text-xs">
-
-
                             <div class="col-span-2 border-t border-slate-600/60" role="separator"></div>
-
                             <div class="col-span-2 border-t border-slate-600/60" role="separator"></div>
-
                             <div class="col-span-2 border-t border-slate-600/60" role="separator"></div>
-
                             <div class="col-span-2 border-t border-slate-600/60" role="separator"></div>
 
                         </div>
@@ -393,6 +403,7 @@
                         <div id="warnings-content-2d" class="space-y-2 text-xs text-slate-300"></div>
                     </details>
                 </div>
+
                 <!-- Type d'élément choisi (piloté par les boutons ci-dessus) -->
                 <div class="hidden">
                     <select autocomplete="off" id="place-type">
@@ -447,6 +458,7 @@
 
                     <!-- Inspecteur de l'élément sélectionné d'abord, comme en 2D -->
                     <div id="inspector-dock-slot">
+                    
                     <!-- 3D Inspector / Adjustment -->
                     <div id="inspector-3d" class="bg-slate-950/60 p-3 rounded-xl border border-yellow-400 space-y-3 hidden overflow-y-auto custom-scrollbar">
                         <div class="border-b border-slate-800 pb-2">
@@ -478,6 +490,7 @@
                                 <option value="right">Droite</option>
                             </select>
                         </div>
+
                         <!-- Côté du mur : juste sous la charnière -->
                         <div id="side-toggle-container" class="space-y-1 pt-1">
                             <div class="flex justify-between text-xs text-slate-300 mb-1">
@@ -498,6 +511,7 @@
                                 <span id="inspector-distance-val" class="w-12 shrink-0 text-left text-xs text-slate-200">0 cm</span>
                             </div>
                         </div>
+
                         <!-- Texte sélectionné (3D) -->
                         <div id="text-inspector-3d" class="hidden space-y-1 pt-1">
                             <label class="block text-xs text-slate-300">Contenu
@@ -516,6 +530,7 @@
                             <div id="circuit-select-info" class="hidden text-[10px] text-sky-300"></div>
                             <select autocomplete="off" id="inspector-circuit" onchange="setSelectedCircuit(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"></select>
                         </div>
+
                         <!-- Prise dédiée : appareil alimenté -->
                         <div id="dedicated-container" class="space-y-1 pt-1 hidden">
                             <div class="text-xs text-slate-300">Appareil alimenté</div>
@@ -534,6 +549,7 @@
             </aside>
             <div id="three-container" class="flex-1 relative min-w-0 min-h-0">
                 <div id="tool-hint-slot-3d" class="hidden absolute top-16 right-4 z-10 h-10 max-w-[calc(100%-2rem)] bg-slate-900/90 backdrop-blur border border-slate-800 px-3 rounded-xl shadow-xl flex items-center gap-4 text-xs text-slate-300 pointer-events-none"></div>
+                
                 <!-- Barre du bas 3D : mêmes boutons que la 2D (impression, PNG, annuler, rétablir), puis vues -->
                 <div class="absolute bottom-4 left-4 z-10 flex flex-wrap justify-end max-w-[calc(100%-2rem)] bg-slate-900/90 backdrop-blur border border-slate-800 p-1.5 rounded-xl shadow-xl gap-1">
                     <button onclick="printPlan('3d')" class="px-2.5 h-9 flex items-center gap-1.5 whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Imprimer / enregistrer le plan en PDF" aria-label="Imprimer le plan"><i class="fa-solid fa-print"></i><span>Imprimer</span></button>

@@ -1,21 +1,42 @@
 /* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
 
+:root {
+  --police-boutons: 'Inter', system-ui, sans-serif;
+  --taille-boutons: 12px;
+}
+
+button,
+header label {
+  font-family: var(--police-boutons);
+}
+
+/* Taille des boutons de la barre du haut : modifier --taille-boutons dans :root */
+header button,
+header label {
+  font-size: var(--taille-boutons) !important;
+}
+
 body { font-family: 'Inter', sans-serif; user-select: none; overflow: hidden; }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
 canvas { display: block; outline: none; }
+
 /* Boutons moins arrondis (remplace les rounded-lg / rounded-xl de Tailwind) ; les boutons circulaires et les poignées de sidebar gardent leur forme */
 button:not(.rounded-full):not(.sb-toggle) { border-radius: 4px !important; }
+
 /* Fenêtres (dialogues, aide, guide) et leurs champs */
 [role="dialog"], .g-panel { border-radius: 6px !important; }
 [role="dialog"] input, [role="dialog"] select, [role="dialog"] textarea { border-radius: 4px !important; }
+
 /* Barres haut et bas flottantes de la vue 2D/3D */
 .absolute.top-4.left-4.rounded-xl, .absolute.bottom-4.left-4.rounded-xl { border-radius: 6px !important; }
+
 /* Mini-fenêtre de niveau (RDC, renommer, cote, fantômes) dans la barre du haut */
 #level-select { border-radius: 4px !important; }
 div:has(> #level-select) { border-radius: 6px !important; }
+
 /* Tous les cadres, panneaux et champs (hors boutons, formes rondes et poignées) : 6px au lieu de 4 à 16px selon Tailwind.
    :where() garde la spécificité nulle pour que les règles des boutons et des fenêtres ci-dessus restent prioritaires. */
 :where(.rounded-md, .rounded-lg, .rounded-xl):not(button):not(.rounded-full):not(.sb-toggle),
@@ -70,6 +91,7 @@ body.theme-light .rt th { background: #e2e8f0; color: #0f172a; }
 body.theme-light .rt td { color: #334155; }
 body.theme-light .rt tbody tr:nth-child(even) td { background: #f1f5f9; }
 body.theme-light .rt tr.rt-warn td { background: #fee2e2; color: #991b1b; }
+
 /* Sidebars repliables / redimensionnables */
 .sb-collapsed { width: 0 !important; min-width: 0 !important; border-width: 0 !important; overflow: hidden !important; }
 .sb-resizer { width: 6px; flex: 0 0 6px; cursor: col-resize; background: transparent; z-index: 25; transition: background .15s; touch-action: none; }
@@ -108,11 +130,14 @@ div:has(> input[type="range"]) > div > span { font-size: 11px !important; }
     line-height: 1.35;
 }
 #el-inspector-2d .text-sm, #wall-inspector .text-sm, #inspector-3d .text-sm, #shaft-inspector .text-sm { font-size: 12px !important; }
+
 /* Libellés des réglages : une seule couleur */
 body:not(.theme-light) #wall-inspector label, body:not(.theme-light) #wall-inspector .text-slate-400, body:not(.theme-light) #inspector-3d .text-slate-300, body:not(.theme-light) #shaft-inspector .text-slate-300,
 body:not(.theme-light) #el-inspector-2d .text-slate-300, body:not(.theme-light) #inspector-3d .text-xs.text-slate-300 { color: #cbd5e1 !important; }
+
 /* Valeurs : même poids et taille */
 #wall-inspector .text-emerald-400:not(i), #inspector-3d .text-emerald-400:not(i) { font-weight: 500 !important; }
+
 /* Lignes de réglage : une seule ligne, valeur à droite sans retour */
 #wall-inspector [id$="-container"].flex > span:first-child { width: 4.5rem !important; }
 #wall-inspector [id$="-container"].flex > span:last-child { width: auto !important; min-width: 3.25rem; white-space: nowrap; text-align: left; }
@@ -141,6 +166,7 @@ body.theme-light .text-red-300,
 body.theme-light .text-red-400 { color: #b91c1c !important; }
 body.theme-light .text-blue-300,
 body.theme-light .text-blue-400 { color: #1d4ed8 !important; }
+
 /* boutons pleins : texte blanc, même en mode clair (règle placée après « .text-white » pour l'emporter) */
 body.theme-light .bg-emerald-600,
 body.theme-light .bg-rose-600,
