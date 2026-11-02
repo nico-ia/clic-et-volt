@@ -1765,8 +1765,8 @@ function startCollisionBlink() {
             redraw2D();
         }
         // Onglet Alertes et cartes de circuits en alerte : même clignotement rouge, dans les deux vues
-        document.querySelectorAll('[data-alert-blink]').forEach(el => {
-            // rouge par contour (outline) et fond en dégradé : ne touche ni la bordure ni l'anneau jaunes
+        document.querySelectorAll('[data-alert-blink], [data-ring-blink]').forEach(el => {
+        // rouge par contour (outline) et fond en dégradé : ne touche ni la bordure ni l'anneau jaunes
             // de la sélection, qui restent visibles en même temps que le clignotement
             el.style.outline = blinkOn ? '2px solid #ef4444' : '';
             el.style.outlineOffset = blinkOn ? '2px' : '';
@@ -3113,17 +3113,38 @@ function syncAssocRing() {
         const box = document.getElementById(id);
         if (!box) return;
         box.classList.remove(...ALERT_RING_RED);
-        if (alertRingAssocId && !box.classList.contains('hidden') && box.dataset.assocFor === alertRingAssocId) box.classList.add(...ALERT_RING_RED);
+        clearRingBlink(box);
+        const forEl = box.dataset.assocFor;
+        // alerte liée à l'appareil affiché : qu'il soit sélectionné ou survolé dans la liste des alertes
+        const alertHere = !!forEl && (lastAlertTargets || []).some(t => t && t.assocElId === forEl);
+        const hovered = !!alertRingAssocId && forEl === alertRingAssocId;
+        if ((alertHere || hovered) && !box.classList.contains('hidden')) {
+            box.classList.add(...ALERT_RING_RED);
+            box.setAttribute('data-ring-blink', '');
+        }
     });
 }
 
 // Entoure les cibles de l'alerte survolée (ou de la première par défaut)
+function clearRingBlink(el) {
+    el.removeAttribute('data-ring-blink');
+    el.style.outline = '';
+    el.style.outlineOffset = '';
+    el.style.backgroundImage = '';
+}
+
 function markAlertTargets(index) {
     const t = lastAlertTargets[index];
     const cls = t && (t.redTools || t.assocElId) ? ALERT_RING_RED : ALERT_RING_AMBER;
-    document.querySelectorAll('.alert-target-ring').forEach(el => el.classList.remove('alert-target-ring', ...ALERT_RING_AMBER, ...ALERT_RING_RED));
+    document.querySelectorAll('.alert-target-ring').forEach(el => {
+        el.classList.remove('alert-target-ring', ...ALERT_RING_AMBER, ...ALERT_RING_RED);
+        clearRingBlink(el);
+    });
     alertRingAssocId = t && t.assocElId ? t.assocElId : null;
-    alertTargetElements(t).forEach(el => el.classList.add('alert-target-ring', ...cls));
+    alertTargetElements(t).forEach(el => {
+        el.classList.add('alert-target-ring', ...cls);
+        if (cls === ALERT_RING_RED) el.setAttribute('data-ring-blink', '');
+    });
     syncAssocRing();
 }
 
@@ -3251,7 +3272,7 @@ function updateCircuitsUI() {
         const selected = selectedCircuitId === c.id;
         // Même présentation que les boutons de la barre : tuile sombre, surbrillance jaune quand le circuit est sélectionné
         div.className = 'p-2 rounded-xl border cursor-pointer transition text-slate-200 ' +
-            (selected ? 'tool-active-yellow' : (r.warnings.length ? 'bg-slate-800 hover:bg-slate-700 border-rose-500/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'));
+            (selected ? 'circuit-active' : (r.warnings.length ? 'bg-slate-800 hover:bg-slate-700 border-rose-500/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'));
         div.setAttribute('role', 'button');
         div.setAttribute('tabindex', '0');
         div.setAttribute('data-circuit-card', c.id);
@@ -4674,8 +4695,10 @@ function updateLightingAssociations(el) {
     boxes.forEach(box => {
         // les volets « Modifier les associations » gardent leur état ouvert / fermé après la mise à jour
         const openStates = [...box.querySelectorAll('details')].map(d => d.open);
+        // appareil en alerte qui vient d'être sélectionné : son volet s'ouvre pour montrer où cliquer
+        const freshAlert = box.dataset.assocFor !== el.id && (lastAlertTargets || []).some(t => t && t.assocElId === el.id);
         box.innerHTML = content;
-        box.querySelectorAll('details').forEach((d, i) => { if (openStates[i]) d.open = true; });
+        box.querySelectorAll('details').forEach((d, i) => { if (openStates[i] || freshAlert) d.open = true; });
         box.classList.remove('hidden');
         box.dataset.assocFor = el.id;
         box.querySelectorAll('[data-related-id]').forEach(button => {
@@ -5119,9 +5142,9 @@ function onDemandCircuitBar() {
         if (!projectData.circuits.some(c => c.id === id)) return;
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
+        b.className = 'circuit-btn inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
         b.innerHTML = circuitIconHtml(projectData.circuits.find(c => c.id === id), 'currentColor') + ' ' + esc(short);
-        if (onDemandSelected === id) b.classList.add('ring-2', 'ring-yellow-300');
+        if (onDemandSelected === id) b.classList.add('is-on');
         b.title = 'Nouveau circuit ' + label + ' : les appareils de ce type posés ensuite vont sur ce nouveau circuit';
         b.addEventListener('click', () => {
             if (onDemandSelected === id) {          // second clic : désélection, sans nouveau circuit
@@ -5139,7 +5162,7 @@ function onDemandCircuitBar() {
     if (onDemandSelected && ON_DEMAND_FAMILIES.some(([id]) => id === onDemandSelected)) {
         const go = document.createElement('button');
         go.type = 'button';
-        go.className = 'mt-1 px-2 py-1 rounded-md border-2 border-yellow-300 bg-slate-800 hover:bg-slate-700 text-[10px] text-yellow-200';
+        go.className = 'circuit-btn is-on mt-1 px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
         go.textContent = 'Aller aux appareillages ↗';
         go.addEventListener('click', () => setPlacementFilter(onDemandSelected));
         wrap.appendChild(go);

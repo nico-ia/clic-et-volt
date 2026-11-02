@@ -257,3 +257,17 @@ body.theme-light .bg-slate-500\/40, body.theme-light .bg-slate-600\/40, body.the
 
 /* ---- Mode clair : fenêtre de tronçon (bg-slate-900/60 et autres fonds slate translucides) en blanc translucide ---- */
 body.theme-light [class*="bg-slate-900/"], body.theme-light [class*="bg-slate-800/"], body.theme-light [class*="bg-slate-700/"] { background-color: rgba(255, 255, 255, 0.94) !important; }
+
+
+/* Circuit sélectionné : liseré cyan (distinct du rouge des alertes et du jaune des éléments) */
+/* Sélections cyan (1 px) : circuits, boutons « Nouveau circuit », « Aller aux appareillages », appareillages mis en valeur */
+.circuit-active { border: 1px solid #22d3ee !important; box-shadow: none !important; background-color: #1e293b !important; }
+body.theme-light .circuit-active { background-color: #ffffff !important; }
+body.theme-light .circuit-active .text-slate-200 { color: #0f172a !important; }
+body.theme-light .circuit-active .text-slate-400 { color: #475569 !important; }
+
+.circuit-btn { border: 1px solid #475569 !important; }
+body.theme-light .circuit-btn { border-color: #94a3b8 !important; }
+.circuit-btn.is-on { border-color: #22d3ee !important; box-shadow: 0 0 0 1px #22d3ee !important; }
+
+.place-btn.ring-yellow-300 { --tw-ring-color: #22d3ee !important; border-color: #22d3ee !important; box-shadow: 0 0 0 1px #22d3ee !important; }
