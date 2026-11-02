@@ -412,7 +412,6 @@ function on2DMouseDown(e) {
             mouseCurrentPos = null;
             document.getElementById('drawing-instruction-hint').textContent = "Tracé arrêté. Cliquez pour placer un nouveau point de mur.";
             redraw2D();
-            showNotification("Tracé de mur arrêté", "info");
         } else if (currentTool === 'place') {
             // clic droit : on arrête la pose (comme Échap)
             setTool('select');
@@ -500,7 +499,6 @@ function on2DMouseDown(e) {
                         height: activeWallHeight
                     });
                     updateStats();
-                    showNotification("Mur tracé avec succès", "success");
                 }
                 drawingStartPoint = { x: endX, y: endY };
                 mouseCurrentPos = { x: endX, y: endY };

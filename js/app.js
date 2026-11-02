@@ -219,7 +219,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 mouseCurrentPos = null;
                 document.getElementById('drawing-instruction-hint').textContent = "Tracé arrêté. Cliquez pour placer un nouveau point de mur.";
                 redraw2D();
-                showNotification("Tracé de mur arrêté", "info");
             }
             // pose 2D (outil « place ») : Échap arrête la pose et vide la sélection, comme le bouton Désélection
             if (currentMode === '2d' && (currentTool === 'place' || currentTool === 'text' || currentTool === 'wall')) { stopPlacement(); return; }
@@ -435,8 +434,8 @@ function showNotification(message, type = 'info') {
     toastTitle.textContent = type === 'error' ? 'Erreur' : type === 'success' ? 'Succès' : 'Information';
     toastIcon.className = type === 'error' ? 'fa-solid fa-triangle-exclamation text-rose-400 text-lg' : type === 'success' ? 'fa-solid fa-circle-check text-emerald-400 text-lg' : 'fa-solid fa-info-circle text-emerald-400 text-lg';
     // 136 : au centre du plan ; un message reste plus longtemps (8 s pour une erreur)
-    toast.classList.remove('bottom-6', 'left-6', 'right-6', 'translate-y-24');
-    toast.classList.add('top-1/3', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2');
+    toast.classList.remove('bottom-6', 'left-6', 'right-6', 'translate-y-24', 'top-1/3', '-translate-y-1/2');
+    toast.classList.add('top-20', 'left-1/2', '-translate-x-1/2');
     toast.classList.remove('opacity-0');
     clearTimeout(notifTimer);
     notifTimer = setTimeout(() => {
