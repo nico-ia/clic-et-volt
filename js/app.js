@@ -1819,12 +1819,12 @@ function ensureCircuitAssignment() {
     circuits.forEach(c => {
         if (!c.receives) return;
         const els = projectData.electrical;
-        const at = c.receivesAfter ? els.findIndex(e => e.id === c.receivesAfter) : -2;
-        if (at === -1) return;   // repère supprimé : on ne touche à rien
+        const at = c.receivesAfter ? els.findIndex(e => e.id === c.receivesAfter) : -1;   // sans repère : tous les appareils
+        if (c.receivesAfter && at === -1) return;   // repère supprimé : on ne touche à rien
         const root = circuitRoot(c);
         for (let i = at + 1; i < els.length; i++) {
             const el = els[i];
-            if (!isCircuitPoint(el) || el.circuitId) continue;
+            if (!el || !isCircuitPoint(el) || el.circuitId) continue;
             const dflt = projectData.circuits.find(x => x.id === DEFAULT_CIRCUIT_BY_TYPE[el.type]);
             if (dflt && circuitRoot(dflt).id === root.id) el.circuitId = c.id;
         }
@@ -1967,16 +1967,22 @@ function ensureCircuitAssignment() {
         // 5. circuits automatiques vides supprimés, les autres renumérotés sans modifier leurs réglages
         const kept = [F];
         chain.slice(1).forEach(c => {
-            if (count.get(c.id) > 0 || c.manual || [...assigned.values()].includes(c.id)) kept.push(c);
-            else circuits.splice(circuits.indexOf(c), 1);
+            if (count.get(c.id) > 0 || [...assigned.values()].includes(c.id)) kept.push(c);
+            else {
+                // circuit vidé (créé à la demande, puis appareils déplacés) : supprimé, les numéros se recalent
+                if (c.receives) { F.receives = true; F.receivesAfter = c.receivesAfter; }
+                circuits.splice(circuits.indexOf(c), 1);
+            }
         });
         // 153 : « (n°1) », « (n°2)… » ; le premier garde son numéro dès qu'il y a plusieurs circuits de la même famille
         const famName = F.name.replace(/ \((n°)?\d+\)$/, '');
-        F.name = kept.length > 1 ? famName + ' (n°1)' : famName;
-        kept.slice(1).forEach((c, i) => {
-            c.name = famName + ' (n°' + (i + 2) + ')';
-            c.color = freeFamilyShade(F, i + 1, c);
+        // numérotation : les circuits de la famille qui ont des appareils, à partir de n°1 (le circuit de base vide ne compte pas)
+        const numbered = kept.filter(c => c !== F || count.get(F.id) > 0);
+        numbered.forEach((c, i) => {
+            c.name = famName + ' (n°' + (i + 1) + ')';
+            if (c !== F) c.color = freeFamilyShade(F, i + 1, c);
         });
+        if (!numbered.includes(F)) F.name = famName;
         assigned.forEach((cid, id) => next.set(id, cid));
     });
     ensureDistinctCircuitColors();
@@ -3080,6 +3086,8 @@ function resetCircuitCuts(cid) {
     if (!c || !c.cableCuts) return;
     saveStateToUndo();
     c.cableCuts = {};
+    AUTO_ASSIGN.sig = null;
+    ensureCircuitAssignment();
     _cableCache.sig = null;
     if (currentMode === '3d') build3DScene(); else updateCircuitsUI();
     redraw2D();
@@ -3890,7 +3898,7 @@ async function deleteCircuit(id) {
     const c = projectData.circuits.find(x => x.id === id);
     if (!c) return;
     ensureCircuitAssignment();
-    const suites = c.auto ? [] : projectData.circuits.filter(x => x.auto && x.baseId === c.id);
+    const suites = (c.auto || FIXED_CIRCUIT_IDS.has(c.id)) ? [] : projectData.circuits.filter(x => x.auto && x.baseId === c.id);
     const removeCircuitIds = new Set([c.id, ...suites.map(s => s.id)]);
     const dropObjects = new Set([...suites.map(s => s.id), ...(FIXED_CIRCUIT_IDS.has(c.id) ? [] : [c.id])]);
     // charges du circuit (les commandes ne sont pas des charges de circuit)
