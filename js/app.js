@@ -3237,7 +3237,7 @@ function circuitIconHtml(c, color) {
     const item = type && typeof PLACE_BUTTONS !== 'undefined' ? PLACE_BUTTONS.find(b => b.type === type) : null;
     if (item) {
         const big = type === 'outlet_dedicated_20' || type === 'outlet_dedicated_32';
-        return placeSvg(big ? '-9 -12 18 13' : '-7 -10 14 11', prisePlanSvg(item.color, big ? 1.33 : 1), 'w-4 h-4 shrink-0');
+        return placeSvg(big ? '-9 -12 18 13' : '-7 -10 14 11', prisePlanSvg(PLACE_CIRCUIT_COLORS[type] || item.color, big ? 1.33 : 1), 'w-4 h-4 shrink-0');
     }
     return '<i class="fa-solid ' + circuitIconOf(c) + ' text-[12px] shrink-0" style="color:' + esc(color || circuitColor(c)) + '"></i>';
 }
@@ -5109,7 +5109,7 @@ function pruneManualLinksOf(light) {
 
 // 227 : circuits créés à la demande (lampes, prises…). Un circuit « receives » reçoit les appareils posés ensuite
 // de sa famille ; il reste même vide (manual) jusqu'à ce qu'on en crée un autre
-const ON_DEMAND_FAMILIES = [['c_lighting', 'éclairage', 'Éclairage'], ['c_outlets', 'prises 16A', 'Prises 16 A'], ['c_outlets20', 'prises 20A', 'Prises 20 A'], ['c_kitchen', 'prises 20A plan de travail', '20A Plan de travail'], ['c_shutters', 'volet', 'Volet']];
+const ON_DEMAND_FAMILIES = [['c_lighting', 'éclairage', 'Éclairage'], ['c_outlets', 'prises 16A', 'Prises 16 A'], ['c_outlets20', 'prises 20A', 'Prises 20 A'], ['c_kitchen', 'prises 20A plan de travail', '20A plan de travail'], ['c_dedicated20', 'circuit dédié 20A', 'Prise dédiée 20 A'], ['c_dedicated32', 'circuit dédié 32A', 'Prise dédiée 32 A'], ['c_doorbell', 'sonnerie', 'Sonnerie'], ['c_shutters', 'volet', 'Volet'], ['c_daaf', 'détecteur de fumée (DAAF)', 'Détecteur de fumée']];
 // Famille « Nouveau circuit » choisie : liseré jaune sur son bouton et bouton « Aller aux appareillages »
 let onDemandSelected = null;
 // Icône de chaque bouton « Nouveau circuit » (une par famille)
@@ -5151,7 +5151,7 @@ function onDemandCircuitBar() {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'circuit-btn inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200';
-        b.innerHTML = circuitIconHtml(projectData.circuits.find(c => c.id === id), 'currentColor') + ' ' + esc(short);
+        b.innerHTML = circuitIconHtml(projectData.circuits.find(c => c.id === id)) + ' ' + esc(short);
         if (onDemandSelected === id) b.classList.add('is-on');
         b.title = 'Nouveau circuit ' + label + ' : les appareils de ce type posés ensuite vont sur ce nouveau circuit';
         b.addEventListener('click', () => {

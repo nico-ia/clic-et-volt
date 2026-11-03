@@ -18,7 +18,9 @@ function init3DScene() {
     threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
     threeControls.enableDamping = true;
     threeControls.dampingFactor = 0.05;
-    threeControls.minDistance = 3;   // zoom avant très proche de l'élément
+    threeControls.zoomSpeed = 2;
+    threeControls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+    threeControls.minDistance = 1.5;   // zoom avant très proche de l'élément
     threeControls.maxDistance = 3000;
     const ambientLight = new THREE.AmbientLight('#ffffff', 0.75);
     threeScene.add(ambientLight);
@@ -2800,6 +2802,19 @@ function renderCableNetwork(cx, cy) {
         const d = q.clone().sub(p);
         const L = d.length();
         if (L < 1e-4) return;
+        // fil de terre : tronçons de 5 cm alternés vert et jaune
+        if (mat === 'stripe') {
+            const green = matFor('green-yellow');
+            const yellow = CABLE_RES.mats.yellowStripe || (CABLE_RES.mats.yellowStripe = markShared(new THREE.MeshBasicMaterial({ color: '#facc15' })));
+            let s = 0, vert = true;
+            while (s < L - 1e-6) {
+                const len = Math.min(vert ? 5 : 10, L - s);   // 5 cm vert, 10 cm jaune
+                strut(p.clone().lerp(q, s / L), p.clone().lerp(q, (s + len) / L), radius, vert ? green : yellow, order, isTube);
+                s += len;
+                vert = !vert;
+            }
+            return;
+        }
         const m = new THREE.Mesh(isTube ? CABLE_RES.cyl : CABLE_RES.core, mat);
         m.position.copy(p).add(q).multiplyScalar(0.5);
         m.quaternion.setFromUnitVectors(Y, d.normalize());
@@ -2967,7 +2982,7 @@ function renderCableNetwork(cx, cy) {
                 if (!pa || !pb) return;
                 const coreMat = (hasLinkFocus || FOC || BOX) && !emphasised
                     ? CABLE_RES.dimCore
-                    : matFor(w.colour);
+                    : (w.colour === 'green-yellow' ? 'stripe' : matFor(w.colour));
                 if (!G || G.wires) strut(s.a.clone().add(pa), s.b.clone().add(pb), CORE_R, coreMat, order, false);
                 });
         });
