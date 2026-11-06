@@ -6,7 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clic & Volt - Plan 2D/3D & câblage auto</title>
+    <title>Clic et Volt - Plan 2D/3D & câblage auto</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -37,7 +37,7 @@
             </div>
             <div>
                 <h1 class="font-bold text-lg leading-tight tracking-wide text-white flex items-center gap-2">
-                    Clic & Volt
+                    Clic et Volt
                 </h1>
                 <p class="text-xs leading-tight text-slate-400 whitespace-nowrap">Plan 2D/3D & câblage auto</p>
             </div>
@@ -153,15 +153,15 @@
                     <details data-persist="tailles-ecritures" class="space-y-2">
                         <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Tailles des écritures</summary>
                         <div class="space-y-2 text-[11px] text-slate-300">
-                            <label class="flex items-center justify-between gap-2">Textes ajoutés
-                                <span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="text" onchange="setTextSize('text', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span>
-                            </label>
-                            <label class="flex items-center justify-between gap-2">Cotes de longueur
-                                <span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="cote" onchange="setTextSize('cote', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span>
-                            </label>
-                            <label class="flex items-center justify-between gap-2">Noms des niveaux reliés
-                                <span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="niveau" onchange="setTextSize('niveau', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span>
-                            </label>
+                            <div class="flex items-center justify-between gap-2">Textes ajoutés
+                                <span class="flex items-center gap-2"><button onclick="toggleWriting2D('text', 'Textes')" data-writing="text" aria-pressed="true" title="Affiche ou masque les textes ajoutés (noms de pièces)" class="h-7 px-2 rounded-lg border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition text-[11px] text-slate-100"><b class="font-semibold">ON</b></button><span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="text" onchange="setTextSize('text', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span></span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2">Cotes de longueur
+                                <span class="flex items-center gap-2"><button onclick="toggleWriting2D('cote', 'Cotes')" data-writing="cote" aria-pressed="true" title="Affiche ou masque les cotes de longueur des murs" class="h-7 px-2 rounded-lg border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition text-[11px] text-slate-100"><b class="font-semibold">ON</b></button><span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="cote" onchange="setTextSize('cote', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span></span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2">Noms des niveaux reliés
+                                <span class="flex items-center gap-2"><button onclick="toggleWriting2D('niveau', 'Niveaux')" data-writing="niveau" aria-pressed="true" title="Affiche ou masque les noms des niveaux reliés (trémies, escaliers)" class="h-7 px-2 rounded-lg border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition text-[11px] text-slate-100"><b class="font-semibold">ON</b></button><span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="niveau" onchange="setTextSize('niveau', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span></span>
+                            </div>
                         </div>
                     </details>
 
@@ -445,6 +445,22 @@
                 </div>
                 <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-4">
                     <div id="shared-tools-slot-3d" class="space-y-4"></div>
+
+                    <!-- Tailles des écritures et affichage des écritures (3D) -->
+                    <details data-persist="tailles-ecritures-3d" class="space-y-2">
+                        <summary class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">Tailles des écritures</summary>
+                        <div class="space-y-2 text-[11px] text-slate-300">
+                            <div class="flex items-center justify-between gap-2">Textes ajoutés
+                                <span class="flex items-center gap-2"><button onclick="toggleWriting2D('text', 'Textes')" data-writing="text" aria-pressed="true" title="Affiche ou masque les textes ajoutés (noms de pièces)" class="h-7 px-2 rounded-lg border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition text-[11px] text-slate-100"><b class="font-semibold">ON</b></button><span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="text" onchange="setTextSize('text', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span></span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2">Cotes de longueur
+                                <span class="flex items-center gap-2"><button onclick="toggleWriting2D('cote', 'Cotes')" data-writing="cote" aria-pressed="true" title="Affiche ou masque les cotes de longueur des murs" class="h-7 px-2 rounded-lg border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition text-[11px] text-slate-100"><b class="font-semibold">ON</b></button><span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="cote" onchange="setTextSize('cote', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span></span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2">Noms des niveaux reliés
+                                <span class="flex items-center gap-2"><button onclick="toggleWriting2D('niveau', 'Niveaux')" data-writing="niveau" aria-pressed="true" title="Affiche ou masque les noms des niveaux reliés (trémies, escaliers)" class="h-7 px-2 rounded-lg border border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 transition text-[11px] text-slate-100"><b class="font-semibold">ON</b></button><span><input autocomplete="off" type="number" min="8" max="32" step="1" data-text-size="niveau" onchange="setTextSize('niveau', this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"> px</span></span>
+                            </div>
+                        </div>
+                    </details>
 
                     <!-- Opacité des gaines ICTA (3D seulement) -->
                     <details data-persist="opacite-gaines" class="space-y-2">

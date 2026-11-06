@@ -1755,13 +1755,17 @@ function* buildCableNetworkSteps() {
     // mémos : une liaison garde les mêmes réglages (objet cuts, stable par circuit) pendant un calcul ; indexé par cuts + cid
     const NO_CUTS = {};
     const routeMemos = new WeakMap();
+    // mémos imbriqués (cuts -> nom -> cid -> table) : pas de texte construit à chaque appel
     const memoOf = (route, name) => {
         const cuts = route.cuts || NO_CUTS;
-        if (!routeMemos.has(cuts)) routeMemos.set(cuts, new Map());
-        const byCuts = routeMemos.get(cuts);
-        const k = name + '|' + (route.cid || '');
-        if (!byCuts.has(k)) byCuts.set(k, new Map());
-        return byCuts.get(k);
+        let byCuts = routeMemos.get(cuts);
+        if (!byCuts) { byCuts = new Map(); routeMemos.set(cuts, byCuts); }
+        let byName = byCuts.get(name);
+        if (!byName) { byName = new Map(); byCuts.set(name, byName); }
+        const cid = route.cid || '';
+        let table = byName.get(cid);
+        if (!table) { table = new Map(); byName.set(cid, table); }
+        return table;
     };
     const wallKeysAt = (n, route) => {
         const memo = memoOf(route, 'wallKeys');
@@ -1783,24 +1787,31 @@ function* buildCableNetworkSteps() {
     };
 
     // 161 : murs posés sous ou au-dessus du morceau lui-même (dans son sens), pas seulement à ses extrémités
-    const spanKeysOf = (e, cid) => {
-        if (!e.spanBy) e.spanBy = new Map();
-        const memo = e.spanBy.get(cid || '');
-        if (memo) return memo;
+    // voisins retenus d'une arête : ne dépend que du graphe (pas du circuit), calculés une seule fois par arête
+    const spanNeighboursOf = e => {
+        if (e.spanNbrs) return e.spanNbrs;
         const kind = e.cav === 'faux_plafond' ? 'ceil' : 'low';
-        const keys = new Set();
+        const list = [];
         [[e.a, e.b], [e.b, e.a]].forEach(([f, o]) => {
             const n = f.ceilNode || f.lowNode;
             if (!n) return;
             (n.adj || []).forEach(x => {
                 if (x.kind !== kind || !x.track) return;
                 const p = x.a === n ? x.b : x.a;
-                if ((p.x - n.x) * (o.x - n.x) + (p.y - n.y) * (o.y - n.y) > 0) {
-                    const k = keyOfEdge(x, cid);
-                    if (k) keys.add(k);
-                }
+                if ((p.x - n.x) * (o.x - n.x) + (p.y - n.y) * (o.y - n.y) > 0) list.push(x);
             });
         });
+        e.spanNbrs = list;
+        return list;
+    };
+    // équivalent à spanKeysOf(e, cid).some(k => cuts[k] === val), mais s'arrête au premier voisin trouvé
+    const spanHasCut = (e, cid, cuts, val) => spanNeighboursOf(e).some(x => { const k = keyOfEdge(x, cid); return !!k && cuts[k] === val; });
+    const spanKeysOf = (e, cid) => {
+        if (!e.spanBy) e.spanBy = new Map();
+        const memo = e.spanBy.get(cid || '');
+        if (memo) return memo;
+        const keys = new Set();
+        spanNeighboursOf(e).forEach(x => { const k = keyOfEdge(x, cid); if (k) keys.add(k); });
         const out = [...keys];
         e.spanBy.set(cid || '', out);
         return out;
@@ -1844,7 +1855,10 @@ function* buildCableNetworkSteps() {
     };
 
     // une arête est-elle permise pour ce mode de route ?
-    const edgeAllowed = (e, route) => {// 214 : un autre circuit n'entre pas dans la boîte ; le circuit de la prise ne contourne pas ses bornes
+    const edgeAllowed = (e, route) => {
+        // navettes : pas de nœud déjà emprunté par une autre navette (deux paires ne doivent jamais se toucher)
+        if (route.avoid && (route.avoid.has(e.a) || route.avoid.has(e.b))) return false;
+        // 214 : un autre circuit n'entre pas dans la boîte ; le circuit de la prise ne contourne pas ses bornes
         if (e.serveCid && !e.bypass && route.cid && e.serveCid !== route.cid) return false;
         if (e.bypass && route.cid && route.cid === e.serveCid) return false;
         // 229 : passage à hauteur de prise réglé « murs bas » ou « murs haut » : interdit, le câble passe par le mur
@@ -1861,8 +1875,8 @@ function* buildCableNetworkSteps() {
         if (e.pair) {
             // 161 : pas de repli d'une cavité vers l'autre au-dessus ou sous un mur réglé
             // 161 : refusé seulement si le morceau passe réellement sous un mur de l'autre type (un coin commun reste permis)
-            if (route.cuts && e.cav === 'faux_plafond' && spanKeysOf(e, route.cid).some(k => route.cuts[k] === 'sp')) return false;
-            if (route.cuts && e.cav === 'sous_plancher' && spanKeysOf(e, route.cid).some(k => route.cuts[k] === 'air')) return false;
+            if (route.cuts && e.cav === 'faux_plafond' && spanHasCut(e, route.cid, route.cuts, 'sp')) return false;
+            if (route.cuts && e.cav === 'sous_plancher' && spanHasCut(e, route.cid, route.cuts, 'air')) return false;
             // 119 : en Auto, le faux plafond ne sert qu'entre deux points au-dessus d'un mur réglé « faux plafond »
             if (e.cav === 'faux_plafond' && route.mode === 'mix') {
                 // 180 : une extrémité libre (plafonnier, spot, sans mur) est permise si l'autre est sur un mur réglé « faux plafond »
@@ -1921,7 +1935,7 @@ function* buildCableNetworkSteps() {
         return true;
     };
 
-    const routeKeyOf = route => route.mode + '|' + (route.cavity || '') + '|' + (route.lightEnd ? 'L' : '') + '|c' + (route.cid || '') + '|' + (route.cuts ? route.cid : '') + (route.pin ? '|pin' + route.pin.node.idx + ':' + route.pin.base : '');
+    const routeKeyOf = route => route.mode + '|' + (route.cavity || '') + '|' + (route.lightEnd ? 'L' : '') + '|c' + (route.cid || '') + '|' + (route.cuts ? route.cid : '') + (route.pin ? '|pin' + route.pin.node.idx + ':' + route.pin.base : '') + (route.avoidId ? '|av' + route.avoidId : '');
     const mapFor = (src, route, target) => {
         // 117 : une liaison avec plafonnier et une liaison sans plafonnier ne partagent pas leur cache
         const key = routeKeyOf(route);
@@ -2186,7 +2200,7 @@ function* buildCableNetworkSteps() {
     };
 
     const linkKeyOf = (cid, A, B) => (cid || '') + '|' + [A.id, B.id].sort().join('~');
-    const addLink = (A, B, wires, cid, extraIds = []) => {
+    const addLink = (A, B, wires, cid, extraIds = [], nav = null) => {
         const ra = R.get(A.id), rb = R.get(B.id);
         const relationId = isControl(A) && canControl(A, B)
             ? controlCableLinkId(A.id, B.id)
@@ -2201,9 +2215,13 @@ function* buildCableNetworkSteps() {
             const lightNode = srcNode.light ? srcNode : (rb.node.light ? rb.node : null);
             const lk = linkKeyOf(cid, A, B);
             const base = cableLinkFeet.get(lk);
-            const pinned = lightNode && base ? Object.assign({}, routeFor(A, B, cid), { pin: { node: lightNode, base } }) : null;
-            let mp = mapFor(srcNode, liaisonRoute(srcNode, rb.node, pinned || routeFor(A, B, cid)), rb.node);
-            if (pinned && mp.dist.get(rb.node) === undefined) mp = mapFor(srcNode, liaisonRoute(srcNode, rb.node, routeFor(A, B, cid)), rb.node);
+            const plain = routeFor(A, B, cid);
+            const nr = nav ? Object.assign({}, plain, { avoid: nav.nodes, avoidId: nav.id }) : plain;
+            const pinned = lightNode && base ? Object.assign({}, nr, { pin: { node: lightNode, base } }) : null;
+            let mp = mapFor(srcNode, liaisonRoute(srcNode, rb.node, pinned || nr), rb.node);
+            if (pinned && mp.dist.get(rb.node) === undefined) mp = mapFor(srcNode, liaisonRoute(srcNode, rb.node, nr), rb.node);
+            // sans chemin qui évite les autres navettes, on garde le tracé libre (cas signalé, rare)
+            if (nav && mp.dist.get(rb.node) === undefined) mp = mapFor(srcNode, liaisonRoute(srcNode, rb.node, plain), rb.node);
 
             for (let cur = rb.node; cur !== srcNode;) {
                 const [p, e] = mp.prev.get(cur);
@@ -2211,6 +2229,8 @@ function* buildCableNetworkSteps() {
                 cur = p;
             }
             path.reverse();
+            // les nœuds de ce tracé sont pris : les navettes suivantes ne doivent pas les toucher
+            if (nav) path.forEach(e => { nav.nodes.add(e.a); nav.nodes.add(e.b); });
             const st = lightNode && path.find(e => e.kind === 'stub' && e.stubKey && (e.a === lightNode || e.b === lightNode));
             if (st) cableLinkFeet.set(lk, st.stubKey.replace(/\|[12]$/, ''));
         }
@@ -2364,13 +2384,15 @@ function* buildCableNetworkSteps() {
     // E1 : plus de liaison de commande entre circuits (voir l'avertissement de la commande)
     // navettes : deux va-et-vient qui commandent la même lampe sont reliés par deux fils violets
     const navettePairs = new Set();
+    const navNodes = new Set();
+    let navN = 0;
     lights.forEach(light => {
         const pair = switches.filter(sw => sw.type === 'switch_va_et_vient' && ctrl.get(sw.id).includes(light));
         for (let k = 0; k + 1 < pair.length; k++) {
             const pk = [pair[k].id, pair[k + 1].id].sort().join('~');
             if (navettePairs.has(pk)) continue;
             navettePairs.add(pk);
-            if (addLink(pair[k], pair[k + 1], ['violet', 'violet'], circuitIdOf(light), [controlCableLinkId(pair[k].id, light.id), controlCableLinkId(pair[k + 1].id, light.id)]) === null) lostFor(circuitIdOf(light));
+            if (addLink(pair[k], pair[k + 1], ['violet', 'violet'], circuitIdOf(light), [controlCableLinkId(pair[k].id, light.id), controlCableLinkId(pair[k + 1].id, light.id)], { id: 'nv' + (++navN), nodes: navNodes }) === null) lostFor(circuitIdOf(light));
         }
     });
     // raccordement : tableau de cet étage → point de dérivation (la gaine vers les autres niveaux)
@@ -3088,6 +3110,7 @@ function addShaft3D(sh, cx, cy) {
         wallMeshes3D.push(volume);
         // noms des niveaux reliés : taille du réglage « Noms des niveaux reliés », texte seul, sans fond
         const label = makeScreenLabel3D(shaftLevelNames(sh).join(' ↔ '), textSizePx('niveau'), { bold: true, halo: false });
+        label.visible = writingsShown.niveau;
         // l'étiquette se place en bas de la trémie si elle relie un niveau plus bas, en haut sinon
         const elevOf = lvId => ((projectData.levels || []).find(l => l.id === lvId) || {}).elevation || 0;
         const otherId = (sh.levelIds || [sh.levelId]).find(lvId => lvId !== activeLevelId);
@@ -3189,7 +3212,7 @@ function addWall3D(w, levelWalls, cx, cy) {
     });
     // cote de longueur : même texte que le plan 2D (« 4,00 m »), taille fixe à l'écran
     const wallLen = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
-    if (wallLen >= 1) {
+    if (wallLen >= 1 && writingsShown.cote) {
         const cote = makeScreenLabel3D((wallLen / 100).toFixed(2).replace('.', ',') + ' m', textSizePx('cote'), { bold: true, halo: false, dark: '#f1f5f9' });
         // posée à mi-hauteur, du côté +normale du mur, à demi-épaisseur + 12 cm
         const ux = (w.x2 - w.x1) / wallLen, uz = (w.y2 - w.y1) / wallLen;
@@ -3513,7 +3536,7 @@ function build3DScene() {
         }
     });
     // Textes ajoutables (patch 72) : étiquette à taille fixe, à la hauteur choisie, cliquable
-    textsOn().forEach(tx => {
+    if (writingsShown.text) textsOn().forEach(tx => {
         const s = makeScreenLabel3D(tx.text || '', textSizePx('text'), { bold: true, halo: false, light: '#1e3a8a', dark: '#fde68a', frame: tx.id === selected3DId });
         s.position.set(tx.x - cx, tx.height || 150, tx.y - cy);
         s.renderOrder = 11;
@@ -4818,7 +4841,7 @@ function on3DPointerUp(e) {
             threeControls.update();
         }
         // le câblage n'a pas suivi le glissement : il est recalculé en fond pour la position finale
-        if (moved) { startCableJob(); build3DScene(); }
+        if (moved) { if (!startCableJob()) build3DScene(); }
     }
 }
 
@@ -4968,7 +4991,7 @@ function buildStair3D(st, cx, cy, ghost = false) {
 function addStair3D(st, cx, cy, ghost = false) {
     const group = buildStair3D(st, cx, cy, ghost);
         // nom des niveaux reliés : au-dessus de l'escalier, taille du réglage « Noms des niveaux reliés »
-    if (!ghost) {
+    if (!ghost && writingsShown.niveau) {
         const lab = makeScreenLabel3D(stairLevelLabel(st), textSizePx('niveau'), { bold: true, halo: false, light: '#6d28d9', dark: '#c4b5fd' });
         lab.position.set(st.x - cx, group.position.y + Math.max(stairRiseCm(st), 1) - 10, st.y - cy);
         lab.userData = { type: 'stairLabel', id: st.id };
@@ -5623,14 +5646,15 @@ function cableMemoryRestore(s) {
 
 // lance le calcul de fond si le réseau affiché ne correspond plus au projet (appelé au relâchement)
 function startCableJob() {
-    if (!_cableCache.net || cableGestureActive()) return;
+    if (!_cableCache.net || cableGestureActive()) return false;
     abortCableJob(false);
     prepareCableMemory();
     const sig = cableSig();
-    if (_cableCache.sig === sig) return;
+    if (_cableCache.sig === sig) return false;
     const job = { sig, snap: cableMemorySnapshot(), gen: buildCableNetworkSteps(), timer: null };
     _cableJob = job;
     job.timer = setTimeout(() => runCableJobSlice(job), 0);
+    return true;
 }
 
 function runCableJobSlice(job) {
@@ -5657,7 +5681,6 @@ function finishCableJob(job, net) {
     cableStats = net;
     cableRevision++;
     syncElementInspectors();   // les cases et listes d'associations se redessinent avec le nouveau réseau
-    if (currentMode === '3d') build3DScene(); else requestRedraw2D();
     if (currentMode === '3d') build3DScene(); else requestRedraw2D();
 }
 

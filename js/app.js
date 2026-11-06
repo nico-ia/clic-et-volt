@@ -1967,7 +1967,7 @@ function ensureCircuitAssignment() {
         // 5. circuits automatiques vides supprimés, les autres renumérotés sans modifier leurs réglages
         const kept = [F];
         chain.slice(1).forEach(c => {
-            if (count.get(c.id) > 0 || [...assigned.values()].includes(c.id)) kept.push(c);
+            if (count.get(c.id) > 0 || [...assigned.values()].includes(c.id) || c.receives) kept.push(c);   // circuit créé à la demande : reste jusqu'à ce qu'il reçoive des appareils
             else {
                 // circuit vidé (créé à la demande, puis appareils déplacés) : supprimé, les numéros se recalent
                 if (c.receives) { F.receives = true; F.receivesAfter = c.receivesAfter; }
@@ -3237,7 +3237,7 @@ function circuitIconHtml(c, color) {
     const item = type && typeof PLACE_BUTTONS !== 'undefined' ? PLACE_BUTTONS.find(b => b.type === type) : null;
     if (item) {
         const big = type === 'outlet_dedicated_20' || type === 'outlet_dedicated_32';
-        return placeSvg(big ? '-9 -12 18 13' : '-7 -10 14 11', prisePlanSvg(PLACE_CIRCUIT_COLORS[type] || item.color, big ? 1.33 : 1), 'w-4 h-4 shrink-0');
+        return placeSvg(big ? '-9 -12 18 13' : '-7 -10 14 11', prisePlanSvg(color || circuitColor(c), big ? 1.33 : 1), 'w-4 h-4 shrink-0');
     }
     return '<i class="fa-solid ' + circuitIconOf(c) + ' text-[12px] shrink-0" style="color:' + esc(color || circuitColor(c)) + '"></i>';
 }
@@ -5138,6 +5138,14 @@ function newCircuitOnDemand(familyId) {
     if (currentMode === '3d') build3DScene(); else { redraw2D(); updateCircuitsUI(); }
     return nc;
 }
+
+// Un nouveau circuit arrête la pose d'appareil en cours, en 2D comme en 3D (murs et texte non touchés)
+function endAppliancePlacement() {
+    if (currentMode === '3d') {
+        if (activePlacementType && activePlacementType !== 'wall' && activePlacementType !== 'text') setPlacementType(activePlacementType);
+    } else if (currentTool === 'place') setTool('select');
+}
+
 function onDemandCircuitBar() {
     const wrap = document.createElement('div');
     const hint = document.createElement('div');
@@ -5159,6 +5167,7 @@ function onDemandCircuitBar() {
                 onDemandSelected = null;
             } else {
                 onDemandSelected = id;
+                endAppliancePlacement();
                 newCircuitOnDemand(id);
             }
             setPlacementFilter(onDemandSelected, false);

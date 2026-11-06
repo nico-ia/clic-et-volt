@@ -270,4 +270,4 @@ body.theme-light .circuit-active .text-slate-400 { color: #475569 !important; }
 body.theme-light .circuit-btn { border-color: #94a3b8 !important; }
 .circuit-btn.is-on { border-color: #22d3ee !important; box-shadow: 0 0 0 1px #22d3ee !important; }
 
-.place-btn.ring-yellow-300 { --tw-ring-color: #22d3ee !important; border-color: #22d3ee !important; box-shadow: 0 0 0 1px #22d3ee !important; }
+.place-btn.ring-yellow-300:not(.tool-active-yellow) { --tw-ring-color: #22d3ee !important; border-color: #22d3ee !important; box-shadow: 0 0 0 1px #22d3ee !important; }

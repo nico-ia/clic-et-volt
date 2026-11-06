@@ -214,7 +214,7 @@ function redraw2D() {
     });
     ctx2D.restore();
     draw2DEquipment();
-    drawTexts2D();
+    if (writingsShown.text) drawTexts2D();
 
     // fantôme de pose : l'élément qu'on va poser, translucide, sous le curseur
     if (!isPrintRendering && currentTool === 'place' && placeGhost2D) drawPlaceGhost2D(placeGhost2D);
@@ -1064,6 +1064,21 @@ function resetZoomPan() {
     redraw2D();
 }
 
+// Écritures, réglables une par une, en 2D comme en 3D : textes (noms de pièces), cotes de longueur, noms des niveaux reliés
+let writingsShown = { text: true, cote: true, niveau: true };
+function toggleWriting2D(kind, label) {
+    writingsShown[kind] = !writingsShown[kind];
+    const on = writingsShown[kind];
+    // tous les boutons de ce type (barre 2D et barre 3D) prennent le même état
+    document.querySelectorAll('[data-writing="' + kind + '"]').forEach(b => {
+        b.innerHTML = '<b class="font-semibold">' + (on ? 'ON' : 'OFF') + '</b>';
+        b.className = 'h-7 px-2 rounded-lg border transition text-[11px] ' +
+            (on ? 'border-yellow-400 ring-1 ring-yellow-400/60 bg-slate-800 text-slate-100' : 'border-slate-500 bg-slate-800 text-slate-200 hover:bg-slate-700');
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (currentMode === '3d') build3DScene(); else redraw2D();
+}
+
 // ---------- Appareils, ouvertures, câbles ----------
 function toggleCables2D() {
     showCables2D = !showCables2D;   // réglage commun 2D et 3D
@@ -1794,7 +1809,7 @@ function draw2DEquipment() {
         ctx2D.font = 'bold ' + (textSizePx('niveau') / zoom) + 'px sans-serif';
         ctx2D.textAlign = 'center';
         ctx2D.textBaseline = 'middle';
-        drawArrowText(ctx2D, shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - (textSizePx('niveau') / 2 + 20) / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
+        if (writingsShown.niveau) drawArrowText(ctx2D, shaftLevelNames(sh).join(' ↔ '), p.x, p.y - s / 2 - (textSizePx('niveau') / 2 + 20) / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
         ctx2D.restore();
     });
     // 2 ter. Escaliers : emprise au sol, marches tracées, flèche vers la marche haute
@@ -1818,7 +1833,7 @@ function draw2DEquipment() {
             ctx2D.stroke();
         });
     }
-    drawWallLengthLabels();
+    if (writingsShown.cote) drawWallLengthLabels();
     ctx2D.textBaseline = 'alphabetic';
 }
 
@@ -1896,7 +1911,7 @@ function drawStair2D(st, colliding) {
     // demi-hauteur de l'emprise tournée (en cm) ; l'étiquette est à 30 px à l'écran au-dessus de son bord haut
     const aRad = (st.angleDeg || 0) * Math.PI / 180;
     const hy = Math.abs(Math.sin(aRad)) * L / 2 + Math.abs(Math.cos(aRad)) * W / 2;
-    drawArrowText(ctx2D, stairLevelLabel(st), st.x, st.y - hy - 30 / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
+    if (writingsShown.niveau) drawArrowText(ctx2D, stairLevelLabel(st), st.x, st.y - hy - 30 / zoom, textSizePx('niveau') / zoom, 1.6, 'sans-serif');
     ctx2D.restore();
 }
 
