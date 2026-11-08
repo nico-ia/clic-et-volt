@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://clic-et-volt.vercel.app/sitemap.xml

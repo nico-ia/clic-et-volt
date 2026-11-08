@@ -1,6 +1,6 @@
 /* © 2026 nico-ia (https://github.com/nico-ia). Tous droits réservés. */
 
-/* Guide intégré à Clic & Volt : styles du panneau et animations */
+/* Guide intégré à Clic et Volt : styles du panneau et animations */
 
 .g-overlay.hidden { display: none; }
 .g-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(2, 6, 23, 0.72); display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -78,6 +78,9 @@ body.theme-light .g-essayer { color: #854d0e; border-color: #ca8a04; }
 .g-pop.p2 { animation-delay: .9s; }
 .g-pop.p3 { animation-delay: 1.8s; }
 @keyframes g-appear { 0% { opacity: 0; } 8%, 80% { opacity: 1; } 100% { opacity: 0; } }
+/* 6 bis. Appareil cliqué : son liseré passe au jaune (comme un outil actif de l'appli) */
+.g-picked { animation: g-picked 5s infinite; }
+@keyframes g-picked { 0%, 40% { stroke: #22d3ee; } 50%, 100% { stroke: #facc15; } }
 
 /* 7. Commande : le câble se trace, la lampe s'allume */
 .g-dash { stroke-dasharray: 6 6; animation: g-flow 1.2s linear infinite; }

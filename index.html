@@ -5,12 +5,30 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clic et Volt - Plan 2D/3D & câblage auto</title>
+    <title>Clic et Volt - Plan 2D/3D et câblage auto</title>
+    <meta name="description" content="Clic et Volt : dessinez votre logement en 2D, visualisez-le en 3D, et obtenez le câblage électrique automatique, le métré et des contrôles par circuit.">
+    <link rel="canonical" href="https://clic-et-volt.vercel.app/">
+    <meta name="robots" content="index, follow">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Clic et Volt : plan électrique 2D et 3D">
+    <meta property="og:description" content="Plan électrique 2D et 3D, câblage automatique, métré et contrôles par circuit.">
+    <script type="application/ld+json">
+    {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Clic et Volt",
+    "applicationCategory": "DesignApplication",
+    "operatingSystem": "Web",
+    "inLanguage": "fr",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+    }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="js/buttons.js" defer></script>
     <script src="js/canvas2d.js" defer></script>
     <script src="js/scene3d.js" defer></script>
@@ -23,7 +41,9 @@
 </head>
 
 <body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col">
-
+    <noscript>
+    <p>Clic et Volt est un plan électrique 2D et 3D avec câblage automatique. Pour l'application, activez JavaScript. Pages de présentation : <a href="/presentation" target="_blank">présentation</a>, <a href="/guide/plan-2d" target="_blank">plan 2D</a>, <a href="/guide/vue-3d" target="_blank">vue 3D</a>, <a href="/guide/cablage-automatique" target="_blank">câblage automatique</a>, <a href="/guide/circuits" target="_blank">circuits</a>, <a href="/guide/prises-interrupteurs" target="_blank">prises et interrupteurs</a>, <a href="/guide/tremie-escalier" target="_blank">trémie et escalier</a>, <a href="/guide/metre-controles" target="_blank">métré et contrôles</a>, <a href="/guide/faq" target="_blank">FAQ</a>.</p>
+    </noscript>
     <header class="bg-slate-900 border-b border-slate-800 h-16 max-[1199px]:h-auto max-[1199px]:py-2 flex flex-wrap items-center justify-between gap-2 px-3 z-30 shrink-0">
         <div class="flex items-center space-x-3">
             <div class="flex flex-col items-center gap-0.5">
@@ -33,14 +53,17 @@
                     <polygon points="14,6.2 11.2,6.2 18.4,21.4" fill="#059669"/>
                     <polygon points="15.4,2.4 7.6,13 12.6,13 8.8,21.8 16.4,11 11.4,11" fill="#fde047"/>
                 </svg>
-                <p class="text-[10px] leading-none text-slate-500 text-center"><a href="https://github.com/nico-ia" target="_blank" rel="noopener" class="hover:text-slate-300">nico-ia<br>Apps</a></p>
+                <p class="text-[12px] leading-none text-slate-500 text-center"><a href="https://github.com/nico-ia" target="_blank" rel="noopener" class="hover:text-slate-300">nico-ia Apps</a></p>
             </div>
             <div>
                 <h1 class="font-bold text-lg leading-tight tracking-wide text-white flex items-center gap-2">
                     Clic et Volt
                 </h1>
-                <p class="text-xs leading-tight text-slate-400 whitespace-nowrap">Plan 2D/3D & câblage auto</p>
+                <p class="text-xs leading-tight text-slate-400 whitespace-nowrap">Plan 2D/3D et câblage auto</p>
             </div>
+            <a href="/presentation" target="_blank" class="ml-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition flex items-center gap-1.5 whitespace-nowrap" title="Ouvrir les pages du guide dans un nouvel onglet" aria-label="Ouvrir les pages du guide dans un nouvel onglet">
+                <i class="fa-solid fa-circle-question"></i> <span class="hidden min-[1536px]:inline text-xs">Pages du guide</span>
+            </a>
         </div>
 
         <!-- Sélecteur de mode : trois boutons séparés -->
@@ -412,6 +435,7 @@
                         <option value="shaft">Trémie</option>
                         <option value="stair">Escalier</option>
                         <option value="panel">Tableau électrique</option>
+                        <option value="meter">Compteur électrique</option>
                         <option value="outlet_16a" selected>Prise 16A</option>
                         <option value="outlet_20a">Prise 20A plan de travail</option>
                         <option value="outlet_20a_classic">Prise 20A classique</option>
@@ -721,5 +745,14 @@
         </div>
     </div>
 
+<script>
+    // window.open évite le noopener implicite des liens target="_blank" : la page guide garde ainsi window.opener vers l'application.
+    document.addEventListener('click', (event) => {
+        const link = event.target.closest('a[target="_blank"][href^="/"]');
+        if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        window.open(link.href, '_blank');
+    });
+</script>
 </body>
 </html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan 2D : dessiner un logement | Clic et Volt</title>
+  <meta name="description" content="Dessiner un logement en 2D dans Clic et Volt : murs, portes, fenêtres, trémies, escaliers, aimantation et cotes.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/plan-2d">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .minis { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .minis figure { margin: 0; flex: 1 1 260px; }
+    .minis figcaption { font-size: 14px; color: #475569; margin-top: -12px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d" aria-current="page">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Dessiner un logement en plan 2D</h1>
+    <p>Le plan 2D est l'endroit où l'on dessine le logement : murs, ouvertures et niveaux. Les appareils se posent aussi ici, puis se règlent en 3D.</p>
+
+    <h2>Tracer un mur</h2>
+    <p>Appuyez sur T ou cliquez « Tracer mur ». Cliquez à un coin, puis au coin suivant. Clic droit ou Échap pour arrêter. Les murs s'accrochent aux autres murs, et l'option Ortho garde les angles droits. Un tracé qui se confond avec un mur existant est refusé.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-tracer-outils.png" alt="Boîte à outils avec Tracer mur en surbrillance">
+        <figcaption>Avant : l'outil Tracer mur est actif, le plan est vide.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-tracer-mur.png" alt="Mur de 7 m tracé de gauche à droite, sa longueur affichée dessous">
+        <figcaption>Après : un mur de 7 m, sa longueur s'affiche sous le mur.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Modifier ou supprimer un mur</h2>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/modif-off.png" alt="Aides et commandes : « Modifier les murs » sur non">
+        <figcaption>« Modifier les murs » désactivé : un clic sur un mur le sélectionne seulement.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/modif-on.png" alt="Aides et commandes : « Modifier les murs » sur oui">
+        <figcaption>« Modifier les murs » activé : vous pouvez alors glisser les extrémités du mur.</figcaption>
+      </figure>
+    </div>
+    <p>Activez « Modifier les murs » : sans cela, un clic ne fait que sélectionner. Glissez une extrémité pour allonger ou raccourcir le mur, ou le mur entier pour le déplacer. « Murs verrouillés » protège tous les murs.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-modifier-mur-avant.png" alt="Mur de 7 m sélectionné, avec une poignée à chaque extrémité">
+        <figcaption>Avant : le mur est sélectionné, « Modifier les murs » est activé.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-modifier-inspecteur-avant.png" alt="Inspecteur de mur : longueur 7,00 m">
+        <figcaption>Avant : l'inspecteur indique 7,00 m.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-modifier-mur-apres.png" alt="Mur raccourci à 6,00 m après avoir glissé son extrémité droite">
+        <figcaption>Après : l'extrémité droite a été glissée vers la gauche.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-modifier-inspecteur-apres.png" alt="Inspecteur de mur : longueur 6,00 m">
+        <figcaption>Après : l'inspecteur confirme 6,00 m.</figcaption>
+      </figure>
+    </div>
+
+    <h3>Supprimer un mur</h3>
+    <p>Sélectionnez le mur, puis cliquez « Supprimer la sélection » en haut à droite et confirmez. Annuler (Ctrl+Z) rétablit le mur.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-supprimer-bouton.png" alt="Bouton rouge Supprimer la sélection en haut à droite du plan">
+        <figcaption>Avant : le mur est sélectionné, le bouton rouge « Supprimer la sélection » est visible.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-supprimer-mur-avant.png" alt="Mur sélectionné avant suppression">
+        <figcaption>Avant : le mur sélectionné.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-supprimer-mur-apres.png" alt="Zone du mur vide après la suppression">
+        <figcaption>Après : le mur a disparu du plan.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Portes et fenêtres</h2>
+    <p>Dans l'onglet « Ouvertures » à droite, cliquez « Porte » ou « Fenêtre », puis cliquez près du mur. Pour une porte, « Choisissez la charnière » indique de quel côté elle s'ouvre (Gauche ou Droite). Une fenêtre a deux ventaux.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-porte-outil.png" alt="Onglet Ouvertures : outil Porte actif, avec le choix de la charnière sur Gauche">
+        <figcaption>Avant : l'outil Porte est actif, le mur est seul.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-porte-mur-apres.png" alt="Porte posée sur le mur, son battant dessiné en arc">
+        <figcaption>Après : la porte est posée, son battant est dessiné.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-fenetre-outil.png" alt="Onglet Ouvertures : outil Fenêtre actif">
+        <figcaption>Avant (fenêtre) : l'outil Fenêtre est actif.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/plan-2d-fenetre-mur-apres.png" alt="Fenêtre posée sur le mur, avec ses deux ventaux en pointillés">
+        <figcaption>Après : la fenêtre est posée, avec ses deux ventaux en pointillés.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Trémies et escaliers</h2>
+    <p>La trémie est une ouverture dans le plancher qui relie des étages. L'escalier se pose sur le plan et se règle en largeur, longueur et rotation. Pour les deux, cochez les étages à relier. Le détail et les captures sont sur la <a href="/guide/tremie-escalier">page Trémie et escalier</a>.</p>
+
+    <h2>Niveaux et cotes</h2>
+    <p>Le menu du haut ajoute un étage ou un sous-sol. Chaque niveau a un nom, une cote par rapport au RDC et une hauteur sous plafond. Les cotes de longueur des murs s'affichent sur le plan et se masquent depuis la barre de gauche.</p>
+    <img class="guide-shot" src="/guide/img/plan-2d-niveaux.png" alt="Barre du haut avec le choix de l'étage (RDC) et les boutons d'ajout de niveau">
+
+    <h2>Étages voisins</h2>
+    <p>Pour créer un étage, utilisez le bouton d'ajout de la barre du haut. Dans la fenêtre « Nouvel étage », donnez un nom et une cote par rapport au RDC. Si « Copier les murs extérieurs » est coché, le contour de l'étage de référence est repris.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-dialogue.png" alt="Fenêtre Nouvel étage avec le nom, la cote et la case Copier les murs extérieurs">
+        <figcaption>La fenêtre « Nouvel étage » : nom, cote et copie des murs extérieurs.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-2d-etage1.png" alt="Plan 2D de l'étage 1 seul, avec son contour et un mur intérieur">
+        <figcaption>Le plan 2D n'affiche que l'étage choisi dans le menu du haut.</figcaption>
+      </figure>
+    </div>
+    <p>En 3D, le bouton Fantômes affiche les étages voisins, au-dessus et au-dessous, en bleu transparent. Ils ne se sélectionnent pas et ne se modifient pas depuis la 3D : repassez sur l'étage concerné pour le modifier.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-barre-off.png" alt="Barre du haut : bouton Fantômes éteint (gris)">
+        <figcaption>Fantômes éteint : seul l'étage actif est affiché.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-barre-on.png" alt="Barre du haut : bouton Fantômes allumé (bleu)">
+        <figcaption>Fantômes allumé : les étages voisins apparaissent.</figcaption>
+      </figure>
+    </div>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-3d-off.png" alt="Vue 3D de l'étage 1 seul, sans étage voisin visible">
+        <figcaption>Fantômes éteint : en 3D, l'étage voisin (RDC) n'est pas visible.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-3d-on.png" alt="Vue 3D de l'étage 1 avec le RDC affiché en bleu transparent dessous">
+        <figcaption>Fantômes allumé : le RDC apparaît en bleu transparent, sous l'étage.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Se repérer</h2>
+    <p>Le plan se fait tourner à 90° ou au curseur, se recentre avec « Centrer », et s'annule avec Ctrl+Z. Les textes ajoutés (par exemple un nom de pièce) se posent avec l'outil « Texte ».</p>
+    <img class="guide-shot" src="/guide/img/plan-2d-reperer.png" alt="Barre du bas avec Imprimer, PNG, Annuler, Centrer et la rotation à 90°">
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d" aria-current="page">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

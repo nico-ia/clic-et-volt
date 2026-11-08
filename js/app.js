@@ -1614,7 +1614,7 @@ const ELEMENT_LABELS = {
     shutter_control: 'Commande de volet roulant', shutter_motor: 'Moteur de volet roulant',
     wall_light: 'Applique murale', light_ceiling: 'Plafonnier', light_spot: 'Spot encastré',
     smoke_detector: 'Détecteur de fumée (DAAF)',
-    panel: 'Tableau électrique',
+    panel: 'Tableau électrique', meter: 'Compteur électrique',
     junction_box: 'Boîte de dérivation'
 };
 
@@ -1626,7 +1626,7 @@ const EL_COLORS = {
     doorbell_button: '#f9a8d4', doorbell_chime: '#f9a8d4',
     shutter_control: '#9ca3af', shutter_motor: '#6b7280',
     wall_light: '#fbbf24', light_ceiling: '#fde047', light_spot: '#fef08a', smoke_detector: '#94a3b8',
-    panel: '#06b6d4',
+    panel: '#06b6d4', meter: '#be123c',
     junction_box: '#e2e8f0'
 };
 
@@ -2184,8 +2184,8 @@ function computeOpeningCollisions() {
 function deviceBox(el) {
     const c = getElCoords(el);
     const gang = gangFamily(el.type) !== null;
-    const r = el.type === 'panel' ? 21 : el.type === 'junction_box' ? 5 : gang ? 3.6 : (el.type === 'outlet_dedicated_20' || el.type === 'outlet_dedicated_32') ? 7.6 : 4;
-    const h = el.type === 'panel' ? 28 : el.type === 'wall_light' || el.type === 'junction_box' ? 5 : 4.5;
+    const r = el.type === 'panel' ? 21 : el.type === 'meter' ? 10 : el.type === 'junction_box' ? 5 : gang ? 3.6 : (el.type === 'outlet_dedicated_20' || el.type === 'outlet_dedicated_32') ? 7.6 : 4;
+    const h = el.type === 'panel' ? 28 : el.type === 'meter' ? 15 : el.type === 'wall_light' || el.type === 'junction_box' ? 5 : 4.5;
     return { el, x: c.x, y: c.y, z: c.z, ceiling: CEILING_TYPES.includes(el.type), r, h };
 }
 
@@ -2394,7 +2394,7 @@ function computeShaftCollisions() {
             if (!center) return;
             electricalOn(lv).forEach(el => {
                 const c = getElCoords(el);
-                const r = el.type === 'panel' ? 20 : 14;
+                const r = el.type === 'panel' || el.type === 'meter' ? 20 : 14;
                 if (Math.hypot(c.x - center.x, c.y - center.y) < half + r && !list.some(x => x.kind === 'appareil' && x.other === el && x.shaft === sh)) list.push({ shaft: sh, other: el, kind: 'appareil' });
             });
         });
@@ -2762,8 +2762,8 @@ function computeCircuitReport() {
     const panels = electricalOn().filter(el => el.type === 'panel');
     // un étage sans tableau est alimenté par la trémie qui le relie au tableau d'un autre niveau
     const anyPanel = projectData.electrical.some(el => el.type === 'panel');
-    // une boîte de dérivation posée n'est pas un appareil : seule, elle n'appelle ni tableau ni alerte d'appareil
-    if (electricalOn().some(el => el.type !== 'panel' && el.type !== 'junction_box') && !panels.length) {
+    // une boîte de dérivation posée n'est pas un appareil : seule, elle n'appelle ni tableau ni alerte d'appareil. Le compteur non plus
+    if (electricalOn().some(el => !['panel', 'junction_box', 'meter'].includes(el.type)) && !panels.length) {
         if (!anyPanel) addAlert('Aucun tableau électrique : les appareils ne sont pas reliés.', { tab: 'appareillage', redTools: ['panel'], hint: 'Placez un tableau électrique depuis l’onglet Appareillages.' });   // 124 : bouton Tableau entouré en rouge
         else if (shaftFeedFor(activeLevelId).reason) addAlert('Cet étage n\'est relié au tableau par aucune trémie : ses appareils ne sont pas alimentés.', { tab: 'ouvertures', hint: 'Placez une trémie qui relie cet étage au tableau de l’autre niveau, depuis l’onglet Ouvertures.' });
     }
@@ -3398,7 +3398,7 @@ function updateCircuitsUI() {
 
 // ---------- Métré en tableaux (écran + impression) ----------
 // Quantitatif par catégories : null = ligne d'espacement entre deux catégories
-const BOM_DEVICE_ORDER = ['panel', 'light_ceiling', 'light_spot', 'wall_light', 'smoke_detector', 'switch_simple', 'switch_va_et_vient', 'switch_pushbutton', 'switch_dimmer', 'motion_timer', 'outlet_16a', 'outlet_20a', 'outlet_20a_classic', 'outlet_dedicated_20', 'outlet_dedicated_32', 'outlet_switched', 'doorbell_button', 'doorbell_chime', 'shutter_control', 'shutter_motor'];
+const BOM_DEVICE_ORDER = ['panel', 'meter', 'light_ceiling', 'light_spot', 'wall_light', 'smoke_detector', 'switch_simple', 'switch_va_et_vient', 'switch_pushbutton', 'switch_dimmer', 'motion_timer', 'outlet_16a', 'outlet_20a', 'outlet_20a_classic', 'outlet_dedicated_20', 'outlet_dedicated_32', 'outlet_switched', 'doorbell_button', 'doorbell_chime', 'shutter_control', 'shutter_motor'];
 // Nombre de boîtes de dérivation de tout le projet (une par étage relié à une trémie)
 function countDerivationBoxes() {
     const saved = activeLevelId;
@@ -3510,8 +3510,8 @@ function printReport() {
         '.rt-title{font-size:12px;margin:10px 0 4px}.rt-note,.rt-empty{font-size:9px}.rt-alerts li{margin-bottom:1px}' +
         '}';
     win.document.open();
-    win.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Métré — Clic & Volt</title><style>' + css + '</style></head><body><div class="page">' +
-        '<div class="toolbar"><h1>Clic & Volt — Métré & contrôles <small style="font-weight:normal;color:#64748b">(' + date + ')</small></h1>' +
+    win.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Métré — Clic et Volt</title><style>' + css + '</style></head><body><div class="page">' +
+        '<div class="toolbar"><h1>Clic et Volt — Métré & contrôles <small style="font-weight:normal;color:#64748b">(' + date + ')</small></h1>' +
         '<label style="font-size:12px">Échelle <select onchange="fitRpt(this.value)" style="font:inherit;padding:4px">' +
         '<option value="1">100 %</option><option value="0.9">90 %</option><option value="0.85">85 %</option><option value="0.8">80 %</option><option value="0.75">75 %</option>' +
         '<option value="auto">Ajuster à une page</option></select></label>' +
@@ -5457,19 +5457,15 @@ async function restoreAutosave() {
         if (!s) return;
         const p = JSON.parse(s);
         if (p && Array.isArray(p.walls) && p.walls.length > 0) {
-            if (await askConfirm('Projet retrouvé', 'Un projet non enregistré a été retrouvé (' + p.walls.length + ' murs). Le reprendre ?', 'Reprendre le projet', { cancelLabel: 'Ne pas reprendre' })) {
-                resetCableCache();
-                projectData = p;
-                currentProjectFileName = (() => { try { return localStorage.getItem(AUTOSAVE_KEY + '_name') || null; } catch (e) { return null; } })();   // 137
-                ensureProjectDefaults();
-                recenter2DView();
-                updateStats();
-                redraw2D();
-                _lastAutosave = s;
-                showNotification('Projet précédent restauré', 'success');
-            } else {
-                localStorage.setItem(AUTOSAVE_KEY + '_backup', s);
-            }
+            resetCableCache();
+            projectData = p;
+            currentProjectFileName = (() => { try { return localStorage.getItem(AUTOSAVE_KEY + '_name') || null; } catch (e) { return null; } })();   // 137
+            ensureProjectDefaults();
+            recenter2DView();
+            updateStats();
+            redraw2D();
+            _lastAutosave = s;
+            showNotification('Projet précédent restauré', 'success');
         }
     } catch (e) { /* données illisibles : on ignore */ }
 }
@@ -5596,7 +5592,7 @@ const PRINT_LEGEND_GROUPS = [
     ['Interrupteurs et commandes', t => t.startsWith('switch_') || ['motion_timer', 'doorbell_button', 'shutter_control'].includes(t)],
     ['Éclairage', t => ['light_ceiling', 'light_spot', 'wall_light'].includes(t)],
     ['Autres appareils', t => ['smoke_detector', 'doorbell_chime', 'shutter_motor'].includes(t)],
-    ['Tableaux', t => t === 'panel']
+    ['Tableaux', t => t === 'panel' || t === 'meter']
 ];
 
 // Rang de famille d'un appareil dans la légende imprimée (99 = hors légende, en fin de liste)
@@ -5785,7 +5781,7 @@ function printPlan(mode) {
         const title = mode === '3d' ? 'Plan 3D' : 'Plan 2D';
         printWindow.document.open();
         printWindow.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>' + title +
-            ' — Clic & Volt</title><style id="print-style">@page{size:landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}</style></head><body><div class="toolbar"><h1>Clic & Volt — ' +
+            ' — Clic et Volt</title><style id="print-style">@page{size:landscape;margin:10mm}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#fff;color:#0f172a;font:14px Arial,sans-serif}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 8px}.toolbar label{font-weight:600}.toolbar button,.toolbar select{font:inherit;padding:5px 10px}h1{font-size:16px;margin:0 auto 0 0}.plan{display:block;width:100%;height:calc(100vh - 38mm);object-fit:contain;break-inside:avoid;page-break-inside:avoid}@media print{.toolbar{display:none!important}.plan{height:calc(100vh - 20mm);width:100%;object-fit:contain}}</style></head><body><div class="toolbar"><h1> Clic et Volt — ' +
             title + '</h1><label for="orientation">Orientation</label><select id="orientation"><option value="landscape" selected>Paysage</option><option value="portrait">Portrait</option></select>' + '<span style="font-weight:600">Recadrage (%) :</span> <label>Haut <input id="crop-t" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Bas <input id="crop-b" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Gauche <input id="crop-l" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <label>Droite <input id="crop-r" type="number" min="0" max="95" step="1" value="0" style="width:52px;font:inherit;padding:4px"></label> <button id="crop-reset" type="button">Réinitialiser le cadrage</button>' + '<button id="print-button" type="button" disabled>Imprimer / Enregistrer en PDF</button></div><div id="preview-row"><div id="stage"><img class="plan" id="plan" alt="' +
             title + '"><div id="crop-box"><i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i><i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i></div></div><div id="plan-sheet"><img id="plan-preview" alt="' + title + ' avec légende"></div></div><img id="plan-print" alt="' + title + '">' +
             '<style>' +

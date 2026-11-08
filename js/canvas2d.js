@@ -1346,6 +1346,26 @@ function drawElementSymbol2D(el) {
         line(-4, 0, 4, 0, 1.2, ink);
         line(0, -4, 0, 4, 1.2, ink);
         ringX = 0; ringR = 9;
+    } else if (t === 'meter') {
+        // compteur posé : coffret clair, cadran de mesure et sigle kWh
+        ctx2D.beginPath();
+        ctx2D.rect(-7, -10, 14, 20);
+        ctx2D.fillStyle = paper;
+        ctx2D.fill();
+        ctx2D.lineWidth = (2.2) * LW;
+        ctx2D.strokeStyle = col;
+        ctx2D.stroke();
+        ctx2D.beginPath();
+        ctx2D.arc(0, -2, 3.2, 0, Math.PI * 2);
+        ctx2D.strokeStyle = col;
+        ctx2D.lineWidth = (1) * LW;
+        ctx2D.stroke();
+        ctx2D.fillStyle = col;
+        ctx2D.font = 'bold 4px Inter, sans-serif';
+        ctx2D.textAlign = 'center';
+        ctx2D.textBaseline = 'middle';
+        ctx2D.fillText('kWh', 0, 6.5);
+        ringX = 0; ringR = 12;
     } else if (t === 'panel') {
         ctx2D.beginPath();
         ctx2D.rect(-1, -18, 11, 36);
@@ -1405,6 +1425,7 @@ function drawElementSymbol2D(el) {
     if (!isPrintRendering && (el.id === selected3DId || selectedDeviceIds.includes(el.id))) {
         const r = Math.max(ringR, 10);
         if (t === 'panel') selectionFrame2D(-5, -22, 19, 44);
+        else if (t === 'meter') selectionFrame2D(-11, -14, 22, 28);
         else selectionFrame2D(ringX - r, -r, 2 * r, 2 * r);
     }
     ctx2D.restore();
@@ -2006,7 +2027,7 @@ function nearestWallInfo(coords) {
 }
 
 function defaultHeightFor(type) {
-    if (type === 'panel' || type === 'junction_box') return 150;
+    if (type === 'panel' || type === 'junction_box' || type === 'meter') return 150;
     if (type === 'wall_light') return 180;
     if (type === 'doorbell_chime') return 200;
     if (type === 'shutter_motor') return 210;
@@ -2065,6 +2086,10 @@ function place2DAt(coords) {
         saveStateToUndo();
         projectData.electrical.push({ levelId: activeLevelId, id: 'el_' + uid, type, x: coords.x, y: 245, z: coords.y });
     } else {
+        if (type === 'meter') {
+            if (activeLevelId !== 'lvl_rdc') { showNotification('Le compteur se place au RDC', 'error'); return; }
+            if (projectData.electrical.some(el => el.type === 'meter')) { showNotification('Un seul compteur par projet', 'error'); return; }
+        }
         const info = nearestWallInfo(coords);
         if (!info || info.d > (info.wall.thickness || 10) / 2 + 60) {
             showNotification("Cliquez près d'un mur pour placer cet élément", 'error');

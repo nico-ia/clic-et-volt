@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trémie et escalier entre deux étages | Clic et Volt</title>
+  <meta name="description" content="Relier deux niveaux d'un plan électrique avec une trémie ou un escalier, et faire passer les câbles d'un étage à l'autre.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/tremie-escalier">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .minis { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .minis figure { margin: 0; flex: 1 1 260px; }
+    .minis figcaption { font-size: 14px; color: #475569; margin-top: -12px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier" aria-current="page">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Trémie et escalier entre deux étages</h1>
+    <p>Une trémie est une ouverture dans le plancher qui laisse passer les câbles entre deux niveaux. Un escalier relie aussi deux niveaux.</p>
+
+    <h2>Poser une trémie</h2>
+    <ol>
+      <li>Ouvrez l'onglet « Ouvertures ».</li>
+      <li>Cochez les étages à relier dans « Niveaux reliés ».</li>
+      <li>Cliquez sur le plan.</li>
+    </ol>
+    <p>Une trémie peut être posée n'importe où sur le plan. Ici, l'étage 1 est coché : la trémie relie le RDC et l'étage 1.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/tremie-panneau-avant.png" alt="Onglet Ouvertures : outil Trémie actif, case Étage 1 décochée dans Niveaux reliés">
+        <figcaption>Avant : l'outil Trémie est actif, la case Étage 1 est décochée.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/tremie-panneau-apres.png" alt="Case Étage 1 cochée dans Niveaux reliés">
+        <figcaption>Après : la case Étage 1 est cochée.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/tremie-plan-apres.png" alt="Trémie posée sur le plan, libellée RDC ↔ Étage 1">
+        <figcaption>Après : la trémie est posée, libellée « RDC ↔ Étage 1 ».</figcaption>
+      </figure>
+    </div>
+    <p>En vue 3D, la trémie apparaît comme une gaine verticale entre les deux étages.</p>
+    <img class="guide-shot" src="/guide/img/tremie-3d-mini.png" alt="Vue 3D : gaine verticale de la trémie entre le RDC et l'étage 1, avec la boîte blanche de dérivation à sa base">
+
+    <h2>Point de dérivation</h2>
+    <p>La boîte de dérivation de la trémie est placée à 1,50 m du sol par défaut (centre de la boîte), à chaque étage relié. Sa hauteur se règle en 3D.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/tremie-derivation-3d.png" alt="Vue 3D : petite boîte blanche de dérivation au pied de la gaine de la trémie">
+        <figcaption>Point de dérivation : la petite boîte blanche, à la base de la gaine.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/tremie-derivation-reglage.png" alt="Panneau Trémie + boîte de dérivation : curseur Hauteur au sol boîte à 1,50 m">
+        <figcaption>Réglage : en 3D, sélectionnez la trémie, puis ajustez « Hauteur au sol boîte » (1,50 m par défaut).</figcaption>
+      </figure>
+    </div>
+
+    <h2>Poser un escalier</h2>
+    <ol>
+      <li>Ouvrez l'onglet « Ouvertures » et cliquez sur « Escalier ».</li>
+      <li>Cochez les étages à relier dans « Niveaux reliés ».</li>
+      <li>Cliquez sur le plan, près d'un mur : l'escalier se colle au mur.</li>
+    </ol>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/escalier-panneau-avant.png" alt="Onglet Ouvertures : outil Escalier actif, aucun escalier posé">
+        <figcaption>Avant : l'outil Escalier est actif, aucun escalier n'est posé.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/escalier-plan-apres.png" alt="Escalier posé contre le mur, avec une flèche de montée et le libellé Étage 1">
+        <figcaption>Après : l'escalier est posé contre le mur. La flèche indique le sens de la montée, et il est relié à l'étage 1.</figcaption>
+      </figure>
+    </div>
+    <p>En vue 3D, l'escalier monte d'un étage à l'autre.</p>
+    <img class="guide-shot" src="/guide/img/escalier-3d-mini.png" alt="Vue 3D : escalier qui monte du RDC vers l'étage 1">
+    <p>L'escalier se règle en largeur, longueur et rotation.</p>
+    <img class="guide-shot" src="/guide/img/escalier-reglages.png" alt="Panneau Escalier : curseurs Largeur 90 cm, Longueur 300 cm, Rotation 0°, et case Étage 1 cochée" style="max-width: 240px;">
+    <p>Un escalier qui touche une porte, une fenêtre ou le débattement de ses ventaux est signalé en rouge dans l'onglet « Alertes ». La pose n'est pas refusée : il faut déplacer l'élément concerné.</p>
+
+    <h2>Câbles et escalier</h2>
+    <p>Si un câble traverse l'emprise d'un escalier, le tronçon concerné clignote en rouge pour signaler l'appareil à déplacer.</p>
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier" aria-current="page">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

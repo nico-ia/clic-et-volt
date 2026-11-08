@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Questions fréquentes sur Clic et Volt | Clic et Volt</title>
+  <meta name="description" content="Questions fréquentes sur Clic et Volt : fonctionnement, enregistrement du projet, impression, alertes et données stockées.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/faq">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq" aria-current="page">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Questions fréquentes</h1>
+
+    <h2>Faut-il installer l'application ?</h2>
+    <p>Non. Elle fonctionne dans le navigateur, avec une connexion internet (voir « L'application fonctionne-t-elle hors ligne ? »).</p>
+
+    <h2>Où sont enregistrés mes projets ?</h2>
+    <p>La sauvegarde automatique est stockée dans le navigateur, et l'application rouvre automatiquement le dernier projet au démarrage. Pour garder un fichier, utilisez « Enregistrer » : il crée un JSON, qu'on rouvre avec « Ouvrir ».</p>
+    <img class="guide-shot" src="/guide/img/faq-enregistrer-ouvrir.png" alt="Barre du haut : boutons Enregistrer et Ouvrir">
+
+    <h2>Comment imprimer le plan ?</h2>
+    <p>« Imprimer » ouvre l'aperçu, avec une feuille A4 et une légende des appareillages présents. Le PDF se fait depuis la fenêtre d'impression. « PNG » enregistre l'image du plan.</p>
+    <img class="guide-shot" src="/guide/img/plan-2d-reperer.png" alt="Barre du bas avec Imprimer, PNG, Annuler, Centrer et la rotation à 90°">
+
+    <h2>Que signifie une alerte ?</h2>
+    <p>Une alerte signale un point à vérifier, sans bloquer le travail. Le bouton « Aller » sélectionne l'élément concerné et ouvre son onglet. La piste de correction est écrite sous l'alerte.</p>
+    <img class="guide-shot" src="/guide/img/alertes-onglet.png" alt="Onglet Alertes de la barre de droite : liste d'avertissements avec un bouton Aller pour chacun">
+
+    <h2>Les contrôles remplacent-ils un électricien ?</h2>
+    <p>Non. Les contrôles sont indicatifs. Faites valider votre projet par un électricien, notamment selon la norme NF C 15-100.</p>
+
+    <h2>Puis-je annuler une erreur ?</h2>
+    <p>Oui, avec Ctrl+Z. Ctrl+Y rétablit. Un déplacement ou un réglage forme une seule étape d'annulation.</p>
+
+    <h2>Quels raccourcis existent ?</h2>
+    <p>T pour tracer un mur, S pour sélectionner, Suppr pour supprimer la sélection, Ctrl+D pour dupliquer, Échap pour arrêter un tracé ou une pose, et ? pour ouvrir l'aide.</p>
+
+    <h2>Pourquoi l'application restaure-t-elle le dernier projet ?</h2>
+    <p>Les guides sont des pages séparées : en les quittant, l'état de l'application est perdu. Le projet est donc sauvegardé en continu dans le navigateur, puis rouvert automatiquement au retour. La sauvegarde est propre à ce navigateur et à cette adresse. Pour garder une copie à part, utilisez « Enregistrer ».</p>
+
+    <h2>Comment ouvrir un projet enregistré sur un autre ordinateur ?</h2>
+    <p>Copiez le fichier JSON créé par « Enregistrer », puis ouvrez-le sur l'autre ordinateur avec « Ouvrir ».</p>
+
+    <h2>Pourquoi un circuit supplémentaire est-il créé automatiquement ?</h2>
+    <p>Chaque circuit a un nombre maximum de points. Quand un circuit est plein, l'application crée un circuit de même type et l'indique par une notification. Les limites par circuit sont détaillées dans <a href="/guide/metre-controles">Métré et contrôles</a>.</p>
+    <img class="guide-shot" src="/guide/img/circuits-liste-groupes.png" alt="Liste des circuits du RDC : circuits d'éclairage, de prises et autres, avec leur nom, leur calibre et leur nombre de points">
+
+    <h2>Comment sont comptés les points ?</h2>
+    <p>Un point correspond à un appareil alimenté : lampe, prise, appareil fixe, sonnerie ou moteur de volet. Les commandes (interrupteurs, boutons poussoirs, commandes de volet) et le bouton de sonnerie ne comptent pas.</p>
+        <img class="guide-shot" src="/guide/img/metre-controles-circuits.png" alt="Tableau des circuits avec le nombre de points, le calibre, la section et la colonne Contrôle">
+
+    <h2>Comment fonctionnent les volets ?</h2>
+    <p>Les moteurs et les commandes de volets roulants sont placés sur leur propre circuit, « Volets 10A ». Si un moteur n'a pas de commande, ou l'inverse, une alerte le signale.</p>
+
+    <h2>Mes données quittent-elles mon ordinateur ?</h2>
+    <p>Le contenu de votre projet reste dans le navigateur ou dans le fichier que vous enregistrez. L'application ne l'envoie à aucun serveur. Le site utilise en revanche un outil de mesure de fréquentation (Vercel Analytics).</p>
+
+    <h2>L'application fonctionne-t-elle hors ligne ?</h2>
+    <p>Non, pas de façon fiable. Elle charge depuis internet Tailwind (mise en forme), Font Awesome (icônes) et three.js (vue 3D). Sans connexion, l'affichage peut être incomplet.</p>
+
+    <h2>Fonctionne-t-elle sur tablette ou téléphone ?</h2>
+    <p>Elle est conçue pour un ordinateur, avec souris et clavier. Elle n'est pas adaptée au téléphone, et son usage sur tablette n'a pas été testé.</p>
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq" aria-current="page">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

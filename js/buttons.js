@@ -37,6 +37,8 @@ const PLACE_BUTTONS = [
     // ----- Appareillages -----
     { group: 'appareillages', type: 'panel', label: 'Tableau', title: 'Tableau électrique : un seul par projet, au RDC', color: '#06b6d4',
         icon: c => placeSvg('-2 -20 16 40', `<rect x="-1" y="-18" width="11" height="36" fill="#f8fafc" stroke="${c}" stroke-width="1.6"/><path d="M-1,-6 H10 M-1,6 H10" stroke="${c}" stroke-width="0.9"/><polygon points="3,-4 7.5,-0.5 5,-0.5 7.5,4 2.5,0.5 5,0.5" fill="${c}"/>`) },
+    { group: 'appareillages', type: 'meter', label: 'Compteur', title: 'Compteur électrique : un seul par projet, au RDC, posé sur un mur', color: '#be123c',
+        icon: c => placeSvg('-2 -20 16 40', `<rect x="-1" y="-9" width="11" height="18" rx="1" fill="#f8fafc" stroke="${c}" stroke-width="1.6"/><circle cx="4.5" cy="0" r="3.4" fill="none" stroke="${c}" stroke-width="0.9"/><path d="M4.5,0 L6.3,-1.8" stroke="${c}" stroke-width="0.9"/>`) },
     { group: 'appareillages', type: 'junction_box', label: 'Dérivation', title: 'Boîte de dérivation : point où se rejoignent les câbles d’un circuit', color: '#64748b',
         icon: c => placeSvg('-8 -8 16 16', `<rect x="-6" y="-6" width="12" height="12" fill="#f8fafc" stroke="${c}" stroke-width="1.6"/><path d="M-4,0 H4 M0,-4 V4" stroke="#0f172a" stroke-width="0.9"/>`) },
     { group: 'appareillages', sep: true },

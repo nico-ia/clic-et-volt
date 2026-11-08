@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Câblage électrique automatique : tracé des câbles | Clic et Volt</title>
+  <meta name="description" content="Le câblage automatique de Clic et Volt : les câbles se tracent entre le tableau et chaque appareil, avec un cheminement Auto, faux plafond ou sous plancher.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/cablage-automatique">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .minis { display: flex; flex-wrap: wrap; gap: 16px; }
+    .minis figure { margin: 0; flex: 1 1 280px; }
+    .minis figcaption { font-size: 14px; color: #475569; margin-top: -12px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique" aria-current="page">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+    <main>
+    <h1>Câblage électrique automatique</h1>
+    <p>Dans Clic et Volt, on ne dessine pas les câbles. L'application les trace seule entre le tableau et chaque appareil, en suivant le plan.</p>
+
+    <h2>Comment les câbles se tracent</h2>
+    <p>Un appareil posé reçoit son câble automatiquement. Le câble suit les murs et passe par les trémies pour rejoindre un autre étage. Les prises d'un circuit sont en série : chaque boîte a une entrée et une sortie.</p>
+
+    <h2>Le cheminement</h2>
+    <p>Sur la carte de chaque circuit, dans l'onglet Circuits :</p>
+    <img class="guide-shot" src="/guide/img/cablage-auto-apercu.png" alt="Carte du circuit Éclairage 10 A dans l'onglet Circuits, dépliée : la ligne Cheminement des câbles propose Auto, Faux plafond et Sous plancher, avec le bouton Réglage manuel par tronçon en dessous">
+    <ul>
+      <li><strong>Auto</strong> (réglage par défaut) : le câble suit les murs, bas ou haut, au plus court selon les portes et fenêtres.</li>
+      <li><strong>Faux plafond / Sous plancher</strong> : le câble trace des lignes droites, 10 cm au-dessus du plafond ou 10 cm sous le sol, sans suivre les murs.</li>
+    </ul>
+
+    <h2>Régler un tronçon</h2>
+    <p>Le circuit passe en réglage manuel depuis sa fiche. On clique ensuite un tronçon en 2D ou en 3D : il s'entoure de pointillés et propose Auto, Murs bas, Murs haut, Faux plafond ou Sous plancher. Un réglage impossible, par exemple des murs bas devant une porte, est refusé avec un avertissement de 6 secondes.</p>
+    <img class="guide-shot" src="/guide/img/cablage-auto-reglage-troncon.png" alt="Carte du circuit en réglage manuel : le bandeau indique « Actif : cliquez un tronçon » et le bouton Réglage manuel par tronçon est actif">
+    <img class="guide-shot" src="/guide/img/troncon-reglage-apercu.png" alt="Tronçon de mur sélectionné dans le plan 2D : le câble est entouré de pointillés, et le panneau de gauche propose Auto, Murs bas, Murs haut, Faux plafond et Sous plancher">
+
+    <p>En 3D, on clique le câble du tronçon à régler, comme en 2D. Il s'entoure de pointillés, puis on choisit le réglage. Sur ce mur, Auto donne le même tracé que Murs haut : le câble court en haut du mur.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/cablage-auto-troncon-3d-haut.png" alt="Vue 3D : tronçon de câble sélectionné (pointillés), réglé Auto ou Murs haut : le câble court sous le plafond du mur, puis redescend vers l'interrupteur">
+        <figcaption>Auto ou Murs haut</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/cablage-auto-troncon-3d-bas.png" alt="Vue 3D : même tronçon réglé Murs bas : le câble longe le bas du mur au niveau du sol, puis remonte vers l'interrupteur">
+        <figcaption>Murs bas</figcaption>
+      </figure>
+    </div>
+    <p>Faux plafond et Sous plancher ne sont pas illustrés ici : sur ce mur, ils ne changent pas le tracé.</p>
+
+
+    <h2>Les câbles de commande</h2>
+    <p>Un interrupteur est relié à sa lampe par un câble de commande. Une lampe commandée depuis un autre circuit n'est pas reliée automatiquement : l'avertissement indique quoi changer.</p>
+
+    <h2>Afficher ou masquer les câbles</h2>
+    <p>Le bouton « Câbles », dans « Aides & Commandes », les affiche ou les masque en 2D et en 3D, sans les supprimer du projet. Il est dans la ligne du haut, entre Ortho et Quadrillage.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/cablage-auto-cables-bouton-on.png" alt="Bouton Câbles en ON dans la ligne Aides & Commandes, entre Ortho et Quadrillage">
+        <figcaption>Câbles ON : affichés</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/cablage-auto-cables-bouton-off.png" alt="Bouton Câbles en OFF dans la ligne Aides & Commandes : les câbles sont masqués">
+        <figcaption>Câbles OFF : masqués</figcaption>
+      </figure>
+    </div>
+    <img class="guide-shot" src="/guide/img/cables-2d-actifs.png" alt="Plan 2D avec le bouton Câbles en ON : les câbles colorés relient le tableau et les appareils">
+    <img class="guide-shot" src="/guide/img/cables-2d-masques.png" alt="Même plan 2D avec le bouton Câbles en OFF : les câbles sont masqués, les appareils restent visibles">
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique" aria-current="page">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Métré et contrôles d'un circuit électrique | Clic et Volt</title>
+  <meta name="description" content="Nombre de points maximum par circuit, sections de câble, chute de tension et métré : les contrôles indicatifs de Clic et Volt.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/metre-controles">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles" aria-current="page">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Métré et contrôles d'un circuit électrique</h1>
+    <p>Chaque circuit a un calibre (disjoncteur), une section de fil et un nombre maximum de points. L'application vérifie ces valeurs et signale les écarts.</p>
+
+    <h2>Nombre maximum de points par circuit</h2>
+    <table>
+      <tr><th>Circuit</th><th>Calibre</th><th>Section</th><th>Points max</th></tr>
+      <tr><td>Éclairage</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+      <tr><td>Prises 16 A</td><td>16 A</td><td>2,5 mm²</td><td>8</td></tr>
+      <tr><td>Prises 20 A classiques</td><td>20 A</td><td>2,5 mm²</td><td>12</td></tr>
+      <tr><td>Prises 20 A plan de travail</td><td>20 A</td><td>2,5 mm²</td><td>6</td></tr>
+      <tr><td>Circuit dédié 20 A</td><td>20 A</td><td>2,5 mm²</td><td>1</td></tr>
+      <tr><td>Circuit dédié 32 A</td><td>32 A</td><td>6 mm²</td><td>1</td></tr>
+      <tr><td>Sonnerie</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+      <tr><td>DAAF</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+      <tr><td>Volets</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+    </table>
+    <p>Les circuits dédiés alimentent une seule prise chacun. La sonnerie, le DAAF et les volets ont chacun leur propre circuit, distinct de l'éclairage.</p>
+    <p>Au-delà du nombre maximum, l'application crée automatiquement un circuit supplémentaire et l'indique par une notification.</p>
+    <p>Les commandes (interrupteurs, boutons, commandes de volet) ne comptent pas comme points. Les lampes, prises, appareils et moteurs de volet comptent chacun pour un point.</p>
+
+    <h2>Section et calibre</h2>
+    <p>Le calibre impose une section minimale : 1,5 mm² pour 10 A, 2,5 mm² pour 20 A et 6 mm² pour 32 A. Un calibre de 16 A demande 2,5 mm² pour les prises, mais reste admis en 1,5 mm² pour l'éclairage. Une section plus fine que le minimum est signalée par une alerte.</p>
+
+    <h2>Chute de tension</h2>
+    <p>La chute de tension est calculée pour chaque circuit, au calibre du disjoncteur, en cuivre et en monophasé. Elle prend en compte la distance entre le tableau et l'appareil le plus éloigné. Elle doit rester sous 5 %, que le circuit soit un circuit d'éclairage ou de prises.</p>
+
+    <h2>Métré</h2>
+    <p>Le métré compte les éléments par catégorie : ouvertures, appareillage, gaines et câbles. Pour chaque circuit, la longueur de câble inclut 30 cm de réserve à chaque extrémité, et une marge de 10 % est ajoutée au total. Les montées entre niveaux sont comptées dans la longueur, et les boîtes de dérivation sont comptées à part.</p>
+    <p>Le tableau des circuits affiche pour chaque circuit le calibre, la section, les points, la longueur de câble, la chute de tension et une colonne Contrôle. Cette colonne indique OK, ou liste les écarts (points dépassés, section trop faible, chute trop forte). Les lignes en écart sont surlignées en rouge clair.</p>
+    <img class="guide-shot" src="/guide/img/metre-controles-apercu.png" alt="Métré : tableau quantitatif des ouvertures et tableau des circuits avec la colonne Contrôle">
+    <img class="guide-shot" src="/guide/img/metre-controles-circuits.png" alt="Zoom sur le tableau des circuits : calibre, section, points, longueur de câble, chute de tension et colonne Contrôle à OK pour chaque circuit">
+
+    <p>Le métré s'imprime et s'exporte en CSV, à ouvrir dans un tableur.</p>
+
+    <p>Les contrôles sont indicatifs. Faites valider votre projet par un électricien, notamment selon la norme NF C 15-100.</p>
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles" aria-current="page">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

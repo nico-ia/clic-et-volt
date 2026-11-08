@@ -325,45 +325,59 @@
         <text class="g-lbl" x="270" y="170">Prise</text>
         <text class="g-lbl" x="160" y="18">Posé en 2D ou en 3D : le câble se trace seul</text>`);
 
-    // Ajouter un circuit : bouton choisi entouré de jaune, bouton « Aller », seuls les appareils compatibles sont cliquables
+    // Ajouter un circuit : bouton choisi entouré de cyan, bouton « Aller », seuls les appareils compatibles sont cliquables
     const animAddCircuit = () => svg(`
-        <text class="g-lbl" x="84" y="16" style="fill:#e2e8f0">Circuits</text>
-        <text class="g-lbl" x="238" y="16" style="fill:#e2e8f0">Appareillages</text>
+        <text class="g-lbl" x="86" y="14" style="fill:#e2e8f0">Circuits</text>
+        <text class="g-lbl" x="238" y="14" style="fill:#e2e8f0">Appareillages</text>
         <g class="g-pop p1">
-            <rect x="14" y="24" width="140" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
-            <text class="g-lbl" x="84" y="36" style="fill:#e2e8f0;font-size:8.5px">Nouveau circuit éclairage</text>
+            <rect x="8" y="24" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="33" y="38" style="fill:#e2e8f0;font-size:8px">Éclairage</text>
+            <rect x="61" y="24" width="50" height="22" rx="4" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+            <text class="g-lbl" x="86" y="33" style="fill:#e2e8f0;font-size:8px">Prises</text>
+            <text class="g-lbl" x="86" y="42" style="fill:#e2e8f0;font-size:8px">16 A</text>
+            <rect x="114" y="24" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="139" y="33" style="fill:#e2e8f0;font-size:8px">Prises</text>
+            <text class="g-lbl" x="139" y="42" style="fill:#e2e8f0;font-size:8px">20 A</text>
+            <rect x="8" y="49" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="33" y="58" style="fill:#e2e8f0;font-size:8px">20A plan</text>
+            <text class="g-lbl" x="33" y="67" style="fill:#e2e8f0;font-size:8px">de travail</text>
+            <rect x="61" y="49" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="86" y="58" style="fill:#e2e8f0;font-size:8px">Prise</text>
+            <text class="g-lbl" x="86" y="67" style="fill:#e2e8f0;font-size:8px">dédiée 20 A</text>
+            <rect x="114" y="49" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="139" y="58" style="fill:#e2e8f0;font-size:8px">Prise</text>
+            <text class="g-lbl" x="139" y="67" style="fill:#e2e8f0;font-size:8px">dédiée 32 A</text>
+            <rect x="8" y="74" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="33" y="88" style="fill:#e2e8f0;font-size:8px">Sonnerie</text>
+            <rect x="61" y="74" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="86" y="88" style="fill:#e2e8f0;font-size:8px">Volet</text>
+            <rect x="114" y="74" width="50" height="22" rx="4" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+            <text class="g-lbl" x="139" y="83" style="fill:#e2e8f0;font-size:8px">Détecteur</text>
+            <text class="g-lbl" x="139" y="92" style="fill:#e2e8f0;font-size:8px">de fumée</text>
         </g>
         <g class="g-pop p2">
-            <rect x="14" y="48" width="140" height="18" rx="4" fill="none" stroke="#facc15" stroke-width="2"/>
-            <text class="g-lbl" x="84" y="60" style="fill:#fef08a;font-size:8.5px">Nouveau circuit prises 16 A</text>
-        </g>
-        <g class="g-pop p2">
-            <rect x="14" y="72" width="140" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
-            <text class="g-lbl" x="84" y="84" style="fill:#e2e8f0;font-size:8.5px">Nouveau circuit volet</text>
-        </g>
-        <g class="g-pop p3">
-            <rect x="14" y="98" width="140" height="18" rx="4" fill="#1e293b" stroke="#facc15" stroke-width="1.5"/>
-            <text class="g-lbl" x="84" y="110" style="fill:#fef08a;font-size:8.5px">Aller aux appareillages ↗</text>
+            <rect x="8" y="102" width="156" height="16" rx="4" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
+            <text class="g-lbl" x="86" y="113" style="fill:#e2e8f0;font-size:8.5px">Aller aux appareillages ↗</text>
         </g>
         <g class="g-pop p1">
-            <rect x="170" y="24" width="136" height="18" rx="4" fill="none" stroke="#facc15" stroke-width="1.5"/>
-            <text class="g-lbl" x="238" y="36" style="fill:#e2e8f0;font-size:8.5px">Prise 16 A</text>
+            <rect class="g-picked" x="170" y="24" width="136" height="18" rx="4" fill="none" stroke="#22d3ee" stroke-width="1.5"/>
+            <text class="g-lbl" x="238" y="36" style="fill:#e2e8f0;font-size:8.5px">Prise 16A</text>
         </g>
         <g class="g-pop p2">
-            <rect x="170" y="48" width="136" height="18" rx="4" fill="none" stroke="#facc15" stroke-width="1.5"/>
+            <rect x="170" y="48" width="136" height="18" rx="4" fill="none" stroke="#22d3ee" stroke-width="1.5"/>
             <text class="g-lbl" x="238" y="60" style="fill:#e2e8f0;font-size:8.5px">Prise commandée</text>
         </g>
-        <g style="opacity:.3">
+        <g style="opacity:.4">
             <rect x="170" y="72" width="136" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
             <text class="g-lbl" x="238" y="84" style="fill:#94a3b8;font-size:8.5px">Plafonnier</text>
         </g>
-        <g style="opacity:.3">
+        <g style="opacity:.4">
             <rect x="170" y="96" width="136" height="18" rx="4" fill="none" stroke="#475569" stroke-width="1"/>
             <text class="g-lbl" x="238" y="108" style="fill:#94a3b8;font-size:8.5px">Interrupteur</text>
         </g>
-        <text class="g-lbl" x="160" y="146" style="font-size:10px">1. Le bouton choisi s’entoure de jaune</text>
+        <text class="g-lbl" x="160" y="146" style="font-size:10px">1. Le bouton choisi s’entoure de cyan</text>
         <text class="g-lbl" x="160" y="161" style="font-size:10px">2. « Aller » ouvre les appareillages</text>
-        <text class="g-lbl" x="160" y="176" style="font-size:10px">3. Seuls les appareils compatibles sont cliquables</text>`);
+        <text class="g-lbl" x="160" y="176" style="font-size:10px">3. Un clic sur un appareil le met en jaune</text>`);
 
     // Circuits : trois couleurs (même palette qu'en 2D et dans la liste des circuits)
     const animCircuits = () => svg(`
@@ -541,8 +555,8 @@
           retenir: 'Deux circuits de même couleur ? Vérifiez le nom du circuit dans la liste.' },
         { part: 'Plan 2D', title: 'Ajouter un circuit sans attendre la limite', anim: animAddCircuit,
           text: ['Dans l’onglet « Circuits », les boutons « Nouveau circuit » créent un circuit supplémentaire, même si le circuit actuel n’a pas atteint sa limite de points.',
-                 'Le bouton choisi s’entoure d’un liseré jaune : les appareils posés ensuite de ce type vont sur ce nouveau circuit. Un bouton « Aller aux appareillages » apparaît.',
-                 'Ce bouton ouvre l’onglet « Appareillages » : seuls les appareils compatibles avec ce circuit sont entourés de jaune et cliquables, les autres sont grisés.'],
+                 'Le bouton choisi s’entoure d’un liseré cyan : les appareils posés ensuite de ce type vont sur ce nouveau circuit. Un bouton « Aller aux appareillages » apparaît.',
+                 'Ce bouton ouvre l’onglet « Appareillages » : seuls les appareils compatibles avec ce circuit sont entourés de cyan et cliquables, les autres sont grisés. Un appareil cliqué passe en jaune : il est alors posé sur le nouveau circuit.'],
           essayer: { mode: '3d', tab: 'circuits', pulse: '#sidebar-3d-right [data-right-tab="circuits"]' },
           retenir: 'Un second clic sur le bouton choisi le désélectionne, sans créer de circuit.' },
         { part: 'Plan 2D', title: 'Ajouter un étage ou un sous-sol', anim: animLevels,

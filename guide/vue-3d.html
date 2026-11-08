@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vue 3D : visualiser et régler son plan électrique | Clic et Volt</title>
+  <meta name="description" content="La vue 3D de Clic et Volt : tourner, zoomer, poser et régler les appareils en volume, voir les étages voisins en fantôme.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/vue-3d">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .minis { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .minis figure { margin: 0; flex: 1 1 260px; }
+    .minis figcaption { font-size: 14px; color: #475569; margin-top: -12px; }
+  </style>
+</head>
+<body>
+  
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d" aria-current="page">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Visualiser et régler son plan en 3D</h1>
+    <p>La vue 3D montre le bâtiment en volume, comme une maquette. On y voit les murs, les ouvertures, les escaliers et les câbles.</p>
+    <img class="guide-shot" src="/guide/img/vue-3d-apercu.png" alt="Vue 3D isométrique de la maison d'exemple, avec la barre d'outils du bas : Isométrique, Dessus, Face, Profil et Centrer">
+
+    <h2>Naviguer</h2>
+    <ul>
+      <li>Clic gauche maintenu : tourner autour du bâtiment.</li>
+      <li>Clic droit maintenu : déplacer la vue.</li>
+      <li>Molette : zoom avant ou arrière.</li>
+      <li>Les boutons « Isométrique », « Dessus », « Face » et « Profil » placent la caméra. « Centrer » recadre sur tout le projet.</li>
+    </ul>
+    <img class="guide-shot" src="/guide/img/vue-3d-barre-outils.png" alt="Barre du bas de la vue 3D : Imprimer, PNG, Annuler, Rétablir, Centrer, puis Isométrique, Dessus, Face et Profil">
+
+    <h2>Poser et régler un appareil</h2>
+    <p>Un premier clic sélectionne l'appareil. Un second clic, suivi d'un glissement, le déplace le long du mur. Le curseur « Hauteur au sol » règle sa hauteur ; la distance au départ règle sa position sur le mur. « Basculer de l'autre côté du mur » le place de l'autre côté.</p>
+    <img class="guide-shot" src="/guide/img/vue-3d-reglage-appareil.png" alt="Panneau de gauche d'une prise sélectionnée en 3D : Côté du mur, Distance au départ, Hauteur au sol et Circuit">
+
+    <h2>Sélectionner plusieurs éléments</h2>
+    <p>Ctrl+clic ou Maj+clic ajoute ou retire un élément de la sélection. Les éléments sélectionnés sont encadrés. Le double clic sur un appareil affiche tout son circuit.</p>
+
+    <h2>Étages voisins</h2>
+    <p>Le bouton « Fantômes », dans la barre du haut, affiche les étages du dessus et du dessous, en bleu transparent. Il est désactivé par défaut.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-barre-off.png" alt="Barre du haut : bouton Fantômes éteint (gris)">
+        <figcaption>Fantômes éteint : seul l'étage actif est affiché.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-barre-on.png" alt="Barre du haut : bouton Fantômes allumé (bleu)">
+        <figcaption>Fantômes allumé : les étages voisins apparaissent en 3D.</figcaption>
+      </figure>
+    </div>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-3d-off.png" alt="Vue 3D de l'étage 1 seul, sans étage voisin visible">
+        <figcaption>Fantômes éteint : en 3D, l'étage voisin (RDC) n'est pas visible.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/etages-3d-on.png" alt="Vue 3D de l'étage 1 avec le RDC affiché en bleu transparent dessous">
+        <figcaption>Fantômes allumé : le RDC apparaît en bleu transparent, sous l'étage.</figcaption>
+      </figure>
+    </div>
+    <p>Les étages fantômes ne se sélectionnent pas et ne se modifient pas depuis la 3D : repassez sur l'étage concerné dans la vue 2D pour le modifier.</p>
+
+
+    <h2>Les câbles</h2>
+    <p>Les câbles se tracent automatiquement. Un câble qui traverse un escalier est signalé en rouge.</p>
+    <h3>Opacité des gaines</h3>
+    <p>Le bloc « Opacité des gaines », dans la barre de gauche, règle la transparence des gaines en 3D. Glissez le curseur « Gaines ICTA » vers la gauche pour les rendre transparentes, vers la droite pour les rendre pleines. Les boutons ▲ et ▼ permettent un réglage pas à pas. La valeur s'affiche à droite (32 % par défaut).</p>
+    <figure>
+      <img class="guide-shot" src="/guide/img/gaines-opacite-curseur.png" alt="Bloc Opacité des gaines : curseur Gaines ICTA réglé à 32 %, avec les boutons ▲ ▼ et la valeur">
+      <figcaption>Le curseur et sa valeur. Les boutons ▲ ▼ règlent pas à pas.</figcaption>
+    </figure>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/gaines-opacite-0.png" alt="Vue 3D avec opacité des gaines à 0 % : gaines invisibles, câbles en traits fins">
+        <figcaption>0 % : les gaines sont invisibles, les câbles restent en traits fins.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/gaines-opacite-32.png" alt="Vue 3D avec opacité des gaines à 32 %, valeur par défaut : gaines translucides">
+        <figcaption>32 % (par défaut) : les gaines sont translucides.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/gaines-opacite-100.png" alt="Vue 3D avec opacité des gaines à 100 % : gaines pleines">
+        <figcaption>100 % : les gaines sont pleines.</figcaption>
+      </figure>
+    </div>
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d" aria-current="page">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

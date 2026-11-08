@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Appareillages électriques : prises, interrupteurs et luminaires | Clic et Volt</title>
+  <meta name="description" content="Poser prises, interrupteurs, luminaires, sonnettes et volets sur un plan électrique : hauteurs usuelles, regroupements, va-et-vient et commandes.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/prises-interrupteurs">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .minis { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .minis figure { margin: 0; flex: 1 1 260px; }
+    .minis figcaption { font-size: 14px; color: #475569; margin-top: -12px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs" aria-current="page">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Poser prises, interrupteurs et luminaires sur un plan</h1>
+    <p>Dans l'onglet « Appareillages », choisissez l'appareil, puis cliquez près d'un mur. Pour un plafonnier ou un spot, cliquez au plafond, au milieu de la pièce. Pour arrêter la pose, cliquez « Désélection » ou appuyez sur Échap.</p>
+
+    <img class="guide-shot" src="/guide/img/prises-interrupteurs-apercu.png" alt="Onglet Appareillages ouvert à droite, avec la liste des prises, interrupteurs, luminaires et appareils de sonnerie, volets et détecteurs">
+
+    <h2>Hauteurs usuelles</h2>
+    <ul>
+      <li>Prise de courant : environ 30 cm du sol.</li>
+      <li>Interrupteur : environ 1,10 m du sol.</li>
+    </ul>
+    <p>La hauteur de chaque appareil se règle dans la vue 3D.</p>
+
+    <h2>Les appareils posés sur un mur</h2>
+    <p>Prises 16 A, prises 20 A (plan de travail ou classique), prises dédiées 20 A et 32 A, prises commandées, interrupteurs simples, va-et-vient, poussoirs, variateurs, minuteries, boutons de sonnette, commandes et moteurs de volets, boîtes de dérivation, applique murale et détecteurs de fumée. Chaque appareil prend la couleur de son circuit.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/prise-mur-2d.png" alt="Prise 16 A posée sur un mur intérieur, zoom agrandi, câbles masqués">
+        <figcaption>Une prise posée sur un mur : cliquez du côté de la pièce où elle doit être.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Les appareils posés au plafond</h2>
+    <p>Plafonnier et spot encastré. Le plafonnier se pose au milieu de la pièce.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/plafonnier-2d.png" alt="Plafonnier posé au milieu d'une pièce, vu en 2D">
+        <figcaption>Un plafonnier posé au milieu de la pièce.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Regrouper les prises et les interrupteurs</h2>
+    <p>Des prises posées côte à côte se regroupent en double, triple ou quadruple, avec un seul liseré autour. Deux interrupteurs posés côte à côte forment un double, avec deux interrupteurs au maximum : un troisième est refusé.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/prises-double-2d.png" alt="Deux prises posées côte à côte, entourées d'un seul liseré orange">
+        <figcaption>Deux prises posées côte à côte : elles partagent un seul liseré.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Relier un interrupteur à son luminaire</h2>
+    <ol>
+      <li>Cliquez sur l'interrupteur : son inspecteur s'ouvre à gauche.</li>
+      <li>Ouvrez « Modifier les associations » sous les charges commandées.</li>
+      <li>Cochez le luminaire à commander dans la liste.</li>
+    </ol>
+    <p>Avant (première capture) : l'interrupteur ne commande rien, aucune case n'est cochée et l'inspecteur indique « Aucune association calculée ».</p>
+    <img class="guide-shot" src="/guide/img/liaison-interrupteur-avant.png" alt="Inspecteur de l'interrupteur simple n°2 : « Aucune association calculée », la case du plafonnier n°2 est décochée">
+    <p>Après (deuxième capture) : la case du plafonnier n°2 est cochée. Il apparaît dans « Charge(s) commandée(s) » et un câble de commande relie l'interrupteur au luminaire dans le plan.</p>
+    <img class="guide-shot" src="/guide/img/liaison-interrupteur-apres.png" alt="Inspecteur de l'interrupteur simple n°2 : le plafonnier n°2 est coché et apparaît dans les charges commandées, le câble le relie dans le plan">
+    <p>Le luminaire peut être sur un autre circuit. L'interrupteur prend alors le circuit du luminaire. Aucune association n'est automatique : c'est vous qui choisissez.</p>
+
+    <h2>Va-et-vient</h2>
+    <p>Un va-et-vient se pose toujours par deux interrupteurs qui commandent le même luminaire. L'application les relie entre eux et au luminaire.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/va-et-vient-2d.png" alt="Deux va-et-vient posés sur les murs de la pièce, entourés de rouge, et le plafonnier au centre">
+        <figcaption>Deux va-et-vient posés : entourés de rouge (alerte), tant qu'ils ne sont pas reliés au luminaire.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Prise commandée 16 A, sonnette et volet</h2>
+    <ul>
+      <li><strong>Prise commandée 16 A</strong> : un interrupteur la coupe ou la rétablit, comme un luminaire.</li>
+      <li><strong>Sonnette</strong> : le bouton de sonnette fait sonner la sonnerie.</li>
+      <li><strong>Volet roulant</strong> : la commande fait monter ou descendre le moteur, alimenté par son propre circuit.</li>
+    </ul>
+    <p>Ces câblages sont simplifiés : les fils réels (basse tension, moteur à plusieurs fils) ne sont pas représentés.</p>
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits">Circuits</a>
+    <a href="/guide/prises-interrupteurs" aria-current="page">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

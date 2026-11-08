@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Circuits électriques : calibres, sections et points | Clic et Volt</title>
+  <meta name="description" content="Les circuits dans Clic et Volt : couleurs, calibres, sections de câble, nombre maximal de points et circuits créés automatiquement.">
+  <link rel="canonical" href="https://clic-et-volt.vercel.app/guide/circuits">
+  <meta name="robots" content="index, follow">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.6; color: #0f172a; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+    a { color: #047857; }
+    .btn-app { display: inline-block; margin-right: 12px; padding: 6px 14px; border-radius: 6px; background: #047857; color: #fff; text-decoration: none; font-weight: 600; }
+    .btn-app:hover { background: #065f46; color: #fff; }
+    nav a[aria-current="page"] { color: #0f172a; font-weight: 700; text-decoration: underline; }
+    nav.bas { margin-top: 48px; padding-top: 16px; border-top: 1px solid #cbd5e1; }
+    .btn-haut { display: inline-block; margin-left: 12px; padding: 6px 14px; border: 1px solid #047857; border-radius: 6px; color: #047857; text-decoration: none; font-weight: 600; }
+    .guide-shot { display: block; max-width: 100%; margin: 12px 0 20px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .minis { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .minis figure { margin: 0; flex: 1 1 240px; }
+    .minis .guide-shot { margin: 8px 0 4px; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits" aria-current="page">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+  </nav>
+
+  <main>
+    <h1>Circuits électriques dans Clic et Volt</h1>
+    <p>Un circuit est un groupe d'appareils protégés par le même disjoncteur. Chaque circuit a sa couleur, son calibre, sa section de câble et un nombre maximal de points.</p>
+
+    <h2>Les circuits par défaut</h2>
+    <table>
+      <tr><th>Circuit</th><th>Calibre</th><th>Section</th><th>Points max</th></tr>
+      <tr><td>Éclairage</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+      <tr><td>Prises 16 A</td><td>16 A</td><td>2,5 mm²</td><td>8</td></tr>
+      <tr><td>Prises 20 A classiques</td><td>20 A</td><td>2,5 mm²</td><td>12</td></tr>
+      <tr><td>Prises 20 A plan de travail</td><td>20 A</td><td>2,5 mm²</td><td>6</td></tr>
+      <tr><td>Prise dédiée</td><td>20 A ou 32 A</td><td>selon le calibre</td><td>1 appareil par circuit</td></tr>
+      <tr><td>Sonnerie</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+      <tr><td>Volets</td><td>10 A</td><td>1,5 mm²</td><td>8</td></tr>
+    </table>
+    <p>Seules les charges comptent dans les points : lampes, prises, sonneries et moteurs de volets. Les interrupteurs et les commandes ne comptent pas.</p>
+
+    <h2>Éclairage</h2>
+    <p>Les luminaires (plafonnier, spot, applique) sont sur le circuit « Éclairage 10A ». Chaque luminaire compte pour un point, jusqu'à 8. Les interrupteurs ne comptent pas : ils commandent les luminaires, et un interrupteur sans luminaire reste rattaché au circuit d'éclairage.</p>
+
+    <h2>Prises de courant</h2>
+    <p>Les prises sont réparties selon leur usage : « Prises 16A » (8 points, 2,5 mm²) pour les prises courantes, « Prises 20A » (12 points) pour un plus grand nombre de prises, « Prises 20A plan de travail » (6 points) pour les plans de travail, et les circuits dédiés (une seule prise, 20 A ou 32 A) pour les gros appareils.</p>
+    <p>Chaque prise compte pour un point, y compris une prise commandée par un interrupteur, qui reste sur le circuit « Prises 16A ».</p>
+
+    <h2>Sonneries et volets</h2>
+    <p>La sonnerie et les volets roulants ont chacun leur propre circuit, séparé de l'éclairage et des prises : « Sonnerie 10A » pour la sonnerie, « Volets 10A » pour les moteurs et les commandes de volet.</p>
+    <p>Le bouton de sonnette et la commande de volet ne comptent pas dans les points. La sonnerie et chaque moteur de volet comptent pour un point.</p>
+
+    <h2>Circuits créés automatiquement</h2>
+    <p>Quand un circuit atteint son nombre maximal de points, l'application crée un circuit supplémentaire, nommé avec un numéro (n°1, n°2…). On peut aussi créer un circuit à la demande depuis l'onglet Circuits.</p>
+    <img class="guide-shot" src="/guide/img/circuits-liste-2d.png" alt="Onglet Circuits de la barre de droite : la grille des circuits à créer (Éclairage, Prises 16 A, Prises 20 A, Sonnerie, Volet, Détecteur de fumée…) et la liste des circuits du RDC en dessous">
+
+    <h2>Régler un circuit</h2>
+    <p>Les boutons − et + changent le calibre et la section. Les valeurs proposées sont limitées : l'éclairage n'a que les calibres 10 A et 16 A, et les sections 1,5 et 2,5 mm².</p>
+    <img class="guide-shot" src="/guide/img/circuits-carte-eclairage.png" alt="Carte du circuit Éclairage 10 A dépliée : boutons − et + du calibre (10 A) et de la section (1,5 mm²), nombre d'éléments, et réglage du cheminement des câbles">
+
+    <h2>Couleurs et liste</h2>
+    <p>Chaque circuit a sa couleur, la même en 2D, en 3D et dans la liste. La liste regroupe les circuits par niveau, puis par type. Un clic sur un circuit le met en évidence.</p>
+    <div class="minis">
+      <figure>
+        <img class="guide-shot" src="/guide/img/circuits-couleurs-plan.png" alt="Plan 2D : le câble de l'éclairage est jaune, avec le symbole des luminaires">
+        <figcaption>Sur le plan, chaque circuit a sa couleur : l'éclairage est en jaune.</figcaption>
+      </figure>
+      <figure>
+        <img class="guide-shot" src="/guide/img/circuits-liste-groupes.png" alt="Liste des circuits : groupe RDC, puis sous-groupes Éclairages, Prises et Autres, avec les couleurs de chaque circuit">
+        <figcaption>La liste : niveau RDC, puis les groupes Éclairages, Prises et Autres.</figcaption>
+      </figure>
+    </div>
+
+    <h2>Supprimer un circuit</h2>
+    <p>Le bouton « Supprimer ce circuit » retire le circuit et ses appareils. Les interrupteurs sont retirés seulement si toutes les lampes qu'ils commandent partent avec le circuit. Ctrl+Z restaure tout.</p>
+
+    <h2>Alertes de circuit</h2>
+    <p>Un circuit trop chargé, une section trop fine ou une chute de tension trop forte sont signalés dans l'onglet Alertes, avec la valeur à atteindre.</p>
+    <img class="guide-shot" src="/guide/img/alertes-onglet.png" alt="Onglet Alertes de la barre de droite : liste d'avertissements, par exemple des plafonniers non reliés à un interrupteur de commande, avec un bouton Aller pour chacun">
+
+    <p><a href="/" class="btn-app">Revenir à l'application</a></p>
+  </main>
+
+  <nav class="bas">
+    <a href="/" class="btn-app">Revenir à l'application</a>
+    <a href="/presentation">Présentation</a>
+    <a href="/guide/plan-2d">Plan 2D</a>
+    <a href="/guide/vue-3d">Vue 3D</a>
+    <a href="/guide/cablage-automatique">Câblage automatique</a>
+    <a href="/guide/circuits" aria-current="page">Circuits</a>
+    <a href="/guide/prises-interrupteurs">Prises et interrupteurs</a>
+    <a href="/guide/tremie-escalier">Trémie et escalier</a>
+    <a href="/guide/metre-controles">Métré et contrôles</a>
+    <a href="/guide/faq">FAQ</a>
+    <a href="#" class="btn-haut">Haut de page</a>
+  </nav>
+<script src="/js/guide-links.js" defer></script>
+</body>
+</html>

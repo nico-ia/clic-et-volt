@@ -363,7 +363,7 @@ function getElCoords(el) {
     return {
         x: posX + perpX * side * offsetDist,
         y: posY + perpY * side * offsetDist,
-        z: el.height || (el.type === 'panel' ? 150 : el.type === 'wall_light' ? 180 : el.type === 'doorbell_chime' ? 200 : el.type === 'shutter_motor' ? 210 : el.type.startsWith('outlet') ? 30 : 110)
+        z: el.height || (el.type === 'panel' || el.type === 'meter' ? 150 : el.type === 'wall_light' ? 180 : el.type === 'doorbell_chime' ? 200 : el.type === 'shutter_motor' ? 210 : el.type.startsWith('outlet') ? 30 : 110)
     };
 }
 
@@ -933,7 +933,7 @@ function* buildCableNetworkSteps() {
     const lostFor = (cid, n = 1) => { const k = cid || '_none'; result.unroutedBy[k] = (result.unroutedBy[k] || 0) + n; result.unrouted += n; };
     const cidOfEl = el => { const c = circuitOf(el); return c ? c.id : null; };
     let panel = els.find(e => e.type === 'panel') || null;
-    const wired = els.filter(e => e.type !== 'panel');
+    const wired = els.filter(e => e.type !== 'panel' && e.type !== 'meter');
     let feedInfo = null;   // niveau sans tableau : trémie qui le relie au tableau d'un autre étage
     // un niveau sans appareil mais avec une trémie vers un autre étage doit aussi être raccordé (ses trémies passent les circuits)
     const hasShaftLinks = wired.length > 0 || derivationPointsOn(activeLevelId).length > 0;
@@ -2548,7 +2548,7 @@ function* buildCableNetworkSteps() {
             const mx = (sg.a.x + sg.b.x) / 2, my = (sg.a.y + sg.b.y) / 2;
             let best = null, bestD = Infinity;
             projectData.electrical.forEach(e => {
-                if (['panel', 'junction_box'].includes(e.type) || e.levelId !== activeLevelId) return;
+                if (['panel', 'junction_box', 'meter'].includes(e.type) || e.levelId !== activeLevelId) return;
                 if (!(sg.cids || []).includes(cidOfEl(e))) return;
                 const b = deviceBox(e), d = Math.hypot(b.x - mx, b.y - my);
                 if (d < bestD) { bestD = d; best = e; }
@@ -3819,6 +3819,12 @@ function applianceModel(el) {
         box(10, 10, 8.0, white, 0, 0, 2);
         box(8.4, 8.4, 4.0, ivory, 0, 0, 4.5);
         [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]].forEach(p => cylZ(0.5, 0.5, 3.0, metal, p[0], p[1], 5.2));
+    } else if (el.type === 'meter') {
+        // compteur électrique : coffret clair, fenêtre sombre, cadran de mesure rouge et bandeau
+        box(22, 30, 6, mMat('#f1f5f9', { rough: 0.45 }), 0, 0, 3);
+        box(15, 12, 0.4, mMat('#0f172a', { opacity: 0.35, rough: 0.2 }), 0, 5, 6.2);
+        cylZ(2.6, 2.6, 0.6, mMat('#dc2626', { rough: 0.4 }), 0, 5, 6.3);
+        box(18, 2.4, 0.6, accentMat, 0, -11, 6.2);
     } else if (el.type === 'panel') {
         // tableau : coffret, porte fumée, trois rangées de modules (différentiel + disjoncteurs)
         const W = 42, H = 56;
